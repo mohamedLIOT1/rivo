@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -28,6 +28,128 @@ import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import UserDetailModal from './UserDetailModal';
 
+function formatLastSeenSubtitle(lastActiveAt) {
+  if (!lastActiveAt) return 'Offline';
+  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
+  if (isNaN(diffSec) || diffSec < 0) return 'Offline';
+  if (diffSec < 60) return 'Active just now';
+  if (diffSec < 3600) return `Active ${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `Last seen ${Math.floor(diffSec / 3600)}h ago`;
+  const days = Math.floor(diffSec / 86400);
+  return days === 1 ? 'Last seen yesterday' : `Last seen ${days}d ago`;
+}
+
+// Pure memoized card component for peak list performance
+const FriendActivityCard = React.memo(function FriendActivityCard({
+  item,
+  isDark,
+  onOpenProfile,
+  onListenAlong,
+}) {
+  const rawListening = item.currentListening;
+  const isDummyOffline = Boolean(
+    rawListening?.title?.toLowerCase() === 'offline' ||
+    rawListening?.name?.toLowerCase() === 'offline'
+  );
+  const listening = isDummyOffline ? null : rawListening;
+  const isLive = Boolean(item.isLive && listening);
+
+  return (
+    <View style={[styles.friendCard, !isDark && styles.friendCardLight]}>
+      {/* Avatar and name clickable to open profile */}
+      <TouchableOpacity
+        style={styles.cardMainTouch}
+        onPress={() => onOpenProfile(item)}
+        activeOpacity={0.7}
+      >
+        {/* Avatar */}
+        <View style={styles.avatarWrap}>
+          {item.avatar ? (
+            <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} fadeDuration={0} />
+          ) : (
+            <View style={styles.avatarFallback}>
+              <Text style={styles.avatarLetter}>
+                {item.name ? item.name[0].toUpperCase() : 'U'}
+              </Text>
+            </View>
+          )}
+          {isLive ? (
+            <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: !isDark ? '#f4ede1' : '#0b1110', borderWidth: 2 }]} />
+          ) : item.isOnline ? (
+            <View style={[styles.onlineDot, { backgroundColor: '#34d399' }]} />
+          ) : (
+            <View style={[styles.onlineDot, { backgroundColor: '#64748b' }]} />
+          )}
+        </View>
+
+        {/* Info Column - Expanded to full width */}
+        <View style={styles.infoCol}>
+          {/* Top Row: Name on left, time/status pill cleanly on right */}
+          <View style={styles.nameRow}>
+            <Text style={[styles.friendName, !isDark && styles.friendNameLight]} numberOfLines={1}>
+              {item.name || 'Anonymous Listener'}
+            </Text>
+            {isLive ? (
+              <View style={styles.liveBadge}>
+                <Radio size={9} color="#0b1110" strokeWidth={3} />
+                <Text style={styles.liveBadgeText}>LIVE</Text>
+              </View>
+            ) : item.isOnline ? (
+              <View style={[styles.liveBadge, { backgroundColor: '#1e3a34' }]}>
+                <Text style={[styles.liveBadgeText, { color: '#34d399' }]}>ONLINE</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Bottom Row: Full width track title & artist */}
+          {isLive && listening ? (
+            <View style={styles.trackInfoRow}>
+              <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
+              <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
+                Playing: {listening.title || 'Playing song'}
+                {listening.artist ? ` • ${listening.artist}` : ''}
+              </Text>
+            </View>
+          ) : listening && item.isOnline ? (
+            <View style={styles.trackInfoRow}>
+              <Disc size={11} color="#f59e0b" strokeWidth={2} />
+              <Text style={[styles.trackTitle, { color: !isDark ? '#b45309' : '#fcd34d' }]} numberOfLines={1}>
+                Paused: {listening.title || 'Track'}
+                {listening.artist ? ` • ${listening.artist}` : ''}
+              </Text>
+            </View>
+          ) : listening && !item.isOnline ? (
+            <View style={styles.trackInfoRow}>
+              <Disc size={11} color="#64748b" strokeWidth={1.8} />
+              <Text style={[styles.trackTitle, { color: !isDark ? '#57534e' : '#94a3b8' }]} numberOfLines={1}>
+                Last played: {listening.title || 'Track'}
+                {listening.artist ? ` • ${listening.artist}` : ''}
+                {item.lastActiveAt ? ` • ${formatLastSeenSubtitle(item.lastActiveAt)}` : ''}
+              </Text>
+            </View>
+          ) : (
+            <Text style={[styles.idleText, !isDark && styles.idleTextLight]} numberOfLines={1}>
+              {item.isOnline ? 'Online • Browsing music' : formatLastSeenSubtitle(item.lastActiveAt)}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+
+      {/* 1-Tap Play Action on the right */}
+      {isLive && listening && (
+        <TouchableOpacity
+          style={styles.listenAlongBtn}
+          onPress={() => onListenAlong(item)}
+          activeOpacity={0.85}
+        >
+          <Play size={11} color="#0b1110" fill="#0b1110" />
+          <Text style={styles.listenAlongText}>TUNE IN</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
 export default function FriendActivityModal({ visible, onClose, onViewProfile }) {
   const { token, currentUser } = useUser();
   const { playTrack } = useAudioPlayer();
@@ -39,7 +161,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
 
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     setIsLoading(true);
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -52,14 +174,14 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
       }
     } catch {}
     setIsLoading(false);
-  };
+  }, [token]);
 
   useEffect(() => {
     if (!visible) return;
     fetchActivities();
     const interval = setInterval(fetchActivities, 20000);
     return () => clearInterval(interval);
-  }, [visible, token]);
+  }, [visible, fetchActivities]);
 
   // Real-time socket updates for zero latency
   useEffect(() => {
@@ -130,10 +252,10 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
   }, [activities, searchQuery, currentUser]);
 
   const liveCount = useMemo(() => {
-    return filtered.filter(a => Boolean(a.isLive && a.currentListening)).length;
+    return filtered.filter((a) => Boolean(a.isLive && a.currentListening)).length;
   }, [filtered]);
 
-  const handleListenAlong = (friend) => {
+  const handleListenAlong = useCallback((friend) => {
     if (!friend.currentListening) return;
     const track = friend.currentListening;
     if (playTrack) {
@@ -148,130 +270,25 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
       });
       onClose();
     }
-  };
+  }, [playTrack, onClose]);
 
-  const formatTimeAgo = (dateStr) => {
-    if (!dateStr) return '';
-    const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (isNaN(diffSec) || diffSec < 0) return '';
-    if (diffSec < 60) return 'just now';
-    if (diffSec < 3600) {
-      const mins = Math.floor(diffSec / 60);
-      return `${mins}m ago`;
-    }
-    if (diffSec < 86400) {
-      const hours = Math.floor(diffSec / 3600);
-      return `${hours}h ago`;
-    }
-    const days = Math.floor(diffSec / 86400);
-    return `${days}d ago`;
-  };
-
-  const handleOpenProfile = (friend) => {
+  const handleOpenProfile = useCallback((friend) => {
     if (onViewProfile) {
       onClose();
       onViewProfile(friend);
     } else {
       setSelectedUser(friend);
     }
-  };
+  }, [onViewProfile, onClose]);
 
-  const renderFriendItem = ({ item }) => {
-    const isLive = Boolean(item.isLive && item.currentListening);
-    const listening = item.currentListening;
-
-    return (
-      <View style={[styles.friendCard, !isDark && styles.friendCardLight]}>
-        {/* Avatar and name clickable to open profile */}
-        <TouchableOpacity
-          style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-          onPress={() => handleOpenProfile(item)}
-          activeOpacity={0.7}
-        >
-          {/* Avatar */}
-          <View style={styles.avatarWrap}>
-            {item.avatar ? (
-              <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} fadeDuration={0} />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarLetter}>
-                  {item.name ? item.name[0].toUpperCase() : 'U'}
-                </Text>
-              </View>
-            )}
-            {item.isLive ? (
-              <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: !isDark ? '#f4ede1' : '#0b1110', borderWidth: 2 }]} />
-            ) : item.isOnline ? (
-              <View style={[styles.onlineDot, { backgroundColor: '#34d399' }]} />
-            ) : (
-              <View style={[styles.onlineDot, { backgroundColor: '#64748b' }]} />
-            )}
-          </View>
-
-          {/* Info */}
-          <View style={styles.infoCol}>
-            <View style={styles.nameRow}>
-              <Text style={[styles.friendName, !isDark && styles.friendNameLight]} numberOfLines={1}>
-                {item.name || 'Anonymous Listener'}
-              </Text>
-              {isLive ? (
-                <View style={styles.liveBadge}>
-                  <Radio size={9} color="#0b1110" strokeWidth={3} />
-                  <Text style={styles.liveBadgeText}>LISTENING NOW</Text>
-                </View>
-              ) : item.isOnline ? (
-                <View style={[styles.liveBadge, { backgroundColor: '#334155' }]}>
-                  <Text style={[styles.liveBadgeText, { color: '#cbd5e1' }]}>ONLINE</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {isLive && listening ? (
-              <View style={styles.trackInfoRow}>
-                <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
-                <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
-                  Playing: {listening.title || 'Playing song'}
-                  {listening.artist ? ` • ${listening.artist}` : ''}
-                </Text>
-              </View>
-            ) : listening && item.isOnline ? (
-              <View style={styles.trackInfoRow}>
-                <Disc size={11} color="#f59e0b" strokeWidth={2} />
-                <Text style={[styles.trackTitle, { color: !isDark ? '#b45309' : '#fcd34d' }]} numberOfLines={1}>
-                  Paused: {listening.title || 'Track'}
-                  {listening.artist ? ` • ${listening.artist}` : ''}
-                </Text>
-              </View>
-            ) : listening && !item.isOnline ? (
-              <View style={styles.trackInfoRow}>
-                <Disc size={11} color="#475569" strokeWidth={1.8} />
-                <Text style={[styles.trackTitle, { color: '#64748b' }]} numberOfLines={1}>
-                  Last played: {listening.title || 'Track'}
-                  {listening.artist ? ` • ${listening.artist}` : ''}
-                </Text>
-              </View>
-            ) : (
-              <Text style={[styles.idleText, !isDark && styles.idleTextLight]}>
-                {item.isOnline ? 'Online • Browsing crates' : (item.lastActiveAt ? `Offline • ${formatTimeAgo(item.lastActiveAt)}` : 'Offline')}
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
-
-        {/* 1-Tap Play Action */}
-        {isLive && listening && (
-          <TouchableOpacity
-            style={styles.listenAlongBtn}
-            onPress={() => handleListenAlong(item)}
-            activeOpacity={0.85}
-          >
-            <Play size={13} color="#0b1110" fill="#0b1110" />
-            <Text style={styles.listenAlongText}>TUNE IN</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    );
-  };
+  const renderFriendItem = useCallback(({ item }) => (
+    <FriendActivityCard
+      item={item}
+      isDark={isDark}
+      onOpenProfile={handleOpenProfile}
+      onListenAlong={handleListenAlong}
+    />
+  ), [isDark, handleOpenProfile, handleListenAlong]);
 
   return (
     <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
@@ -318,6 +335,11 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={14} color={!isDark ? '#0b1110' : '#94a3b8'} />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* List */}
@@ -438,12 +460,13 @@ const styles = StyleSheet.create({
     borderColor: '#263330',
     marginHorizontal: 16,
     marginTop: 12,
-    marginBottom: 8,
-    paddingHorizontal: 10,
+    marginBottom: 10,
+    paddingHorizontal: 12,
+    height: 42,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 8,
     color: '#ffffff',
     fontSize: 13,
@@ -451,31 +474,39 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 20,
-    gap: 8,
+    paddingBottom: 24,
   },
   friendCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#141d1b',
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#263330',
-    padding: 10,
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  cardMainTouch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
   },
   avatarWrap: {
     position: 'relative',
-    marginRight: 10,
+    marginRight: 11,
+    flexShrink: 0,
   },
   avatarImg: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 12,
   },
   avatarFallback: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 12,
     backgroundColor: '#17a398',
     alignItems: 'center',
@@ -490,65 +521,81 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -1,
     right: -1,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
     backgroundColor: '#10b981',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: '#0e1715',
   },
   infoCol: {
     flex: 1,
-    marginRight: 8,
+    minWidth: 0,
+    justifyContent: 'center',
+    paddingRight: 4,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    width: '100%',
     marginBottom: 3,
   },
   friendName: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '800',
-    flexShrink: 1,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 8,
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#17a398',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
     gap: 3,
+    flexShrink: 0,
   },
   liveBadgeText: {
     color: '#0b1110',
-    fontSize: 8,
+    fontSize: 8.5,
     fontWeight: '900',
+    letterSpacing: 0.4,
   },
   trackInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: '100%',
+    flex: 1,
+    minWidth: 0,
     gap: 5,
   },
   trackTitle: {
     color: '#94a3b8',
-    fontSize: 11,
-    flexShrink: 1,
+    fontSize: 11.5,
+    flex: 1,
+    minWidth: 0,
   },
   idleText: {
     color: '#64748b',
-    fontSize: 11,
+    fontSize: 11.5,
+    width: '100%',
+    flex: 1,
+    minWidth: 0,
   },
   listenAlongBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#17a398',
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: 8,
     gap: 4,
+    marginLeft: 8,
+    flexShrink: 0,
   },
   listenAlongText: {
     color: '#0b1110',

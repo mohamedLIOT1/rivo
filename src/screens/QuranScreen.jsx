@@ -4,6 +4,7 @@ import {
   Link2, Disc, User, Check, Sparkles, Volume2, ArrowRight, ArrowLeft
 } from 'lucide-react';
 import QuranRadioModal from '../components/QuranRadioModal';
+import { useTranslation } from '../context/PreferencesContext';
 import { 
   isQuranContent, 
   getQuranReciterName, 
@@ -32,6 +33,7 @@ export default function QuranScreen({
   globalTheme = 'dark',
 }) {
   const isDark = globalTheme === 'dark';
+  const { t, isRTL } = useTranslation();
   const [activeTab, setActiveTab] = useState('reciters'); // Default is reciters view per user request
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -203,18 +205,22 @@ export default function QuranScreen({
         </div>
 
         <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-          <div className="max-w-xl text-left">
+          <div className={`max-w-xl ${isRTL ? 'text-right' : 'text-left'}`}>
             <div className="inline-flex items-center gap-2 bg-[#17a398] text-[#041d1a] px-3 py-0.5 rounded-full brutal-border text-[11px] font-mono font-black mb-2.5 shadow-sm">
               <BookOpen size={14} />
-              <span>THE HOLY QURAN</span>
+              <span>{t('quran.holyQuranAudio')}</span>
             </div>
 
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black font-display leading-tight mb-2 text-white">
-              Soulful Recitations & <span className="text-[#26c4b7]">Complete Mushaf</span>
+              {isRTL ? (
+                <span>{t('quran.title')} • <span className="text-[#26c4b7]">{t('quran.completeMushaf')}</span></span>
+              ) : (
+                <span>Soulful Recitations & <span className="text-[#26c4b7]">Complete Mushaf</span></span>
+              )}
             </h1>
 
             <p className="text-emerald-100/90 text-xs sm:text-sm font-medium leading-relaxed mb-4">
-              Listen to recitations from renowned reciters with pure acoustic fidelity, zero ads, and full Surah support.
+              {t('quran.heroRecitationsDesc')}
             </p>
 
             {/* Quick Actions */}
@@ -225,7 +231,7 @@ export default function QuranScreen({
                   className="bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs sm:text-sm px-4 py-2 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-2 cursor-pointer transition-all"
                 >
                   <Play size={15} fill="currentColor" />
-                  <span>Play All ({filteredTracks.length} Recitations)</span>
+                  <span>{t('quran.playAllRecitations', { count: filteredTracks.length })}</span>
                 </button>
               )}
 
@@ -233,10 +239,10 @@ export default function QuranScreen({
                 <button
                   onClick={openImportPlaylistModal}
                   className="bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-bold text-xs px-3.5 py-2 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer"
-                  title="Import full Quran playlist from YouTube or Spotify"
+                  title={t('quran.importQuranPlaylist')}
                 >
                   <DownloadCloud size={15} strokeWidth={2.5} className="text-[#0f756d]" />
-                  <span>Import Quran / Playlist</span>
+                  <span>{t('quran.importQuranPlaylist')}</span>
                 </button>
               )}
 
@@ -244,10 +250,10 @@ export default function QuranScreen({
                 <button
                   onClick={openImportSongModal}
                   className="bg-[#0b1110] hover:bg-zinc-900 text-emerald-300 font-display font-bold text-xs px-3.5 py-2 rounded-xl brutal-border border-[#17a398] brutal-btn flex items-center gap-1.5 cursor-pointer"
-                  title="Add recitation with direct link"
+                  title={t('quran.addSurahLink')}
                 >
                   <Link2 size={15} strokeWidth={2.5} />
-                  <span>+ Add Surah Link</span>
+                  <span>{t('quran.addSurahLink')}</span>
                 </button>
               )}
 
@@ -255,10 +261,10 @@ export default function QuranScreen({
                 <button
                   onClick={openCreatePlaylistModal}
                   className="bg-amber-400 hover:bg-amber-300 text-black font-display font-bold text-xs px-3 py-2 rounded-xl brutal-border brutal-btn flex items-center gap-1.5 cursor-pointer"
-                  title="Create new Quran playlist"
+                  title={t('quran.newPlaylist')}
                 >
                   <Plus size={15} strokeWidth={2.5} />
-                  <span>New Playlist</span>
+                  <span>{t('quran.newPlaylist')}</span>
                 </button>
               )}
             </div>
@@ -266,15 +272,15 @@ export default function QuranScreen({
 
           {/* Badge Widget */}
           <div className="shrink-0 bg-[#082621]/90 rounded-xl brutal-border border-[#26c4b7] p-4 text-center min-w-[170px] shadow-lg">
-            <span className="text-[10px] font-mono font-bold text-[#26c4b7] block mb-1 uppercase tracking-wider">
-              Quran Library
+            <span className="text-[10px] font-mono font-bold text-[#26c4b7] block mb-1 uppercase">
+              {t('quran.quranLibrary')}
             </span>
             <div className="text-3xl font-black font-display text-white mb-0.5">
               {quranTracks.length}
             </div>
-            <div className="text-xs text-emerald-200/80 font-medium">Recitations Available</div>
+            <div className="text-xs text-emerald-200/80 font-medium">{t('quran.recitationsAvailable', { count: quranTracks.length })}</div>
             <div className="mt-2 pt-2 border-t border-emerald-900/60 text-[11px] text-emerald-400 font-mono">
-              {quranPlaylists.length} Playlists
+              {t('quran.playlistsCount', { count: quranPlaylists.length })}
             </div>
           </div>
         </div>
@@ -291,15 +297,15 @@ export default function QuranScreen({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-display font-black text-sm text-[#fdfbf7]">Holy Quran Radio • Live 24/7 Broadcast</span>
-              <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">🔴 LIVE</span>
+              <span className="font-display font-black text-sm text-[#fdfbf7]">{t('quran.radioLive')}</span>
+              <span className="bg-red-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full animate-pulse">🔴 {t('quran.liveBadge')}</span>
             </div>
-            <p className="text-xs text-emerald-200/80 font-medium">Continuous 24/7 live stream: Saudi Quran Radio, Minshawi, Abdulbasit, Al-Hussary, Alafasy, and more</p>
+            <p className="text-xs text-emerald-200/80 font-medium">{t('quran.radioDesc')}</p>
           </div>
         </div>
         <button className="hidden sm:flex items-center gap-2 bg-[#d4af37] text-black font-display font-black text-xs px-4 py-2 rounded-xl shadow group-hover:bg-[#f1c40f] transition-all">
           <Play size={14} fill="currentColor" />
-          <span>Choose Station</span>
+          <span>{t('quran.chooseStation')}</span>
         </button>
       </div>
 
@@ -312,16 +318,16 @@ export default function QuranScreen({
             className="px-3.5 py-2 rounded-lg text-xs font-display font-black transition-all brutal-btn whitespace-nowrap cursor-pointer bg-gradient-to-r from-amber-500 to-amber-400 text-black border border-black shadow-[0_0_15px_rgba(245,158,11,0.3)] flex items-center gap-1.5 shrink-0"
           >
             <Radio size={14} className="text-black animate-pulse" />
-            <span>Quran Radio (Live 24/7)</span>
+            <span>{t('quran.radioLive')}</span>
           </button>
           {[
-            { id: 'reciters', label: `Reciters (${reciters.length})` },
-            { id: 'playlists', label: `Playlists (${quranPlaylists.length})` },
+            { id: 'reciters', label: t('quran.tabReciters', { count: reciters.length }) },
+            { id: 'playlists', label: t('quran.tabPlaylists', { count: quranPlaylists.length }) },
             { 
               id: 'surahs', 
               label: selectedReciter 
-                ? `Surahs of Sheikh ${selectedReciter.split(' ')[0]} (${reciterTracks.length})` 
-                : `Surahs (${quranTracks.length})` 
+                ? t('quran.tabSurahsOfSheikh', { name: selectedReciter.split(' ')[0], count: reciterTracks.length })
+                : t('quran.tabSurahs', { count: quranTracks.length })
             },
           ].map((tab) => {
             const active = activeTab === tab.id;
@@ -345,13 +351,13 @@ export default function QuranScreen({
 
         {/* Search Bar inside Quran */}
         <div className="relative w-full sm:w-72">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400/70 pointer-events-none" />
+          <Search size={15} className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-emerald-400/70 pointer-events-none`} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search surah or reciter (e.g. Al-Baqarah, Minshawi)..."
-            className={`w-full text-xs font-bold pl-9 pr-3 py-2 rounded-lg brutal-border focus:outline-none transition-colors ${
+            placeholder={t('quran.searchPlaceholder')}
+            className={`w-full text-xs font-bold ${isRTL ? 'pr-9 pl-3 text-right' : 'pl-9 pr-3 text-left'} py-2 rounded-lg brutal-border focus:outline-none transition-colors ${
               isDark 
                 ? 'bg-[#0c201d] text-white border-emerald-800 placeholder-emerald-400/50 focus:bg-[#102a26]' 
                 : 'bg-[#fdfbf7] text-[#0b1110] border-black placeholder-zinc-500 focus:bg-white'
@@ -375,17 +381,17 @@ export default function QuranScreen({
                     setActiveTab('reciters');
                   }}
                   className="px-3 py-1.5 rounded-lg bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
-                  title="Back to all reciters"
+                  title={t('quran.backToReciters')}
                 >
-                  <ArrowRight size={14} />
-                  <span>← Back to Reciters</span>
+                  <ArrowRight size={14} className={isRTL ? 'rotate-180' : ''} />
+                  <span>{t('quran.backToReciters')}</span>
                 </button>
                 <div>
                   <h3 className="font-display font-black text-sm sm:text-base text-white">
-                    Sheikh {selectedReciter}
+                    {t('quran.sheikh', { name: selectedReciter })}
                   </h3>
                   <p className="text-[11px] text-emerald-300 font-mono font-medium">
-                    {filteredTracks.length} Surahs available • Ordered 1 to 114
+                    {t('quran.surahsAvailableCount', { count: filteredTracks.length })}
                   </p>
                 </div>
               </div>
@@ -396,23 +402,23 @@ export default function QuranScreen({
                   className="px-3.5 py-1.5 rounded-lg bg-[#fdfbf7] hover:bg-white text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
                 >
                   <Play size={13} fill="currentColor" />
-                  <span>Play from Surah {getSurahName(filteredTracks[0]) || 'Start'}</span>
+                  <span>{t('quran.playAllFromSurah', { name: getSurahName(filteredTracks[0]) || (isRTL ? 'البداية' : 'Start') })}</span>
                 </button>
               )}
             </div>
           )}
 
-          {/* If no reciter is selected and no search: do NOT dump 457 mixed tracks, show reciters selection! */}
+          {/* If no reciter is selected and no search: show reciters selection */}
           {!selectedReciter && !searchQuery.trim() ? (
             <div className={`p-6 rounded-2xl brutal-border text-center ${
               isDark ? 'bg-[#0a231f] border-emerald-900' : 'bg-[#fdfbf7] border-[#082621]'
             }`}>
               <BookOpen size={42} className="mx-auto mb-3 text-[#26c4b7] opacity-80" />
               <h3 className="text-base sm:text-lg font-display font-black mb-1.5 text-white">
-                Select Reciter to Listen to Full Quran
+                {t('quran.selectReciter')}
               </h3>
               <p className="text-xs text-emerald-200/80 mb-5 max-w-md mx-auto">
-                Browse recitations ordered by the Holy Quran (from Al-Fatihah to An-Nas) for each reciter.
+                {t('quran.browseSurahs')}
               </p>
 
               {/* Reciters Quick Grid */}
@@ -439,7 +445,7 @@ export default function QuranScreen({
                       {reciter.name}
                     </h4>
                     <p className="text-[10px] font-mono font-bold mt-0.5 text-[#26c4b7]">
-                      {reciter.count} Surahs
+                      {t('quran.surahsCount', { count: reciter.count })}
                     </p>
                   </div>
                 ))}
@@ -450,14 +456,14 @@ export default function QuranScreen({
               isDark ? 'bg-[#0f2421] border-emerald-900 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
             }`}>
               <BookOpen size={40} className="mx-auto mb-3 text-[#26c4b7] opacity-60" />
-              <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No matching Surahs found</h3>
-              <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>You can import a full playlist or add Surahs by direct link</p>
+              <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{t('quran.noRecitations')}</h3>
+              <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>{t('quran.noRecitationsSub')}</p>
               {openImportPlaylistModal && (
                 <button
                   onClick={openImportPlaylistModal}
-                  className="px-4 py-2 bg-[#26c4b7] text-black font-black text-xs rounded-lg brutal-border brutal-shadow-sm"
+                  className="px-4 py-2 bg-[#26c4b7] text-black font-black text-xs rounded-lg brutal-border brutal-shadow-sm cursor-pointer"
                 >
-                  Import Playlist Now
+                  {t('quran.importPlaylistNow')}
                 </button>
               )}
             </div>
@@ -531,7 +537,7 @@ export default function QuranScreen({
                               : 'text-[#084c41]'
                         }`}>
                           <span className="font-bold">{reciterName}</span>
-                          {surahNum >= 1 && surahNum <= 114 ? ` • سورة رقم ${surahNum}` : ''}
+                          {surahNum >= 1 && surahNum <= 114 ? ` • ${t('quran.surahNum', { num: surahNum })}` : ''}
                           {track.album ? ` • ${cleanQuranTrackTitle(track.album)}` : ''}
                         </p>
                       </div>
@@ -580,7 +586,7 @@ export default function QuranScreen({
                     onClick={() => setVisibleLimit((prev) => prev + 40)}
                     className="px-6 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-black font-mono font-black text-xs brutal-border brutal-shadow-sm cursor-pointer transition-transform hover:scale-105"
                   >
-                    Show more recitations ({filteredTracks.length - visibleLimit} remaining) ↓
+                    {t('quran.showMoreRecitations', { count: filteredTracks.length - visibleLimit })}
                   </button>
                 </div>
               )}
@@ -597,14 +603,14 @@ export default function QuranScreen({
               isDark ? 'bg-[#0f2421] border-emerald-900 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
             }`}>
               <BookOpen size={40} className="mx-auto mb-3 text-[#26c4b7] opacity-60" />
-              <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Quran playlists currently</h3>
-              <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>Click Import to add a playlist from YouTube with one link</p>
+              <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{t('quran.noRecitations')}</h3>
+              <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>{t('quran.noRecitationsSub')}</p>
               {openImportPlaylistModal && (
                 <button
                   onClick={openImportPlaylistModal}
-                  className="px-4 py-2 bg-[#26c4b7] text-black font-black text-xs rounded-lg brutal-border brutal-shadow-sm"
+                  className="px-4 py-2 bg-[#26c4b7] text-black font-black text-xs rounded-lg brutal-border brutal-shadow-sm cursor-pointer"
                 >
-                  استيراد مصحف الآن
+                  {t('quran.importPlaylistNow')}
                 </button>
               )}
             </div>
@@ -633,7 +639,7 @@ export default function QuranScreen({
                           onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=600'; }}
                         />
                         <span className="absolute bottom-2 right-2 text-[10px] font-mono font-black bg-[#041d1a]/90 text-[#26c4b7] px-2 py-0.5 rounded brutal-border border-emerald-800">
-                          {count} {count > 100 ? 'سورة (كامل)' : 'سورة'}
+                          {count > 100 ? t('quran.surahCountFull', { count }) : t('quran.surahsCount', { count })}
                         </span>
                       </div>
 
@@ -649,7 +655,7 @@ export default function QuranScreen({
                           ? 'text-emerald-300/80' 
                           : 'text-[#0a3832]'
                       }`}>
-                        {pl.description ? cleanQuranTrackTitle(pl.description) : `مصحف كامل بصوت ${reciterName}`}
+                        {pl.description ? cleanQuranTrackTitle(pl.description) : t('quran.fullMushafVoice', { reciter: reciterName })}
                       </p>
                     </div>
 
@@ -659,7 +665,7 @@ export default function QuranScreen({
                       <span className={`font-mono text-[10px] font-bold ${
                         isDark ? 'text-[#26c4b7]' : 'text-[#084c41]'
                       }`}>
-                        Playlist
+                        {t('common.playlists')}
                       </span>
                       <div className="w-7 h-7 rounded-lg bg-[#26c4b7] text-[#041d1a] flex items-center justify-center font-bold">
                         <Play size={12} fill="currentColor" />
@@ -708,7 +714,7 @@ export default function QuranScreen({
               <p className={`text-[10px] font-mono font-bold mt-1 ${
                 isDark ? 'text-[#26c4b7]' : 'text-[#084c41]'
               }`}>
-                {reciter.count} سورة
+                {t('quran.surahsCount', { count: reciter.count })}
               </p>
             </div>
           ))}

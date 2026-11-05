@@ -10,25 +10,22 @@ function formatTimeAgo(dateStr, isRTL) {
   if (diffSec < 60) return isRTL ? 'منذ قليل' : 'just now';
   if (diffSec < 3600) {
     const mins = Math.floor(diffSec / 60);
-    return isRTL ? `منذ ${mins} د` : `${mins}m ago`;
+    return isRTL ? `منذ ${mins} دقيقة` : `${mins}m ago`;
   }
   if (diffSec < 86400) {
     const hours = Math.floor(diffSec / 3600);
-    return isRTL ? `منذ ${hours} س` : `${hours}h ago`;
+    return isRTL
+      ? (hours === 1 ? 'منذ ساعة' : hours === 2 ? 'منذ ساعتين' : `منذ ${hours} ساعات`)
+      : `${hours}h ago`;
   }
   const days = Math.floor(diffSec / 86400);
-  return isRTL ? `منذ ${days} يوم` : `${days}d ago`;
-}
-
-function formatCompactPill(lastActiveAt, isRTL) {
-  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
-  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
-  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}M`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}H`;
-  const days = Math.floor(diffSec / 86400);
-  return `${days}D`;
+  if (isRTL) {
+    if (days === 1) return 'أمس';
+    if (days === 2) return 'منذ يومين';
+    if (days <= 10) return `منذ ${days} أيام`;
+    return `منذ ${days} يوماً`;
+  }
+  return days === 1 ? 'yesterday' : `${days}d ago`;
 }
 
 function ActivityListItemComponent({
@@ -128,16 +125,7 @@ function ActivityListItemComponent({
               <span className="text-[8.5px] font-mono font-black px-1.5 py-0.5 rounded-md bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 uppercase shrink-0">
                 {isRTL ? 'متصل' : 'ONLINE'}
               </span>
-            ) : (
-              <span
-                className={`text-[8.5px] font-mono font-bold px-1.5 py-0.5 rounded-md uppercase shrink-0 ${
-                  isDark ? 'bg-zinc-800 text-zinc-400 border border-zinc-700/60' : 'bg-[#e5dcce] text-zinc-600 border border-[#0b1110]/15'
-                }`}
-                title={friend.lastActiveAt ? (isRTL ? `آخر نشاط: ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active: ${formatTimeAgo(friend.lastActiveAt, false)}`) : 'Offline'}
-              >
-                {formatCompactPill(friend.lastActiveAt, isRTL)}
-              </span>
-            )}
+            ) : null}
           </div>
 
           {/* Listening State / Track Info Row - Full flex width */}
@@ -187,12 +175,16 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-85 transition"
-              title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}`}
+              title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}${friend.lastActiveAt ? ` • ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : ''}`}
             >
               <Disc size={11} className="shrink-0 text-[#64748b]" strokeWidth={1.8} />
               <p className="text-[11px] truncate leading-tight text-[#94a3b8] flex-1 min-w-0">
-                {isRTL ? 'آخر استماع: ' : 'Last played: '}{listening.title || 'Track'}
+                <span className="text-[#64748b]">{isRTL ? 'آخر استماع: ' : 'Last played: '}</span>
+                <span>{listening.title || 'Track'}</span>
                 {listening.artist ? ` • ${listening.artist}` : ''}
+                {friend.lastActiveAt ? (
+                  <span className="text-[#64748b] font-mono text-[10.5px]"> • {formatTimeAgo(friend.lastActiveAt, isRTL)}</span>
+                ) : null}
               </p>
             </div>
           ) : (
@@ -200,7 +192,7 @@ function ActivityListItemComponent({
               {isOnline
                 ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Exploring music')
                 : friend.lastActiveAt
-                ? (isRTL ? `آخر نشاط ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active ${formatTimeAgo(friend.lastActiveAt, false)}`)
+                ? (isRTL ? `آخر ظهور ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last seen ${formatTimeAgo(friend.lastActiveAt, false)}`)
                 : (isRTL ? 'غير متصل' : 'Offline')}
             </p>
           )}
