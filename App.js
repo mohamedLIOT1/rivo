@@ -696,6 +696,7 @@ function MainAppShell() {
  * Native React Native UI for Offline Vault, Quran, and local storage playback.
  */
 function NativeAppShell() {
+  const { t, isRTL } = useTranslation();
   const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
   const { appMode, setAppMode } = useConnectivity();
   const { navStyle, visibleMenuItems, firstVisibleTab, hiddenMenuItems, isLoaded: isNavLoaded } = useNavPreferences();

@@ -7,8 +7,9 @@ import {
   Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save, GripVertical, BookOpen
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import { useAudioPlayer } from '../context/AudioContext';
+import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
+import { useUI } from '../context/UIContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
@@ -18,6 +19,7 @@ import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName, isRadioTrack
 import { parseLrcLyrics } from '../utils/lrcParser';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
+import { detectTrackGenre } from '../utils/tasteAlgorithm';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -83,7 +85,7 @@ function extractColorFromImage(src, callback) {
 }
 
 
-export default function FullPlayerModal({
+function FullPlayerModal({
   currentTrack,
   isPlaying: propIsPlaying,
   togglePlay: propTogglePlay,
@@ -125,16 +127,22 @@ export default function FullPlayerModal({
 }) {
   const isAdmin = isUserAdmin(currentUser);
 
+  // Get audio progress from dedicated context
+  const progress = useAudioProgress();
+  const audioCurrentTime = progress?.currentTime ?? 0;
+  const audioDuration = progress?.duration ?? 210;
+
   // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
   const { 
-    audioRef, isYtTrack, playTrack, currentTime: audioCurrentTime, duration: audioDuration,
+    audioRef, isYtTrack, playTrack,
     isShuffle: ctxIsShuffle, toggleShuffle: ctxToggleShuffle,
     isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
     currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
     isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
     vocalIsolationStatus,
-    isLoadingTrack: ctxIsLoadingTrack
+    activeTransitions = {},
+    isLoadingTrack: ctxIsLoadingTrack
   } = useAudioPlayer();
 
   const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
@@ -142,6 +150,7 @@ export default function FullPlayerModal({
     : null;
 
   const { toggleLike: ctxToggleLike } = useUser() || {};
+  const { setIsSleepTimerOpen } = useUI() || {};
   const isLoadingTrack = Boolean(ctxIsLoadingTrack);
   const isPlaying = propIsPlaying !== undefined ? propIsPlaying : ctxIsPlaying;
   const togglePlay = propTogglePlay || ctxTogglePlay;
@@ -216,14 +225,23 @@ export default function FullPlayerModal({
   const [trackMenuTarget, setTrackMenuTarget] = useState(null);
   const [deleteConfirmTrack, setDeleteConfirmTrack] = useState(null);
   const [actionToast, setActionToast] = useState(null);
+  const toastTimerRef = useRef(null);
   const [draggedQueueIdx, setDraggedQueueIdx] = useState(null);
   const [dragOverQueueIdx, setDragOverQueueIdx] = useState(null);
 
   const showToast = useCallback((msg) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setActionToast(msg);
-    setTimeout(() => {
+    toastTimerRef.current = setTimeout(() => {
       setActionToast(prev => prev === msg ? null : prev);
+      toastTimerRef.current = null;
     }, 2500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   // ── Dynamic background color extracted from album art ──
@@ -1097,7 +1115,6 @@ export default function FullPlayerModal({
             <ArtistLinks
               track={track}
               onSelectArtist={onSelectArtist}
-              onClickExtra={onClose}
               className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
               linkClassName="hover:underline cursor-pointer"
             />
@@ -1383,6 +1400,13 @@ export default function FullPlayerModal({
         <div className="flex items-center gap-2">
           <button
             className="w-10 h-10 rounded-xl bg-[#fdfbf7] hover:bg-white text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
+            title="Sleep Timer"
+            onClick={() => setIsSleepTimerOpen && setIsSleepTimerOpen(true)}
+          >
+            <Moon size={18} strokeWidth={2.5} />
+          </button>
+          <button
+            className="w-10 h-10 rounded-xl bg-[#fdfbf7] hover:bg-white text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
             title="Track Options"
             onClick={() => setActionMenuTrack(currentTrack)}
           >
@@ -1551,7 +1575,7 @@ export default function FullPlayerModal({
               <span className={`text-[9px] font-mono font-bold bg-[#17a398] text-[#0b1110] px-1.5 py-0.2 rounded border ${
                 isDark ? 'border-[#090e0c] shadow-[2px_2px_0px_#050807]' : 'brutal-border'
               }`}>
-                {isCurQuran ? 'QURAN' : (currentTrack.genre || 'STEREO')}
+                {isCurQuran ? 'QURAN' : (detectTrackGenre(currentTrack) || currentTrack.genre || 'STEREO').toUpperCase()}
               </span>
               <h2 className={`text-base sm:text-lg font-display font-black truncate tracking-tight mt-0.5 ${
                 isDark ? 'text-white' : 'text-[#0b1110]'
@@ -1566,7 +1590,6 @@ export default function FullPlayerModal({
                 <ArtistLinks
                   track={currentTrack}
                   onSelectArtist={onSelectArtist}
-                  onClickExtra={onClose}
                   className={`text-xs font-bold truncate block ${
                     isDark ? 'text-zinc-300' : 'text-[#0f756d]'
                   }`}
@@ -2448,3 +2471,5 @@ export default function FullPlayerModal({
     </div>
   );
 }
+
+export default React.memo(FullPlayerModal);
