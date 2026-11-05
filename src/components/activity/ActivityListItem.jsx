@@ -1,23 +1,23 @@
 import React, { memo, useState } from 'react';
 import { Play, Radio, MessageSquare, Disc } from 'lucide-react';
 import VerifiedBadge from '../VerifiedBadge';
+import { usePreferences } from '../../context/PreferencesContext';
 
-function formatLastSeen(dateStr, isOnline) {
-  if (isOnline) return 'Active now';
-  if (!dateStr) return 'Offline';
+function formatTimeAgo(dateStr, isRTL) {
+  if (!dateStr) return '';
   const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return 'Offline';
-  if (diffSec < 60) return 'Active just now';
+  if (isNaN(diffSec) || diffSec < 0) return '';
+  if (diffSec < 60) return isRTL ? 'منذ قليل' : 'just now';
   if (diffSec < 3600) {
     const mins = Math.floor(diffSec / 60);
-    return `Active ${mins}m ago`;
+    return isRTL ? `منذ ${mins} د` : `${mins}m ago`;
   }
   if (diffSec < 86400) {
     const hours = Math.floor(diffSec / 3600);
-    return `Offline ${hours}h ago`;
+    return isRTL ? `منذ ${hours} س` : `${hours}h ago`;
   }
   const days = Math.floor(diffSec / 86400);
-  return `Offline ${days}d ago`;
+  return isRTL ? `منذ ${days} يوم` : `${days}d ago`;
 }
 
 function ActivityListItemComponent({
@@ -28,9 +28,15 @@ function ActivityListItemComponent({
   onStartJamWithUser,
   openChatModal
 }) {
+  const { t, isRTL } = usePreferences();
   const [imgError, setImgError] = useState(false);
-  const listening = friend.currentListening;
-  const isLive = Boolean(friend.isLive && friend.currentListening);
+  const rawListening = friend.currentListening;
+  const isDummyOffline = Boolean(
+    rawListening?.title?.toLowerCase() === 'offline' ||
+    rawListening?.name?.toLowerCase() === 'offline'
+  );
+  const listening = isDummyOffline ? null : rawListening;
+  const isLive = Boolean(friend.isLive && listening);
   const isOnline = Boolean(friend.isOnline);
   const hasAvatar = Boolean(friend.avatar && !imgError);
 
@@ -88,30 +94,29 @@ function ActivityListItemComponent({
         {/* Friend Info & Current Track */}
         <div className="flex-1 min-w-0 pr-1">
           {/* Name & Status Badge Row */}
-          <div className="flex items-center gap-1.5 mb-0.5">
-            <span
-              className={`text-xs font-extrabold truncate max-w-[110px] hover:underline ${
-                isDark ? 'text-white' : 'text-[#082621]'
-              }`}
-            >
-              {friend.name || 'Anonymous Listener'}
-            </span>
-            {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
+          <div className="flex items-center justify-between gap-1.5 mb-0.5">
+            <div className="flex items-center gap-1 min-w-0 max-w-[145px]">
+              <span
+                className={`text-xs font-extrabold truncate hover:underline ${
+                  isDark ? 'text-white' : 'text-[#082621]'
+                }`}
+                title={friend.name || 'Anonymous Listener'}
+              >
+                {friend.name || 'Anonymous Listener'}
+              </span>
+              {friend.isVerified && <VerifiedBadge userOrName={friend} size={11} />}
+            </div>
 
             {isLive ? (
               <span className="flex items-center gap-1 text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#17a398] text-[#0b1110] uppercase shrink-0">
-                <Radio size={9} strokeWidth={3} className="shrink-0" />
-                LISTENING NOW
+                <Radio size={9} strokeWidth={3} className="shrink-0 animate-pulse" />
+                {isRTL ? 'مباشر' : 'LIVE'}
               </span>
             ) : isOnline ? (
               <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#334155] text-[#cbd5e1] uppercase shrink-0">
-                ONLINE
+                {isRTL ? 'متصل' : 'ONLINE'}
               </span>
-            ) : (
-              <span className="text-[8px] font-mono font-black px-1.5 py-0.5 rounded bg-[#1e293b] text-[#94a3b8] uppercase shrink-0">
-                {formatLastSeen(friend.lastActiveAt, false).toUpperCase()}
-              </span>
-            )}
+            ) : null}
           </div>
 
           {/* Listening State / Track Info Row */}
@@ -122,7 +127,7 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-              title={`Playing: ${listening.title || 'Playing song'}`}
+              title={`${isRTL ? 'يستمع إلى' : 'Playing'}: ${listening.title || 'Playing song'}`}
             >
               <Disc
                 size={12}
@@ -131,7 +136,7 @@ function ActivityListItemComponent({
                 strokeWidth={2.4}
               />
               <p className="text-[11px] truncate leading-tight text-[#26c4b7] font-bold">
-                Playing: {listening.title || 'Playing song'}
+                {isRTL ? 'يستمع إلى: ' : 'Playing: '}{listening.title || 'Playing song'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
               </p>
             </div>
@@ -142,7 +147,7 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-              title={`Paused: ${listening.title || 'Track'}`}
+              title={`${isRTL ? 'متوقف مؤقتاً' : 'Paused'}: ${listening.title || 'Track'}`}
             >
               <Disc size={11} className="shrink-0 text-[#f59e0b]" strokeWidth={2} />
               <p
@@ -150,7 +155,7 @@ function ActivityListItemComponent({
                   isDark ? 'text-[#fcd34d]' : 'text-[#b45309]'
                 }`}
               >
-                Paused: {listening.title || 'Track'}
+                {isRTL ? 'متوقف مؤقتاً: ' : 'Paused: '}{listening.title || 'Track'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
               </p>
             </div>
@@ -161,21 +166,22 @@ function ActivityListItemComponent({
                 onPlayFriendTrack?.(friend);
               }}
               className="flex items-center gap-1.5 truncate cursor-pointer hover:opacity-85 transition"
-              title={`Last played: ${listening.title || 'Track'}`}
+              title={`${isRTL ? 'آخر استماع' : 'Last played'}: ${listening.title || 'Track'}`}
             >
               <Disc size={11} className="shrink-0 text-[#64748b]" strokeWidth={1.8} />
               <p className="text-[11px] truncate leading-tight text-[#64748b]">
-                Last played: {listening.title || 'Track'}
+                {isRTL ? 'آخر استماع: ' : 'Last played: '}{listening.title || 'Track'}
                 {listening.artist ? ` • ${listening.artist}` : ''}
+                {friend.lastActiveAt ? ` (${formatTimeAgo(friend.lastActiveAt, isRTL)})` : ''}
               </p>
             </div>
           ) : (
             <p className="text-[11px] font-mono text-[#64748b] truncate leading-tight">
               {isOnline
-                ? 'Online • Browsing crates'
+                ? (isRTL ? 'متصل الآن' : 'Online • In app')
                 : friend.lastActiveAt
-                ? `Offline • ${formatLastSeen(friend.lastActiveAt, false)}`
-                : 'Offline'}
+                ? (isRTL ? `غير متصل • ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Offline • ${formatTimeAgo(friend.lastActiveAt, false)}`)
+                : (isRTL ? 'غير متصل' : 'Offline')}
             </p>
           )}
         </div>

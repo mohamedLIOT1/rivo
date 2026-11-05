@@ -113,9 +113,11 @@ def repack():
                         plist_obj = plistlib.loads(raw)
                         plist_obj['CFBundleShortVersionString'] = target_ver
                         plist_obj['CFBundleVersion'] = BUILD_NUM
+                        plist_obj['NSMicrophoneUsageDescription'] = 'Rivo requires microphone access to listen to and identify songs via Song Radar.'
+                        plist_obj['NSSpeechRecognitionUsageDescription'] = 'Rivo uses speech and audio recognition for Song Radar.'
                         new_plist = plistlib.dumps(plist_obj, fmt=plistlib.FMT_BINARY)
                         zout.writestr(item, new_plist)
-                        print(f" -> Updated Info.plist: v{target_ver} (Build {BUILD_NUM})")
+                        print(f" -> Updated Info.plist: v{target_ver} (Build {BUILD_NUM}) with Song Radar permissions")
                     except Exception as e:
                         print(f"[WARN] Failed to update Info.plist: {e}")
                         zout.writestr(item, zin.read(filename))

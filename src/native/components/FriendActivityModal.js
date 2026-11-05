@@ -150,22 +150,21 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
     }
   };
 
-  const formatLastSeen = (dateStr, isOnline) => {
-    if (isOnline) return 'Active now';
-    if (!dateStr) return 'Offline';
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return '';
     const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-    if (isNaN(diffSec) || diffSec < 0) return 'Offline';
-    if (diffSec < 60) return 'Active just now';
+    if (isNaN(diffSec) || diffSec < 0) return '';
+    if (diffSec < 60) return 'just now';
     if (diffSec < 3600) {
       const mins = Math.floor(diffSec / 60);
-      return `Active ${mins}m ago`;
+      return `${mins}m ago`;
     }
     if (diffSec < 86400) {
       const hours = Math.floor(diffSec / 3600);
-      return `Offline ${hours}h ago`;
+      return `${hours}h ago`;
     }
     const days = Math.floor(diffSec / 86400);
-    return `Offline ${days}d ago`;
+    return `${days}d ago`;
   };
 
   const handleOpenProfile = (friend) => {
@@ -224,13 +223,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
                 <View style={[styles.liveBadge, { backgroundColor: '#334155' }]}>
                   <Text style={[styles.liveBadgeText, { color: '#cbd5e1' }]}>ONLINE</Text>
                 </View>
-              ) : (
-                <View style={[styles.liveBadge, { backgroundColor: '#1e293b' }]}>
-                  <Text style={[styles.liveBadgeText, { color: '#94a3b8' }]}>
-                    {formatLastSeen(item.lastActiveAt, false).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              ) : null}
             </View>
 
             {isLive && listening ? (
