@@ -37,6 +37,43 @@ console.log(`\n========================================`);
 console.log(`🚀 Building Rivo OTA Fast Update v${targetVersion}...`);
 console.log(`========================================\n`);
 
+function findHermesCompiler() {
+  const platform = process.platform;
+  let binName = 'hermesc';
+  let subDir = 'linux64-bin';
+  if (platform === 'win32') {
+    binName = 'hermesc.exe';
+    subDir = 'win64-bin';
+  } else if (platform === 'darwin') {
+    subDir = 'osx-bin';
+  }
+
+  const candidatePaths = [
+    path.join(rootDir, 'node_modules', 'react-native', 'sdks', 'hermesc', subDir, binName),
+    path.join(rootDir, 'node_modules', 'hermes-engine', subDir, binName),
+    path.join(rootDir, 'node_modules', '.bin', binName),
+  ];
+
+  for (const candidate of candidatePaths) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return 'hermesc';
+}
+
+function isHermesConfigured() {
+  const gradlePropsPath = path.join(rootDir, 'android', 'gradle.properties');
+  if (fs.existsSync(gradlePropsPath)) {
+    const props = fs.readFileSync(gradlePropsPath, 'utf8');
+    if (/hermesEnabled\s*=\s*false/i.test(props)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 const cmd = `node node_modules/@expo/cli/build/bin/cli export:embed --entry-file index.js --platform android --dev false --bundle-output "${bundlePath}" --assets-dest "${path.join(rootDir, 'android', 'app', 'src', 'main', 'res')}"`;
 
 try {
@@ -45,6 +82,24 @@ try {
 
   if (!fs.existsSync(bundlePath)) {
     throw new Error('Bundle file was not generated!');
+  }
+
+  // Compile to Hermes Bytecode (HBC) if Hermes is configured
+  if (isHermesConfigured()) {
+    console.log('\nCompiling JS bundle to Hermes bytecode (hermesc)...');
+    const hermescBin = findHermesCompiler();
+    const hbcBundlePath = `${bundlePath}.hbc`;
+    const hermesCmd = `"${hermescBin}" -emit-binary -out "${hbcBundlePath}" "${bundlePath}"`;
+    try {
+      execSync(hermesCmd, { cwd: rootDir, stdio: 'inherit' });
+      if (fs.existsSync(hbcBundlePath)) {
+        fs.unlinkSync(bundlePath);
+        fs.renameSync(hbcBundlePath, bundlePath);
+        console.log('✅ Hermes bytecode compilation succeeded (-emit-binary).');
+      }
+    } catch (hbcErr) {
+      console.warn('⚠️ hermesc bytecode compilation warning:', hbcErr.message);
+    }
   }
 
   const stat = fs.statSync(bundlePath);

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.2.9",
+  "version": "2.3.8",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "YouTube direct streaming v2.2.9",
-  "notesEn": "Instant in-app OTA update (3.36 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 3518925,
-  "sizeMb": "3.36 MB",
-  "updatedAt": "2026-11-02T19:19:58.245Z"
+  "notes": "تحديث هوائي فوري v2.3.8 • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant OTA update v2.3.8 • Performance improvements and bug fixes.",
+  "bundleSize": 4807988,
+  "sizeMb": "4.59 MB",
+  "updatedAt": "2026-11-05T09:58:22.897Z"
 }

@@ -17,6 +17,7 @@ import {
   Alert,
   ScrollView,
   BackHandler,
+  InteractionManager,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -43,6 +44,7 @@ import {
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
+import { LocalizationProvider, useTranslation } from './src/native/context/LocalizationContext';
 import { ToastProvider, useToast } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
 import { SocketProvider, useSocket } from './src/native/context/SocketContext';
@@ -53,7 +55,7 @@ import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
 import { installApk, getInitialChatSenderId, subscribeToChatNotification, exitAndRemoveTask, hasNativeProcessRestart } from './src/native/services/mediaControls';
-import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion } from './src/native/services/otaService';
+import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion, isOtaUpdateAvailable, getBaseAppVersion, fetchOtaManifest, compareVersions as otaCompareVersions } from './src/native/services/otaService';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
 
@@ -91,6 +93,7 @@ const BETA_TESTER_EMAILS = [
 ];
 
 function MainAppShell() {
+  const { t, isRTL } = useTranslation();
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const { socket } = useSocket();
@@ -134,33 +137,30 @@ function MainAppShell() {
     const remoteVersion = remotePlatform?.version || data?.version;
 
     // ─── 1. Check Fast OTA Update first (Android only) ───
-    if (Platform.OS === 'android' && remotePlatform?.ota?.enabled) {
+    if (Platform.OS === 'android') {
       try {
-        const ota = remotePlatform.ota;
-        const currentOta = await getCurrentOtaVersion();
-        const activeRunningVersion = (currentOta && isNewerVersion(currentOta, APP_VERSION)) ? currentOta : APP_VERSION;
-        
-        // If client is already running latest version (via active OTA or base APK), do nothing!
-        if (activeRunningVersion && !isNewerVersion(ota.version, activeRunningVersion) && !isNewerVersion(remoteVersion, activeRunningVersion)) {
-          return;
+        let ota = remotePlatform?.ota;
+        if (!ota || !ota.enabled) {
+          ota = await fetchOtaManifest();
         }
+        if (ota && ota.enabled) {
+          const currentOta = await getCurrentOtaVersion();
+          const baseVersion = getBaseAppVersion();
 
-        const isOtaNewer = isNewerVersion(ota.version, activeRunningVersion);
-        const isBaseCompatible = !ota.minAppVersion || !isNewerVersion(ota.minAppVersion, APP_VERSION);
-
-        if (isOtaNewer && isBaseCompatible) {
-          setOtaUpdateInfo({
-            enabled: true,
-            version: ota.version,
-            notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
-            notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',
-            bundleUrl: ota.bundleUrl.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl}`,
-            minAppVersion: ota.minAppVersion,
-            bundleSize: ota.bundleSize,
-            sizeMb: ota.sizeMb || (ota.bundleSize ? `${(ota.bundleSize / 1048576).toFixed(2)} MB` : null)
-          });
-          setIsOtaModalOpen(true);
-          return; // Handled via lightweight OTA!
+          if (isOtaUpdateAvailable(ota, currentOta, baseVersion)) {
+            setOtaUpdateInfo({
+              enabled: true,
+              version: ota.version,
+              notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
+              notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',
+              bundleUrl: ota.bundleUrl?.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl || '/downloads/ota/index.android.bundle'}`,
+              minAppVersion: ota.minAppVersion || '1.9.6',
+              bundleSize: ota.bundleSize,
+              sizeMb: ota.sizeMb || (ota.bundleSize ? `${(ota.bundleSize / 1048576).toFixed(2)} MB` : null)
+            });
+            setIsOtaModalOpen(true);
+            return; // Handled via lightweight OTA!
+          }
         }
       } catch (e) {
         console.warn('OTA manifest check error:', e);
@@ -169,7 +169,7 @@ function MainAppShell() {
 
     // ─── 2. Fallback to full binary update (APK / IPA) ───
     const currentOta = await getCurrentOtaVersion().catch(() => null);
-    const activeVersion = (currentOta && isNewerVersion(currentOta, APP_VERSION)) ? currentOta : APP_VERSION;
+    const activeVersion = currentOta || getBaseAppVersion();
 
     if (remoteVersion && isNewerVersion(remoteVersion, activeVersion)) {
       setUpdateInfo({
@@ -205,15 +205,24 @@ function MainAppShell() {
     if (Platform.OS === 'android' && Platform.Version >= 33) {
       PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
     }
-    cleanupOldApkInstallers();
-    checkAppUpdates();
+    const task = InteractionManager.runAfterInteractions(() => {
+      cleanupOldApkInstallers();
+      checkAppUpdates();
+    });
 
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
-        checkAppUpdates();
+        setTimeout(() => {
+          if (AppState.currentState === 'active') {
+            checkAppUpdates();
+          }
+        }, 2500);
       }
     });
-    return () => sub.remove();
+    return () => {
+      if (task && typeof task.cancel === 'function') task.cancel();
+      sub.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -250,11 +259,12 @@ function MainAppShell() {
       }
       const params = new URLSearchParams();
       if (email) params.set('email', email);
-      params.set('currentVersion', APP_VERSION);
+      const safeVersion = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : getBaseAppVersion();
+      params.set('currentVersion', safeVersion);
       params.set('platform', Platform.OS);
       const query = `?${params.toString()}`;
       const headers = {
-        'x-app-version': APP_VERSION,
+        'x-app-version': safeVersion,
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       };
       const res = await fetch(`${API_BASE_URL}/api/app/version${query}`, { headers });
@@ -265,19 +275,7 @@ function MainAppShell() {
   };
 
   const isNewerVersion = (remote, current) => {
-    try {
-      const r = remote.replace(/[^0-9.]/g, '').split('.').map(Number);
-      const c = current.replace(/[^0-9.]/g, '').split('.').map(Number);
-      for (let i = 0; i < Math.max(r.length, c.length); i++) {
-        const rv = r[i] || 0;
-        const cv = c[i] || 0;
-        if (rv > cv) return true;
-        if (rv < cv) return false;
-      }
-      return false;
-    } catch {
-      return false;
-    }
+    return otaCompareVersions(remote, current) > 0;
   };
 
   const [isDownloadingUpdate, setIsDownloadingUpdate] = useState(false);
@@ -698,6 +696,7 @@ function MainAppShell() {
  * Native React Native UI for Offline Vault, Quran, and local storage playback.
  */
 function NativeAppShell() {
+  const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
   const { appMode, setAppMode } = useConnectivity();
   const { navStyle, visibleMenuItems, firstVisibleTab, hiddenMenuItems, isLoaded: isNavLoaded } = useNavPreferences();
   const [activeTab, setActiveTab] = useState('home');
@@ -748,6 +747,10 @@ function NativeAppShell() {
 
   const handleSelectArtist = useCallback((art) => {
     setSelectedArtist(art);
+  }, []);
+
+  const handleClearViewingUser = useCallback(() => {
+    setViewingUser(null);
   }, []);
 
   const handleOpenCreatePlaylist = useCallback(() => {
@@ -808,6 +811,7 @@ function NativeAppShell() {
   }, []);
 
   const handleAvatarPress = useCallback(() => {
+    setViewingUser(null);
     if (currentUser) {
       setActiveTab('profile');
     } else {
@@ -820,7 +824,6 @@ function NativeAppShell() {
       registerFullPlayerHandler(handleOpenFullPlayer);
     }
   }, [registerFullPlayerHandler, handleOpenFullPlayer]);
-  const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
   const [headerSearchText, setHeaderSearchText] = useState('');
   const { isDark, toggleTheme } = useTheme();
   const { socket } = useSocket();
@@ -915,11 +918,15 @@ function NativeAppShell() {
     // 3. Resume from background
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        getInitialChatSenderId().then((senderId) => {
-          if (senderId) {
-            handleOpenChatFromNotification(senderId);
+        setTimeout(() => {
+          if (AppState.currentState === 'active') {
+            getInitialChatSenderId().then((senderId) => {
+              if (senderId) {
+                handleOpenChatFromNotification(senderId);
+              }
+            }).catch(() => {});
           }
-        }).catch(() => {});
+        }, 1500);
       }
     });
 
@@ -957,77 +964,24 @@ function NativeAppShell() {
     } else {
       setSelectedAlbum(null);
       setSelectedArtist(null);
+      if (tabId === 'profile') {
+        setViewingUser(null);
+      }
       setActiveTab(tabId);
     }
   }, []);
 
-  const renderActiveScreen = () => {
-    switch (activeTab) {
-      case 'search':
-        return (
-          <SearchScreen
-            initialQuery={headerSearchText}
-            onQueryChange={handleQueryChange}
-            onTrackAction={handleTrackAction}
-            onOpenChat={handleOpenChat}
-            onOpenFullPlayer={handleOpenFullPlayer}
-            onSelectAlbum={handleSelectAlbum}
-            onSelectArtist={handleSelectArtist}
-          />
-        );
-      case 'library':
-        return (
-          <LibraryScreen
-            onOpenCreatePlaylist={handleOpenCreatePlaylist}
-            onNavigateOffline={handleNavigateOffline}
-            onTrackAction={handleTrackAction}
-          />
-        );
-      case 'quran':
-        return <QuranScreen onTrackAction={handleTrackAction} />;
-      case 'profile':
-        return (
-          <ProfileScreen
-            onOpenSettings={handleOpenSettings}
-            onOpenAuth={handleOpenAuth}
-            onOpenFriendActivity={handleOpenFriendActivity}
-            onOpenJam={handleOpenJam}
-            onOpenChat={handleOpenChat}
-            onSelectPlaylist={handleSelectPlaylist}
-            onOpenFullPlayer={handleOpenFullPlayer}
-            onSelectAlbum={handleSelectAlbum}
-            onSelectArtist={handleSelectArtist}
-          />
-        );
-      case 'stats':
-        return <StatsScreen />;
-      case 'offline':
-        return <OfflineScreen />;
-      case 'admin':
-        return <AdminScreen />;
-      case 'music':
-        return (
-          <HomeScreen
-            initialFilter="music"
-            onOpenAddSong={handleOpenAddSong}
-            onTrackAction={handleTrackAction}
-            onOpenFullPlayer={handleOpenFullPlayer}
-            onSelectAlbum={handleSelectAlbum}
-            onSelectArtist={handleSelectArtist}
-          />
-        );
-      default:
-        return (
-          <HomeScreen
-            onOpenAddSong={handleOpenAddSong}
-            onTrackAction={handleTrackAction}
-            onOpenFullPlayer={handleOpenFullPlayer}
-            onSelectAlbum={handleSelectAlbum}
-            onSelectArtist={handleSelectArtist}
-          />
-        );
-    }
-  };
+  const [visitedTabs, setVisitedTabs] = useState(() => new Set(['home']));
+
+  useEffect(() => {
+    const tabKey = (activeTab === 'music' ? 'home' : activeTab);
+    setVisitedTabs(prev => {
+      if (prev.has(tabKey)) return prev;
+      const next = new Set(prev);
+      next.add(tabKey);
+      return next;
+    });
+  }, [activeTab]);
 
   return (
     <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
@@ -1051,8 +1005,8 @@ function NativeAppShell() {
         <View style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}>
           <Search size={13} color={isDark ? '#64748b' : '#78716c'} strokeWidth={2.2} />
           <TextInput
-            style={[styles.headerSearchInput, !isDark && styles.headerSearchInputLight]}
-            placeholder="Search songs, artists..."
+            style={[styles.headerSearchInput, !isDark && styles.headerSearchInputLight, isRTL && { textAlign: 'right' }]}
+            placeholder={t('search.placeholder')}
             placeholderTextColor={isDark ? '#64748b' : '#78716c'}
             value={headerSearchText}
             onChangeText={(txt) => {
@@ -1120,10 +1074,85 @@ function NativeAppShell() {
       </View>
 
       {/* ─────────────────────────────────────────
-          ACTIVE SCREEN
+          ACTIVE SCREEN (Instant Tab Switching via Lazy Keep-Alive)
           ───────────────────────────────────────── */}
       <View style={[styles.screenContainer, !isDark && styles.screenContainerLight]}>
-        {renderActiveScreen()}
+        <View style={[{ flex: 1 }, (activeTab === 'home' || activeTab === 'music' || (!['search', 'library', 'quran', 'profile', 'stats', 'offline', 'admin'].includes(activeTab))) ? { display: 'flex' } : { display: 'none' }]}>
+          <HomeScreen
+            initialFilter="all"
+            onOpenAddSong={handleOpenAddSong}
+            onTrackAction={handleTrackAction}
+            onOpenFullPlayer={handleOpenFullPlayer}
+            onSelectAlbum={handleSelectAlbum}
+            onSelectArtist={handleSelectArtist}
+          />
+        </View>
+
+        {visitedTabs.has('search') && (
+          <View style={[{ flex: 1 }, activeTab === 'search' ? { display: 'flex' } : { display: 'none' }]}>
+            <SearchScreen
+              initialQuery={headerSearchText}
+              onQueryChange={handleQueryChange}
+              onTrackAction={handleTrackAction}
+              onOpenChat={handleOpenChat}
+              onOpenFullPlayer={handleOpenFullPlayer}
+              onSelectAlbum={handleSelectAlbum}
+              onSelectArtist={handleSelectArtist}
+            />
+          </View>
+        )}
+
+        {visitedTabs.has('library') && (
+          <View style={[{ flex: 1 }, activeTab === 'library' ? { display: 'flex' } : { display: 'none' }]}>
+            <LibraryScreen
+              onOpenCreatePlaylist={handleOpenCreatePlaylist}
+              onNavigateOffline={handleNavigateOffline}
+              onTrackAction={handleTrackAction}
+            />
+          </View>
+        )}
+
+        {visitedTabs.has('quran') && (
+          <View style={[{ flex: 1 }, activeTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
+            <QuranScreen onTrackAction={handleTrackAction} />
+          </View>
+        )}
+
+        {visitedTabs.has('offline') && (
+          <View style={[{ flex: 1 }, activeTab === 'offline' ? { display: 'flex' } : { display: 'none' }]}>
+            <OfflineScreen />
+          </View>
+        )}
+
+        {visitedTabs.has('profile') && (
+          <View style={[{ flex: 1 }, activeTab === 'profile' ? { display: 'flex' } : { display: 'none' }]}>
+            <ProfileScreen
+              onOpenSettings={handleOpenSettings}
+              onOpenAuth={handleOpenAuth}
+              onOpenFriendActivity={handleOpenFriendActivity}
+              onOpenJam={handleOpenJam}
+              onOpenChat={handleOpenChat}
+              onSelectPlaylist={handleSelectPlaylist}
+              onOpenFullPlayer={handleOpenFullPlayer}
+              onSelectAlbum={handleSelectAlbum}
+              onSelectArtist={handleSelectArtist}
+              viewingUser={viewingUser}
+              onClearViewingUser={handleClearViewingUser}
+            />
+          </View>
+        )}
+
+        {visitedTabs.has('stats') && (
+          <View style={[{ flex: 1 }, activeTab === 'stats' ? { display: 'flex' } : { display: 'none' }]}>
+            <StatsScreen />
+          </View>
+        )}
+
+        {activeTab === 'admin' && (
+          <View style={[{ flex: 1 }]}>
+            <AdminScreen />
+          </View>
+        )}
       </View>
 
       {/* ─────────────────────────────────────────
@@ -1164,7 +1193,7 @@ function NativeAppShell() {
                   strokeWidth={active ? 2.8 : 2}
                 />
                 <Text style={[styles.tabLabel, !isDark && styles.tabLabelLight, active && styles.tabLabelActive]}>
-                  {tab.label}
+                  {t(`nav.${tab.id}`, tab.label)}
                 </Text>
               </TouchableOpacity>
             );
@@ -1187,17 +1216,17 @@ function NativeAppShell() {
           activeOpacity={1}
           onPress={handleCloseMenu}
         >
-          <View style={styles.menuSheet}>
-            <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>RIVO MENU</Text>
-              <TouchableOpacity onPress={handleCloseMenu}>
-                <X size={18} color="#ffffff" />
+          <View style={[styles.menuSheet, !isDark && styles.menuSheetLight]}>
+            <View style={[styles.menuHeader, !isDark && styles.menuHeaderLight]}>
+              <Text style={[styles.menuTitle, !isDark && styles.menuTitleLight]}>{t('nav.rivoMenu')}</Text>
+              <TouchableOpacity onPress={handleCloseMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <X size={18} color={isDark ? '#ffffff' : '#475569'} strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
 
             {/* Category: Community & Live */}
             <View style={styles.menuSection}>
-              <Text style={styles.menuSectionHeader}>COMMUNITY & LIVE</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.communityLive')}</Text>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1205,10 +1234,10 @@ function NativeAppShell() {
                   setIsFriendActivityOpen(true);
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(23,163,152,0.18)' }]}>
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(23,163,152,0.18)' : '#e6f7f5' }]}>
                   <Users size={15} color="#17a398" strokeWidth={2.4} />
                 </View>
-                <Text style={styles.menuItemText}>Friend Activity</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.friendActivity')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1218,10 +1247,10 @@ function NativeAppShell() {
                   setIsJamOpen(true);
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(245,158,11,0.18)' }]}>
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : '#fef3c7' }]}>
                   <Radio size={15} color="#f59e0b" strokeWidth={2.4} />
                 </View>
-                <Text style={styles.menuItemText}>Live Jam Room</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.jamSession')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1231,27 +1260,28 @@ function NativeAppShell() {
                   setIsChatOpen(true);
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(56,189,248,0.18)' }]}>
-                  <MessageSquare size={15} color="#38bdf8" strokeWidth={2.4} />
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(56,189,248,0.18)' : '#e0f2fe' }]}>
+                  <MessageSquare size={15} color="#0284c7" strokeWidth={2.4} />
                 </View>
-                <Text style={styles.menuItemText}>Messages & Chat</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('modals.chatTitle')}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Category: Music & Library */}
             <View style={styles.menuSection}>
-              <Text style={styles.menuSectionHeader}>LIBRARY & STATS</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.library')}</Text>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
                   setIsMenuOpen(false);
+                  setViewingUser(null);
                   setActiveTab('profile');
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(16,185,129,0.18)' }]}>
-                  <User size={15} color="#10b981" />
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(16,185,129,0.18)' : '#ecfdf5' }]}>
+                  <User size={15} color="#059669" />
                 </View>
-                <Text style={styles.menuItemText}>My Profile</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.profile')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1261,10 +1291,10 @@ function NativeAppShell() {
                   setActiveTab('stats');
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(245,158,11,0.18)' }]}>
-                  <Activity size={15} color="#f59e0b" />
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : '#fef3c7' }]}>
+                  <Activity size={15} color="#d97706" />
                 </View>
-                <Text style={styles.menuItemText}>Listening Stats</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.stats')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1274,16 +1304,16 @@ function NativeAppShell() {
                   setActiveTab('offline');
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(56,189,248,0.18)' }]}>
-                  <Download size={15} color="#38bdf8" />
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(56,189,248,0.18)' : '#e0f2fe' }]}>
+                  <Download size={15} color="#0284c7" />
                 </View>
-                <Text style={styles.menuItemText}>Offline Vault</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.offlineVault')}</Text>
               </TouchableOpacity>
             </View>
 
             {/* Category: System */}
             <View style={styles.menuSection}>
-              <Text style={styles.menuSectionHeader}>PREFERENCES</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.preferences')}</Text>
               {/* Theme Toggle inside Drawer */}
               <TouchableOpacity
                 style={styles.menuItem}
@@ -1291,14 +1321,14 @@ function NativeAppShell() {
                   toggleTheme();
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : 'rgba(11,17,16,0.12)' }]}>
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(245,158,11,0.18)' : '#f1f5f9' }]}>
                   {isDark ? (
                     <Sun size={15} color="#f59e0b" strokeWidth={2.5} />
                   ) : (
                     <Moon size={15} color="#0b1110" strokeWidth={2.5} />
                   )}
                 </View>
-                <Text style={styles.menuItemText}>{isDark ? 'Light Theme' : 'Dark Theme'}</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{isDark ? t('nav.lightTheme') : t('nav.darkTheme')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1308,10 +1338,10 @@ function NativeAppShell() {
                   setIsSettingsOpen(true);
                 }}
               >
-                <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(237,229,211,0.15)' }]}>
-                  <SettingsIcon size={15} color="#ede5d3" />
+                <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(237,229,211,0.15)' : '#f1f5f9' }]}>
+                  <SettingsIcon size={15} color={isDark ? '#ede5d3' : '#475569'} />
                 </View>
-                <Text style={styles.menuItemText}>Settings</Text>
+                <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.settings')}</Text>
               </TouchableOpacity>
 
               {(currentUser?.role === 'admin' || currentUser?.email?.includes('admin')) && (
@@ -1322,18 +1352,18 @@ function NativeAppShell() {
                     setActiveTab('admin');
                   }}
                 >
-                  <View style={[styles.menuIconWrap, { backgroundColor: 'rgba(220,38,38,0.18)' }]}>
+                  <View style={[styles.menuIconWrap, { backgroundColor: isDark ? 'rgba(220,38,38,0.18)' : '#fee2e2' }]}>
                     <Shield size={15} color="#dc2626" />
                   </View>
-                  <Text style={styles.menuItemText}>Admin Portal</Text>
+                  <Text style={[styles.menuItemText, !isDark && styles.menuItemTextLight]}>{t('nav.adminPortal')}</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             {/* Version Information Footer */}
-            <View style={styles.menuFooter}>
-              <Text style={styles.menuFooterVersion}>{FULL_VERSION}</Text>
-              <Text style={styles.menuFooterSub}>Rivo Music Streaming</Text>
+            <View style={[styles.menuFooter, !isDark && styles.menuFooterLight]}>
+              <Text style={[styles.menuFooterVersion, !isDark && styles.menuFooterVersionLight]}>{FULL_VERSION}</Text>
+              <Text style={styles.menuFooterSub}>{t('nav.brandingSubtitle')}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -1385,15 +1415,17 @@ export default function App() {
       <ThemeProvider>
         <ConnectivityProvider>
           <UserProvider>
-            <ToastProvider>
-              <AudioProvider>
-                <SocketProvider>
-                  <NavPreferencesProvider>
-                    <MainAppShell />
-                  </NavPreferencesProvider>
-                </SocketProvider>
-              </AudioProvider>
-            </ToastProvider>
+            <LocalizationProvider>
+              <ToastProvider>
+                <AudioProvider>
+                  <SocketProvider>
+                    <NavPreferencesProvider>
+                      <MainAppShell />
+                    </NavPreferencesProvider>
+                  </SocketProvider>
+                </AudioProvider>
+              </ToastProvider>
+            </LocalizationProvider>
           </UserProvider>
         </ConnectivityProvider>
       </ThemeProvider>

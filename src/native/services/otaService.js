@@ -1,8 +1,10 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import Constants from 'expo-constants';
 import { applyOtaBundle, reloadApp, clearOtaBundle, getOtaInfo } from './mediaControls';
-import { APP_VERSION } from '../version';
+import { ANDROID_VERSION, APP_VERSION } from '../version';
+import { API_BASE_URL } from '../config';
 
 const STORAGE_KEYS = {
   OTA_VERSION: 'rivo_ota_version',
@@ -11,11 +13,13 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Compare two semver-like strings (e.g. "1.9.5.1" vs "1.9.5")
+ * Compare two semver-like strings (e.g. "2.3.7" vs "2.3.3")
  * Returns >0 if v1 > v2, <0 if v1 < v2, 0 if equal
  */
 export const compareVersions = (v1, v2) => {
-  if (!v1 || !v2) return 0;
+  if (!v1 && !v2) return 0;
+  if (!v1) return -1;
+  if (!v2) return 1;
   const p1 = String(v1).replace(/[^0-9.]/g, '').split('.').map(Number);
   const p2 = String(v2).replace(/[^0-9.]/g, '').split('.').map(Number);
   const maxLen = Math.max(p1.length, p2.length);
@@ -26,6 +30,19 @@ export const compareVersions = (v1, v2) => {
     if (num1 < num2) return -1;
   }
   return 0;
+};
+
+/**
+ * Returns the underlying installed base APK binary version
+ */
+export const getBaseAppVersion = () => {
+  return (
+    Constants?.nativeAppVersion ||
+    Constants?.expoConfig?.version ||
+    ANDROID_VERSION ||
+    APP_VERSION ||
+    '2.3.3'
+  );
 };
 
 /**
@@ -49,6 +66,40 @@ export const getCurrentOtaVersion = async () => {
 };
 
 /**
+ * Check if an OTA update should be prompted / applied
+ */
+export const isOtaUpdateAvailable = (otaManifest, currentOta, baseVersion = getBaseAppVersion()) => {
+  if (Platform.OS !== 'android') return false;
+  if (!otaManifest || otaManifest.enabled === false || !otaManifest.version) return false;
+  const activeVer = currentOta || baseVersion;
+  if (activeVer && compareVersions(activeVer, otaManifest.version) >= 0) {
+    return false;
+  }
+  if (otaManifest.minAppVersion && compareVersions(baseVersion, otaManifest.minAppVersion) < 0) {
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Poll dedicated server OTA endpoint
+ */
+export const fetchOtaManifest = async () => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/app/ota`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
  * Safety mechanism: Guard against faulty bundles.
  * If the app crashes during boot on an OTA bundle, rollback to APK assets.
  */
@@ -57,7 +108,6 @@ export const initOtaCrashGuard = async () => {
   try {
     const bootFlag = await AsyncStorage.getItem(STORAGE_KEYS.OTA_BOOT_FLAG);
     if (bootFlag === 'booting') {
-      // App crashed before completing startup!
       let crashCount = parseInt((await AsyncStorage.getItem(STORAGE_KEYS.OTA_CRASH_COUNT)) || '0', 10) + 1;
       if (crashCount >= 5) {
         console.warn('[RivoOTA] Crash detected on OTA bundle! Rolling back to stock bundle...');
@@ -70,10 +120,8 @@ export const initOtaCrashGuard = async () => {
       await AsyncStorage.setItem(STORAGE_KEYS.OTA_CRASH_COUNT, String(crashCount));
     }
 
-    // Mark as booting
     await AsyncStorage.setItem(STORAGE_KEYS.OTA_BOOT_FLAG, 'booting');
 
-    // After 6 seconds of smooth operation, mark boot as successful
     setTimeout(async () => {
       try {
         await AsyncStorage.setItem(STORAGE_KEYS.OTA_BOOT_FLAG, 'healthy');
@@ -100,20 +148,18 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
     return { available: false, reason: 'manifest_empty' };
   }
 
+  const baseVersion = getBaseAppVersion();
+
   // Check minimum binary compatibility
-  if (otaManifest.minAppVersion && compareVersions(APP_VERSION, otaManifest.minAppVersion) < 0) {
+  if (otaManifest.minAppVersion && compareVersions(baseVersion, otaManifest.minAppVersion) < 0) {
     return { available: false, reason: 'requires_full_apk', minAppVersion: otaManifest.minAppVersion };
   }
 
   const currentOta = await getCurrentOtaVersion();
   // If already running this or newer OTA version, no update needed
-  if (currentOta && compareVersions(currentOta, otaManifest.version) >= 0) {
+  const activeVer = currentOta || baseVersion;
+  if (activeVer && compareVersions(activeVer, otaManifest.version) >= 0) {
     return { available: false, reason: 'already_up_to_date' };
-  }
-
-  // If no OTA installed yet, verify that OTA version is newer than the APK base version
-  if (!currentOta && compareVersions(APP_VERSION, otaManifest.version) >= 0) {
-    return { available: false, reason: 'apk_is_newer' };
   }
 
   // Download the bundle

@@ -12,13 +12,18 @@ if not os.path.exists(KEY):
     alt_key = os.path.expanduser(r"~/Desktop/LightsailDefaultKey-eu-north-1.pem")
     if os.path.exists(alt_key):
         KEY = alt_key
+    else:
+        KEY = None
 
 HOST = "ubuntu@rivo-m.duckdns.org"
 REMOTE_DIR = "/home/ubuntu/rivo"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def run_ssh(cmd):
-    full_cmd = ["ssh", "-i", KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", HOST, cmd]
+    full_cmd = ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
+    if KEY:
+        full_cmd.extend(["-i", KEY])
+    full_cmd.extend([HOST, cmd])
     print(f"[SSH] {cmd}", flush=True)
     res = subprocess.run(full_cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
     if res.returncode != 0:
@@ -30,7 +35,10 @@ def run_ssh(cmd):
     return res
 
 def upload_file(local_path, remote_path):
-    cmd = ["scp", "-i", KEY, "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes", local_path, f"{HOST}:{remote_path}"]
+    cmd = ["scp", "-o", "StrictHostKeyChecking=no", "-o", "BatchMode=yes"]
+    if KEY:
+        cmd.extend(["-i", KEY])
+    cmd.extend([local_path, f"{HOST}:{remote_path}"])
     print(f"[SCP] {os.path.basename(local_path)} -> {remote_path}", flush=True)
     res = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace', stdin=subprocess.DEVNULL)
     if res.returncode != 0:
@@ -42,9 +50,9 @@ def get_current_version():
     pkg_path = os.path.join(BASE_DIR, 'package.json')
     try:
         with open(pkg_path, 'r', encoding='utf-8') as f:
-            return json.load(f).get('version', '2.2.9')
+            return json.load(f).get('version', '2.3.5')
     except Exception:
-        return '2.2.9'
+        return '2.3.5'
 
 def sync_server():
     print("\n📦 [1/4] Packaging and syncing server/ code...", flush=True)
@@ -142,9 +150,14 @@ def build_and_sync_frontend(skip_build=False):
     print("✅ Frontend dist synchronized successfully.")
 
 def sync_assets_and_metadata():
-    print("\n📄 [3/4] Syncing OTA bundles & metadata...", flush=True)
+    print("\n📄 [3/4] Syncing OTA bundles, IPAs & metadata...", flush=True)
     meta_files = [
         ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
+        ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
+        ("public/downloads/Rivo-v2.3.8.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.ipa"),
+        ("public/downloads/Rivo-v2.3.7.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.7.ipa"),
+        ("public/downloads/Rivo-v2.3.5.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.5.ipa"),
+        ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
         ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
         ("public/assets/rivo-bot.png", f"{REMOTE_DIR}/public/assets/rivo-bot.png"),
         ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
@@ -153,15 +166,15 @@ def sync_assets_and_metadata():
         p = os.path.join(BASE_DIR, local_rel)
         if os.path.exists(p):
             upload_file(p, remote_path)
-    print("✅ Metadata synchronized.")
+    print("✅ Metadata and bundles synchronized.")
 
 def restart_and_verify():
     print("\n⚡ [4/4] Reloading PM2 and verifying status...", flush=True)
-    # Safe cleanup and reload
     remote_cmd = (
         f"rm -f {REMOTE_DIR}/*.tar.gz /home/ubuntu/*.tar.gz 2>/dev/null || true; "
-        f"pm2 reload 0 || pm2 restart 0; "
-        f"curl -s http://localhost:5000/api/app/broadcast-update 2>/dev/null || true; "
+        f"pm2 reload rivo || pm2 restart rivo; "
+        f"sleep 2; "
+        f"curl -s http://localhost:5000/api/health 2>/dev/null || true; "
         f"pm2 status"
     )
     run_ssh(remote_cmd)
@@ -175,17 +188,17 @@ def main():
     args = parser.parse_args()
 
     version = get_current_version()
-    print(f"==================================================")
+    print("==================================================")
     print(f"🚀 Deploying Rivo v{version} to Production ({HOST})")
-    print(f"==================================================")
+    print("==================================================")
 
-    # Pre-create remote directories
     run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server {REMOTE_DIR}/dist /home/ubuntu/dist")
 
     if args.dist_only:
         build_and_sync_frontend(skip_build=args.skip_build)
     elif args.server_only:
         sync_server()
+        sync_assets_and_metadata()
         restart_and_verify()
     else:
         sync_server()
@@ -193,7 +206,7 @@ def main():
         sync_assets_and_metadata()
         restart_and_verify()
 
-    print(f"\n🎉 Deployment completed successfully!")
+    print("\n🎉 Deployment completed successfully!")
 
 if __name__ == '__main__':
     main()
