@@ -70,6 +70,9 @@ uploads/audio-cache/
 uploads/*
 !uploads/.gitkeep
 scripts/__pycache__/
+__pycache__/
+*.pyc
+*.pyo
 scripts/archive/
 *.log
 *-player-script.js
