@@ -161,6 +161,7 @@ def sync_assets_and_metadata():
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
         ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
         ("public/downloads/Rivo-v2.3.8.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.apk"),
+        ("public/downloads/Rivo-v2.3.9.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.9.ipa"),
         ("public/downloads/Rivo-v2.3.8.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.ipa"),
         ("public/downloads/Rivo-v2.3.7.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.7.ipa"),
         ("public/downloads/Rivo-v2.3.5.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.5.ipa"),
