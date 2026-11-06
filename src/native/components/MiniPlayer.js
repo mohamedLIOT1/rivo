@@ -74,11 +74,13 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
             <View style={[styles.coverPlaceholder, !isDark && styles.coverPlaceholderLight]}>
               <Disc size={18} color="#17a398" strokeWidth={1.8} />
             </View>
-            <Image
-              source={{ uri: coverUri }}
-              style={styles.cover}
-              onError={() => setImageError(true)}
-            />
+            {!imageError && coverUri ? (
+              <Image
+                source={{ uri: coverUri }}
+                style={styles.cover}
+                onError={() => setImageError(true)}
+              />
+            ) : null}
           </View>
 
           {/* Title & Artist */}

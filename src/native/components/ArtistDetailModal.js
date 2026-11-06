@@ -48,7 +48,6 @@ import { useTranslation } from '../context/LocalizationContext';
 
 
 const { width } = Dimensions.get('window');
-const ALBUM_CARD_WIDTH = (width - 48) / 2;
 
 export default function ArtistDetailModal({
   visible,

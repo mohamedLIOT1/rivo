@@ -32,13 +32,14 @@ function LockscreenSettingCard({
 
   const [hasNotificationPermission, setHasNotificationPermission] = useState(true);
   const [hasOverlayPermission, setHasOverlayPermission] = useState(true);
+  const [isPermissionChecked, setIsPermissionChecked] = useState(false);
 
   const checkPermissions = useCallback(async () => {
     try {
       const notifAllowed = await checkNotificationPermission();
       setHasNotificationPermission(Boolean(notifAllowed));
     } catch (_e) {
-      setHasNotificationPermission(true);
+      setHasNotificationPermission(false);
     }
 
     if (isAndroid) {
@@ -46,9 +47,10 @@ function LockscreenSettingCard({
         const overlayAllowed = await canDrawOverlays();
         setHasOverlayPermission(Boolean(overlayAllowed));
       } catch (_e) {
-        setHasOverlayPermission(true);
+        setHasOverlayPermission(false);
       }
     }
+    setIsPermissionChecked(true);
   }, [isAndroid]);
 
   useEffect(() => {
@@ -66,25 +68,49 @@ function LockscreenSettingCard({
   }, [checkPermissions]);
 
   const handleGrantNotificationPermission = useCallback(async () => {
-    const granted = await requestNotificationPermission();
-    if (!granted) {
+    try {
+      const granted = await requestNotificationPermission();
+      if (!granted) {
+        await openNotificationSettings();
+      }
+    } catch (_e) {
       await openNotificationSettings();
+    } finally {
+      await checkPermissions();
     }
-    await checkPermissions();
   }, [checkPermissions]);
 
   const handleGrantOverlayPermission = useCallback(async () => {
-    await requestOverlayPermission();
-    await checkPermissions();
+    try {
+      await requestOverlayPermission();
+    } finally {
+      await checkPermissions();
+    }
   }, [checkPermissions]);
 
   const handleToggle = useCallback(async (val) => {
-    if (val && !hasNotificationPermission) {
-      await requestNotificationPermission();
+    onToggle?.(val);
+    if (val) {
+      try {
+        const notifAllowed = await checkNotificationPermission();
+        if (!notifAllowed) {
+          const granted = await requestNotificationPermission();
+          if (!granted) {
+            // Handled via permission warning card
+          }
+        }
+        if (isAndroid) {
+          const overlayAllowed = await canDrawOverlays();
+          if (!overlayAllowed) {
+            await requestOverlayPermission();
+          }
+        }
+      } catch (_e) {}
       await checkPermissions();
     }
-    onToggle?.(val);
-  }, [hasNotificationPermission, onToggle, checkPermissions]);
+  }, [isAndroid, onToggle, checkPermissions]);
+
+  const allPermissionsGranted = hasNotificationPermission && (!isAndroid || hasOverlayPermission);
 
   return (
     <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
@@ -126,7 +152,7 @@ function LockscreenSettingCard({
               <Text style={[styles.warningDesc, { color: isDark ? '#fca5a5' : '#b91c1c' }]}>
                 {isIos
                   ? 'Enable notifications to display Now Playing media controls and Dynamic Island info on your device.'
-                  : 'Android 13+ requires notification permission to display Now Playing media playback controls on the lock screen.'}
+                  : 'Android requires notification permission to display Now Playing media playback controls on the lock screen.'}
               </Text>
               <TouchableOpacity
                 style={styles.grantButton}
@@ -139,8 +165,15 @@ function LockscreenSettingCard({
             </View>
           )}
 
-          {isAndroid && !hasOverlayPermission && hasNotificationPermission && (
-            <View style={[styles.warningBox, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2', borderColor: '#ef4444' }]}>
+          {isAndroid && !hasOverlayPermission && (
+            <View style={[
+              styles.warningBox,
+              {
+                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                borderColor: '#ef4444',
+                marginTop: !hasNotificationPermission ? 10 : 0,
+              }
+            ]}>
               <View style={styles.warningHeader}>
                 <ShieldAlert size={16} color="#ef4444" />
                 <Text style={styles.warningTitle}>Overlay Permission Required</Text>
@@ -159,7 +192,7 @@ function LockscreenSettingCard({
             </View>
           )}
 
-          {hasNotificationPermission && (!isAndroid || hasOverlayPermission) && (
+          {isPermissionChecked && allPermissionsGranted && (
             <View style={[styles.successBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.08)' : '#f0fdf4', borderColor: isDark ? '#059669' : '#86efac' }]}>
               <CheckCircle2 size={15} color={colors.mint} />
               <Text style={[styles.successText, { color: isDark ? '#6ee7b7' : '#047857' }]}>

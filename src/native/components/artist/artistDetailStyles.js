@@ -1,7 +1,4 @@
-import { StyleSheet, Platform, Dimensions } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const ALBUM_CARD_WIDTH = Math.floor((Math.min(SCREEN_WIDTH || 375, 760) - 44) / 2);
+import { StyleSheet, Platform } from 'react-native';
 
 export const styles = StyleSheet.create({
   fullScreenWrapper: {
@@ -326,15 +323,21 @@ export const styles = StyleSheet.create({
   albumGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
+    rowGap: 12,
   },
   albumCard: {
-    width: ALBUM_CARD_WIDTH,
+    width: '48%',
+    maxWidth: '49%',
     backgroundColor: '#182320',
     borderWidth: 1.5,
     borderColor: '#000000',
     borderRadius: 10,
-    padding: 10,
+    padding: 8,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.25, shadowRadius: 0 },
+      android: { elevation: 0 },
+    }),
   },
   albumCover: {
     width: '100%',
@@ -342,19 +345,19 @@ export const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#000000',
-    marginBottom: 8,
+    marginBottom: 6,
     backgroundColor: '#0b1110',
   },
   albumCardTitle: {
-    fontFamily: 'monospace',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontSize: 11,
     fontWeight: '900',
     color: '#fdfbf7',
     marginBottom: 2,
   },
   albumCardSub: {
-    fontFamily: 'monospace',
-    fontSize: 9,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 9.5,
     color: '#26c4b7',
     fontWeight: '700',
   },
@@ -464,6 +467,9 @@ export const styles = StyleSheet.create({
   },
   albumCardTitleLight: {
     color: '#0b1110',
+  },
+  albumCardSubLight: {
+    color: '#0f766e',
   },
   trackTitleLight: {
     color: '#0b1110',

@@ -3,7 +3,7 @@ import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, 
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
-import { normalizeCoverUrl } from '../utils/coverUtils';
+import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK } from '../utils/coverUtils';
 
 function MiniPlayer({
   currentTrack,
@@ -272,21 +272,25 @@ function MiniPlayer({
             onClick={openFullPlayer}
             className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer pr-1"
           >
-            <div className="w-10 h-10 rounded-lg bg-[#0b1110] text-[#17a398] brutal-border flex items-center justify-center shrink-0 overflow-hidden brutal-shadow-sm">
-              {currentTrack.cover ? (
-                <img 
-                  src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
-                  alt={currentTrack.title} 
-                  className="w-full h-full object-cover" 
-                />
-              ) : (
+            <div className="w-10 h-10 rounded-lg bg-[#0b1110] text-[#17a398] brutal-border flex items-center justify-center shrink-0 overflow-hidden brutal-shadow-sm relative">
+              <div className="absolute inset-0 flex items-center justify-center text-[#17a398] bg-[#0b1110]">
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="4" width="20" height="16" rx="2"></rect>
                   <circle cx="8" cy="10" r="2"></circle>
                   <circle cx="16" cy="10" r="2"></circle>
                   <path d="M8 14h8"></path>
                 </svg>
-              )}
+              </div>
+              <img 
+                src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
+                alt={currentTrack.title} 
+                className="relative z-10 w-full h-full object-cover" 
+                onError={(e) => {
+                  if (e.currentTarget.dataset.fallback) return;
+                  e.currentTarget.dataset.fallback = 'true';
+                  e.currentTarget.src = DEFAULT_COVER_FALLBACK;
+                }}
+              />
             </div>
 
             <div className="min-w-0 flex-1">
@@ -350,14 +354,27 @@ function MiniPlayer({
           <div className="flex items-center gap-3.5 w-3/12 min-w-0">
             <div 
               onClick={openFullPlayer} 
-              className="relative w-12 h-12 rounded-xl brutal-border overflow-hidden shrink-0 group cursor-pointer"
+              className="relative w-12 h-12 rounded-xl bg-[#0b1110] text-[#17a398] brutal-border overflow-hidden shrink-0 group cursor-pointer"
             >
+              <div className="absolute inset-0 flex items-center justify-center text-[#17a398] bg-[#0b1110]">
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                  <circle cx="8" cy="10" r="2"></circle>
+                  <circle cx="16" cy="10" r="2"></circle>
+                  <path d="M8 14h8"></path>
+                </svg>
+              </div>
               <img 
                 src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
                 alt={currentTrack.title} 
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                className="relative z-10 w-full h-full object-cover group-hover:scale-105 transition-transform" 
+                onError={(e) => {
+                  if (e.currentTarget.dataset.fallback) return;
+                  e.currentTarget.dataset.fallback = 'true';
+                  e.currentTarget.src = DEFAULT_COVER_FALLBACK;
+                }}
               />
-              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
                 <Maximize2 size={16} className="text-white" />
               </div>
             </div>

@@ -7,6 +7,7 @@ import { isQuranContent } from '../utils/quranUtils';
 import { buildUrl } from '../utils/router';
 import { FULL_VERSION, APP_VERSION } from '../version';
 import RivoLogo from './RivoLogo';
+import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
 export default function Navigation({ 
   currentScreen = 'home', 
@@ -316,10 +317,10 @@ export default function Navigation({
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       {pl.cover ? (
                         <img 
-                          src={pl.cover} 
+                          src={normalizeCoverUrl(pl.cover)} 
                           alt={pl.name} 
                           className="w-6 h-6 rounded object-cover border border-zinc-700 shrink-0" 
-                          onError={(e) => { e.target.style.display = 'none'; }}
+                          onError={handleCoverImageError}
                         />
                       ) : (
                         <div 
@@ -430,7 +431,12 @@ export default function Navigation({
             >
               <div className="w-9 h-9 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-display font-black text-xs text-[#0b1110] brutal-shadow-sm shrink-0 overflow-hidden group-hover:scale-105 transition-transform">
                 {currentUser?.avatar ? (
-                  <img src={currentUser.avatar} alt="Profile" className="w-full h-full object-cover" />
+                  <img 
+                    src={currentUser.avatar} 
+                    alt="Profile" 
+                    className="w-full h-full object-cover" 
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
                 ) : (
                   currentUser?.name?.[0] || 'R'
                 )}

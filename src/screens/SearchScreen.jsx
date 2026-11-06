@@ -15,7 +15,7 @@ import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases 
 import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
-import { normalizeCoverUrl } from '../utils/coverUtils';
+import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -969,7 +969,7 @@ export default function SearchScreen({
                                 src={normalizeCoverUrl(track.cover, track)} 
                                 alt={track.title} 
                                 className="w-10 h-10 brutal-border object-cover bg-white shrink-0" 
-                                onError={(e) => { e.target.style.display = 'none'; }}
+                                onError={handleCoverImageError}
                               />
                               <div className="truncate flex-1">
                                 <p className="text-xs sm:text-sm font-mono font-black truncate group-hover:text-[#17a398] transition-colors">
@@ -1057,6 +1057,7 @@ export default function SearchScreen({
                                 src={normalizeCoverUrl(track.cover, track)} 
                                 alt={track.title} 
                                 className="w-10 h-10 brutal-border object-cover bg-white" 
+                                onError={handleCoverImageError} 
                               />
                               <span className="absolute -bottom-1 -right-1 text-[8px] font-mono font-black bg-[#17a398] text-[#0b1110] px-1 brutal-border">
                                 WEB

@@ -211,7 +211,8 @@ export default function ListeningActivityPanel({
       {/* Panel Box */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-lg h-[600px] max-h-[85vh] rounded-2xl flex flex-col brutal-shadow-lg brutal-border-thick overflow-hidden animate-in zoom-in-95 duration-200 md:w-full md:h-full md:max-w-none md:max-h-none md:rounded-none md:border-y-0 md:border-r-0 md:border-l-[2.5px] md:shadow-none md:animate-none transition-colors ${
+        dir={isRTL ? 'rtl' : 'ltr'}
+        className={`w-full max-w-lg h-[600px] max-h-[85vh] rounded-2xl flex flex-col brutal-shadow-lg brutal-border-thick overflow-hidden animate-in zoom-in-95 duration-200 md:w-full md:h-full md:max-w-none md:max-h-none md:rounded-none md:border-y-0 md:border-r-0 md:border-l-[2.5px] md:rtl:border-l-0 md:rtl:border-r-[2.5px] md:shadow-none md:animate-none transition-colors ${
           isDark ? 'bg-[#101716] border-zinc-800 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
         }`}
       >
@@ -224,37 +225,37 @@ export default function ListeningActivityPanel({
             isDark ? 'bg-[#141d1b] border-zinc-800 text-white' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]'
           }`}
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <div className="w-8 h-8 rounded-lg bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center font-display font-black text-sm shrink-0">
               <Users size={16} strokeWidth={2.5} />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <h3 className="text-xs font-mono font-black uppercase tracking-wider">
-                  {t?.('common.friendActivityTitle') || 'FRIEND ACTIVITY'}
+                <h3 className={`text-xs font-black uppercase truncate ${isRTL ? 'font-sans tracking-normal' : 'font-mono tracking-wider'}`}>
+                  {t?.('common.friendActivityTitle') || (isRTL ? 'نشاط الأصدقاء' : 'FRIEND ACTIVITY')}
                 </h3>
-                <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] rounded">
+                <span className="text-[10px] font-bold px-1.5 py-0.2 bg-[#082621] text-[#26c4b7] rounded shrink-0">
                   {isGuest ? 0 : filteredActivities.length}
                 </span>
               </div>
-              <span className="text-[9.5px] font-mono text-zinc-400 block mt-0.5 uppercase">
+              <span className={`text-[9.5px] text-zinc-400 block mt-0.5 truncate ${isRTL ? 'font-sans' : 'font-mono uppercase'}`}>
                 {isGuest
-                  ? (t?.('common.connectShare') || 'Connect & share in real-time')
+                  ? (t?.('common.connectShare') || (isRTL ? 'تواصل وشارك في الوقت الفعلي' : 'Connect & share in real-time'))
                   : liveCount > 0
-                  ? `${liveCount} ${t?.('common.listeningLive') || 'LISTENING LIVE'}`
-                  : (t?.('common.discordRadar') || 'DISCORD & COMMUNITY RADAR')}
+                  ? `${liveCount} ${t?.('common.listeningLive') || (isRTL ? 'يستمعون الآن' : 'LISTENING LIVE')}`
+                  : (t?.('common.discordRadar') || (isRTL ? 'رادار المجتمع والأصدقاء' : 'DISCORD & COMMUNITY RADAR'))}
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             {!isGuest && (
               <button
                 onClick={() => fetchActivity()}
                 className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                   isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-white' : 'bg-white text-[#082621] border-black hover:bg-[#ded2bb]'
                 }`}
-                title={t?.('common.refreshActivity') || 'Refresh Activity'}
+                title={t?.('common.refreshActivity') || (isRTL ? 'تحديث النشاط' : 'Refresh Activity')}
               >
                 <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
               </button>
@@ -277,18 +278,19 @@ export default function ListeningActivityPanel({
             <div className={`flex items-center px-3 py-1.5 rounded-xl border ${
               isDark ? 'bg-[#182320] border-zinc-700/80 text-white' : 'bg-white border-black text-[#0b1110]'
             }`}>
-              <Search size={14} className="shrink-0 text-zinc-400 mr-2 rtl:mr-0 rtl:ml-2" />
+              <Search size={14} className="shrink-0 text-zinc-400 me-2" />
               <input
                 type="text"
+                dir="auto"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t?.('common.searchFriendOrSong') || 'Search friend or song...'}
-                className="w-full text-xs font-mono bg-transparent outline-none placeholder:text-zinc-500"
+                placeholder={t?.('common.searchFriendOrSong') || (isRTL ? 'ابحث عن صديق أو أغنية...' : 'Search friend or song...')}
+                className="w-full text-xs font-sans font-medium bg-transparent outline-none placeholder:text-zinc-500"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="shrink-0 text-zinc-400 hover:text-white cursor-pointer ml-1.5 rtl:ml-0 rtl:mr-1.5"
+                  className="shrink-0 text-zinc-400 hover:text-white cursor-pointer ms-1.5"
                 >
                   <X size={13} />
                 </button>
@@ -318,7 +320,7 @@ export default function ListeningActivityPanel({
               <div className="w-12 h-12 rounded-xl bg-zinc-800/60 brutal-border flex items-center justify-center mx-auto mb-3 text-zinc-400">
                 <Radio size={22} className="opacity-70" />
               </div>
-              <h4 className={`text-xs font-mono font-black uppercase mb-1.5 tracking-wider ${
+              <h4 className={`text-xs font-black uppercase mb-1.5 ${isRTL ? 'font-sans tracking-normal' : 'font-mono tracking-wider'} ${
                 isDark ? 'text-zinc-200' : 'text-[#082621]'
               }`}>
                 {searchQuery ? (isRTL ? 'لا يوجد أصدقاء مطابقون' : 'NO MATCHING FRIENDS') : (isRTL ? 'لا توجد جلسات بث حالياً' : 'NO LIVE SESSIONS')}
@@ -336,7 +338,7 @@ export default function ListeningActivityPanel({
 
         {/* Footer info banner */}
         <div
-          className={`p-2.5 border-t-2 flex items-center justify-between text-[11px] font-mono shrink-0 ${
+          className={`p-2.5 border-t-2 flex items-center justify-between text-[11px] shrink-0 ${isRTL ? 'font-sans' : 'font-mono'} ${
             isDark ? 'bg-[#141d1b] border-zinc-800 text-zinc-400' : 'bg-[#ede5d3] border-[#0b1110] text-[#082621]/70'
           }`}
         >

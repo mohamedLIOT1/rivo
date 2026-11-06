@@ -2,6 +2,7 @@ import React from 'react';
 import { Music2, MoreVertical, Heart } from 'lucide-react';
 import { ArtistLinks } from '../../utils/artistUtils';
 import { useTranslation } from '../../context/PreferencesContext';
+import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils';
 
 export default function ArtistTrackList({
   artistTracks = [],
@@ -50,10 +51,10 @@ export default function ArtistTrackList({
                 {String(i + 1).padStart(2, '0')}
               </span>
               <img 
-                src={track.cover || `https://ui-avatars.com/api/?name=${encodeURIComponent(track.title || 'R')}&background=082621&color=26c4b7`}
+                src={normalizeCoverUrl(track.cover, track)}
                 alt={track.title} 
-                className="w-9 h-9 sm:w-11 sm:h-11 brutal-border rounded-md object-cover bg-white shrink-0" 
-                onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7`; }}
+                className="w-9 h-9 sm:w-11 sm:h-11 brutal-border rounded-md object-cover bg-black/10 shrink-0" 
+                onError={handleCoverImageError}
               />
               <div className="flex-1 truncate">
                 <h4 className={`text-xs sm:text-sm font-bold truncate group-hover:text-[#17a398] transition-colors ${

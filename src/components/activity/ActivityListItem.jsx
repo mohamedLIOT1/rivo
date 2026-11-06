@@ -1,5 +1,5 @@
 import React, { memo, useState } from 'react';
-import { Play, Radio, MessageSquare, Disc } from 'lucide-react';
+import { Play, Radio, MessageSquare, Disc, Clock, User } from 'lucide-react';
 import VerifiedBadge from '../VerifiedBadge';
 import { usePreferences } from '../../context/PreferencesContext';
 
@@ -9,7 +9,7 @@ function formatTimeAgo(dateStr, isRTL) {
   if (isNaN(diffSec) || diffSec < 0) return '';
   if (diffSec < 60) return isRTL ? 'منذ قليل' : 'just now';
   if (diffSec < 3600) {
-    const mins = Math.floor(diffSec / 60);
+    const mins = Math.max(1, Math.floor(diffSec / 60));
     return isRTL ? `منذ ${mins} دقيقة` : `${mins}m ago`;
   }
   if (diffSec < 86400) {
@@ -29,21 +29,21 @@ function formatTimeAgo(dateStr, isRTL) {
 }
 
 function formatBadgePill(lastActiveAt, isRTL) {
-  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
+  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'Offline';
   const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
-  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
+  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'Offline';
+  if (diffSec < 60) return isRTL ? 'الآن' : 'Now';
   if (diffSec < 3600) {
-    const mins = Math.floor(diffSec / 60);
-    return isRTL ? `${mins} د` : `${mins}M`;
+    const mins = Math.max(1, Math.floor(diffSec / 60));
+    return isRTL ? `${mins} د` : `${mins}m`;
   }
   if (diffSec < 86400) {
     const hours = Math.floor(diffSec / 3600);
-    return isRTL ? `${hours} س` : `${hours}H`;
+    return isRTL ? `${hours} س` : `${hours}h`;
   }
   const days = Math.floor(diffSec / 86400);
-  if (days === 1) return isRTL ? 'أمس' : '1D';
-  return isRTL ? `${days} ي` : `${days}D`;
+  if (days === 1) return isRTL ? 'أمس' : '1d';
+  return isRTL ? `${days} ي` : `${days}d`;
 }
 
 function ActivityListItemComponent({
@@ -54,7 +54,7 @@ function ActivityListItemComponent({
   onStartJamWithUser,
   openChatModal
 }) {
-  const { t, isRTL } = usePreferences();
+  const { isRTL } = usePreferences();
   const [imgError, setImgError] = useState(false);
   const rawListening = friend.currentListening;
   const isDummyOffline = Boolean(
@@ -135,24 +135,34 @@ function ActivityListItemComponent({
 
             {/* Time / Status pill cleanly positioned on the top-right */}
             {isLive ? (
-              <span className="flex items-center gap-1 text-[9px] font-mono font-black px-2 py-0.5 rounded-full bg-[#17a398] text-[#0b1110] uppercase shrink-0 shadow-xs">
-                <Radio size={9} strokeWidth={3} className="shrink-0 animate-pulse" />
-                {isRTL ? 'مباشر' : 'LIVE'}
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#17a398] text-[#0b1110] shrink-0 shadow-xs">
+                <Radio size={10} strokeWidth={3} className="shrink-0 animate-pulse" />
+                <span>{isRTL ? 'مباشر' : 'LIVE'}</span>
               </span>
             ) : isOnline ? (
-              <span className="text-[9px] font-mono font-black px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 uppercase shrink-0">
-                {isRTL ? 'متصل' : 'ONLINE'}
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <span>{isRTL ? 'متصل' : 'ONLINE'}</span>
               </span>
             ) : (
               <span
-                className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full uppercase shrink-0 ${
+                className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full shrink-0 ${
                   isDark
                     ? 'bg-zinc-800/90 text-zinc-300 border border-zinc-700/60'
                     : 'bg-[#ded4c1] text-zinc-700 border border-[#0b1110]/20'
                 }`}
-                title={friend.lastActiveAt ? (isRTL ? `آخر نشاط: ${formatTimeAgo(friend.lastActiveAt, isRTL)}` : `Last active: ${formatTimeAgo(friend.lastActiveAt, false)}`) : (isRTL ? 'غير متصل' : 'Offline')}
+                title={
+                  friend.lastActiveAt
+                    ? isRTL
+                      ? `آخر نشاط: ${formatTimeAgo(friend.lastActiveAt, true)}`
+                      : `Last active: ${formatTimeAgo(friend.lastActiveAt, false)}`
+                    : isRTL
+                    ? 'غير متصل'
+                    : 'Offline'
+                }
               >
-                {formatBadgePill(friend.lastActiveAt, isRTL)}
+                <Clock size={11} className="shrink-0 text-zinc-400" />
+                <span>{formatBadgePill(friend.lastActiveAt, isRTL)}</span>
               </span>
             )}
           </div>
@@ -213,9 +223,16 @@ function ActivityListItemComponent({
               </p>
             </div>
           ) : (
-            <p className="text-xs font-mono text-zinc-400 truncate leading-snug flex-1 min-w-0">
+            <p
+              dir="auto"
+              className={`text-xs truncate leading-snug flex-1 min-w-0 font-sans ${
+                isDark ? 'text-zinc-400' : 'text-zinc-600'
+              }`}
+            >
               {isOnline
                 ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Exploring music')
+                : friend.lastActiveAt
+                ? (isRTL ? `غير متصل • ${formatTimeAgo(friend.lastActiveAt, true)}` : `Offline • Last seen ${formatTimeAgo(friend.lastActiveAt, false)}`)
                 : (isRTL ? 'غير متصل' : 'Offline')}
             </p>
           )}
@@ -229,14 +246,14 @@ function ActivityListItemComponent({
             e.stopPropagation();
             onPlayFriendTrack?.(friend);
           }}
-          className="flex items-center gap-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase brutal-border cursor-pointer transition shrink-0 brutal-shadow-xs ml-1"
+          className="flex items-center gap-1.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] px-3 py-1.5 rounded-lg text-[10.5px] font-black uppercase brutal-border cursor-pointer transition shrink-0 brutal-shadow-xs ms-1"
           title={`Tune in to ${friend.name}`}
         >
           <Play size={11} fill="#0b1110" color="#0b1110" />
-          <span>TUNE IN</span>
+          <span>{isRTL ? 'استماع' : 'TUNE IN'}</span>
         </button>
       ) : (
-        <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+        <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ms-1">
           {onStartJamWithUser && (
             <button
               onClick={(e) => {
@@ -244,7 +261,7 @@ function ActivityListItemComponent({
                 onStartJamWithUser(friend);
               }}
               className="w-7.5 h-7.5 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs"
-              title={`Invite ${friend.name || 'friend'} to Jam`}
+              title={isRTL ? `دعوة ${friend.name || 'الصديق'} للجام` : `Invite ${friend.name || 'friend'} to Jam`}
             >
               <Radio size={12} strokeWidth={2.5} className="animate-pulse" />
             </button>
@@ -259,9 +276,24 @@ function ActivityListItemComponent({
               className={`w-7.5 h-7.5 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs ${
                 isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
               }`}
-              title={`Message ${friend.name || 'friend'}`}
+              title={isRTL ? `مراسلة ${friend.name || 'الصديق'}` : `Message ${friend.name || 'friend'}`}
             >
               <MessageSquare size={12} strokeWidth={2} />
+            </button>
+          )}
+
+          {onOpenUserProfile && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenUserProfile(friend);
+              }}
+              className={`w-7.5 h-7.5 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg brutal-shadow-xs ${
+                isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
+              }`}
+              title={isRTL ? `عرض الملف الشخصي لـ ${friend.name || 'المستخدم'}` : `View ${friend.name || 'user'}'s profile`}
+            >
+              <User size={12} strokeWidth={2} />
             </button>
           )}
         </div>

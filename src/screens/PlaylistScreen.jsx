@@ -19,7 +19,7 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import { getAlbumArtwork } from './ArtistScreen';
-import { normalizeCoverUrl } from '../utils/coverUtils';
+import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
 export default function PlaylistScreen({
   playlist: initialPlaylist, 
@@ -1478,7 +1478,7 @@ export default function PlaylistScreen({
                         src={normalizeCoverUrl(track.cover, track)} 
                         alt={track.title} 
                         className="w-10 h-10 sm:w-12 sm:h-12 brutal-border object-cover shrink-0 bg-[#ede5d3]" 
-                        onError={(e) => { e.target.src = `https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7`; }}
+                        onError={handleCoverImageError}
                       />
                       <div className="truncate flex-1">
                         <h4 className={`text-xs sm:text-sm font-bold truncate group-hover:text-[#17a398] transition-colors ${
@@ -1723,7 +1723,7 @@ export default function PlaylistScreen({
                     onClick={() => handlePlayPlaylistTrack(rec)}
                     className="flex items-center gap-3 flex-1 truncate cursor-pointer"
                   >
-                    <img src={normalizeCoverUrl(rec.cover, rec)} alt={rec.title} className="w-11 h-11 brutal-border object-cover shrink-0" />
+                    <img src={normalizeCoverUrl(rec.cover, rec)} alt={rec.title} className="w-11 h-11 brutal-border object-cover shrink-0" onError={handleCoverImageError} />
                     <div className="truncate">
                       <h4 className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{rec.title}</h4>
                       <p className={`text-[11px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{rec.artist}</p>
@@ -1798,7 +1798,7 @@ export default function PlaylistScreen({
                   onClick={() => onSelectTrack(track)}
                   className="flex items-center gap-3 flex-1 truncate cursor-pointer"
                 >
-                  <img src={normalizeCoverUrl(track.cover, track)} alt={track.title} className="w-10 h-10 brutal-border object-cover shrink-0" />
+                  <img src={normalizeCoverUrl(track.cover, track)} alt={track.title} className="w-10 h-10 brutal-border object-cover shrink-0" onError={handleCoverImageError} />
                   <div className="truncate">
                     <h4 className={`text-xs font-bold truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{track.title}</h4>
                     <p className={`text-[11px] truncate ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>{track.artist} • {track.album}</p>

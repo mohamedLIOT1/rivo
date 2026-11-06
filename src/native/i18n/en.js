@@ -10,8 +10,10 @@ import offline from './translations/en/offline.js';
 import profile from './translations/en/profile.js';
 import modals from './translations/en/modals.js';
 import admin from './translations/en/admin.js';
+import home from './translations/en/home.js';
 
 export default {
+  home,
   common,
   nav,
   settings,

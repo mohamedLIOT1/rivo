@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.3.8.3",
+  "version": "2.3.9.0",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث هوائي فوري (4.62 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (4.62 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 4848604,
-  "sizeMb": "4.62 MB",
-  "updatedAt": "2026-11-05T14:35:47.923Z"
+  "notes": "تحديث فوري v2.3.9 • إصلاح نشاط الأصدقاء وشبكة الألبومات ودعم العربية واللوك سكرين",
+  "notesEn": "Instant OTA update v2.3.9 • Friend Activity UI, Artist Albums 2-column grid, natural Arabic localization, and Dynamic Lock Screen permissions.",
+  "bundleSize": 4862700,
+  "sizeMb": "4.64 MB",
+  "updatedAt": "2026-11-06T12:08:32.956Z"
 }

@@ -3,23 +3,46 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Arabic & RTL Localization Support ── */
-html[dir="rtl"], [dir="rtl"], body.rtl {
+html[dir="rtl"], [dir="rtl"], body.rtl, html.rtl, html[lang="ar"], [lang="ar"], [lang|="ar"] {
   font-family: 'Cairo', 'Tajawal', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
-body.rtl,
-body.rtl * {
-  font-family: 'Cairo', 'Tajawal', 'Noto Sans Arabic', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  letter-spacing: normal !important;
-}
-
-/* Prevent cursive letter detachment in Arabic caused by Tailwind tracking utilities */
+/* Prevent cursive letter detachment in Arabic caused by Tailwind tracking utilities or non-zero letter-spacing */
 html.rtl,
 html.rtl *,
 body.rtl,
 body.rtl *,
+html[lang="ar"],
+html[lang="ar"] *,
 [dir="rtl"],
-[dir="rtl"] * {
+[dir="rtl"] *,
+[lang="ar"],
+[lang="ar"] *,
+[lang|="ar"],
+[lang|="ar"] *,
+:lang(ar),
+*:lang(ar),
+.font-arabic,
+.font-arabic *,
+.arabic-text,
+.arabic-text *,
+.arabic-script,
+.arabic-script * {
+  letter-spacing: normal !important;
+  word-spacing: normal !important;
+}
+
+/* Force override on ALL Tailwind tracking utilities when applied within Arabic/RTL elements */
+html.rtl [class*="tracking-"],
+body.rtl [class*="tracking-"],
+html[lang="ar"] [class*="tracking-"],
+[dir="rtl"] [class*="tracking-"],
+[lang="ar"] [class*="tracking-"],
+[lang|="ar"] [class*="tracking-"],
+:lang(ar) [class*="tracking-"],
+.font-arabic [class*="tracking-"],
+.arabic-text [class*="tracking-"],
+.arabic-script [class*="tracking-"] {
   letter-spacing: normal !important;
 }
 
@@ -29,18 +52,39 @@ body.rtl svg * {
 }
 
 body.rtl .font-display,
-[dir="rtl"] .font-display {
+html.rtl .font-display,
+html[lang="ar"] .font-display,
+[dir="rtl"] .font-display,
+[lang="ar"] .font-display,
+:lang(ar).font-display {
   font-family: 'Cairo', 'Tajawal', 'Space Grotesk', system-ui, sans-serif !important;
   letter-spacing: normal !important;
 }
 
 body.rtl .font-mono,
-[dir="rtl"] .font-mono {
-  font-family: 'Cairo', 'Space Mono', monospace !important;
+html.rtl .font-mono,
+html[lang="ar"] .font-mono,
+[dir="rtl"] .font-mono,
+[lang="ar"] .font-mono,
+:lang(ar).font-mono {
+  font-family: 'Cairo', 'Tajawal', 'Space Mono', monospace !important;
   letter-spacing: normal !important;
 }
 
-/* Clean, comfortable Arabic line-height & text rendering (مريح للعين) */
+/* Clean, comfortable Arabic line-height & text rendering (مريح للعين 1.55 - 1.6) so diacritics and descenders never cramp */
+body.rtl,
+html.rtl,
+html[lang="ar"],
+[dir="rtl"],
+[lang="ar"],
+:lang(ar),
+.font-arabic,
+.arabic-text {
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
 body.rtl h1,
 body.rtl h2,
 body.rtl h3,
@@ -49,6 +93,14 @@ body.rtl p,
 body.rtl span,
 body.rtl button,
 body.rtl label,
+html[lang="ar"] h1,
+html[lang="ar"] h2,
+html[lang="ar"] h3,
+html[lang="ar"] h4,
+html[lang="ar"] p,
+html[lang="ar"] span,
+html[lang="ar"] button,
+html[lang="ar"] label,
 [dir="rtl"] h1,
 [dir="rtl"] h2,
 [dir="rtl"] h3,
@@ -60,6 +112,7 @@ body.rtl label,
   line-height: 1.55;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: normal !important;
 }
 
 /* Right-aligned text flow for Arabic content */
@@ -242,10 +295,10 @@ body.rtl textarea::placeholder {
 .animate-eq-4 { animation: eqBounce4 0.9s infinite ease-in-out; }
 .animate-eq-5 { animation: eqBounce5 0.75s infinite ease-in-out; }
 
-/* Font Family definitions */
-.font-sans { font-family: 'Plus Jakarta Sans', sans-serif; }
-.font-display { font-family: 'Space Grotesk', sans-serif; }
-.font-mono { font-family: 'Space Mono', monospace; }
+/* Font Family definitions with Arabic Fallbacks */
+.font-sans { font-family: 'Plus Jakarta Sans', 'Cairo', 'Tajawal', sans-serif; }
+.font-display { font-family: 'Space Grotesk', 'Cairo', 'Tajawal', sans-serif; }
+.font-mono { font-family: 'Space Mono', 'Cairo', 'Tajawal', monospace; }
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
@@ -849,6 +902,30 @@ input[type=range].opacity-0::-moz-range-thumb {
 .sp-section-link:hover {
   color: var(--sp-text-primary);
   text-decoration: underline;
+}
+
+/* Ensure sp-* elements preserve Arabic cursive ligatures in RTL/Arabic */
+body.rtl .sp-title,
+html.rtl .sp-title,
+html[lang="ar"] .sp-title,
+[dir="rtl"] .sp-title,
+body.rtl .sp-label,
+html.rtl .sp-label,
+html[lang="ar"] .sp-label,
+[dir="rtl"] .sp-label,
+body.rtl .sp-btn-primary,
+html.rtl .sp-btn-primary,
+html[lang="ar"] .sp-btn-primary,
+[dir="rtl"] .sp-btn-primary,
+body.rtl .sp-section-title,
+html.rtl .sp-section-title,
+html[lang="ar"] .sp-section-title,
+[dir="rtl"] .sp-section-title,
+body.rtl .sp-section-link,
+html.rtl .sp-section-link,
+html[lang="ar"] .sp-section-link,
+[dir="rtl"] .sp-section-link {
+  letter-spacing: normal !important;
 }
 
 /* =============================================

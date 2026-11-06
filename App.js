@@ -54,7 +54,14 @@ import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
 import * as FileSystem from 'expo-file-system';
-import { installApk, getInitialChatSenderId, subscribeToChatNotification, exitAndRemoveTask, hasNativeProcessRestart } from './src/native/services/mediaControls';
+import {
+  installApk,
+  getInitialChatSenderId,
+  subscribeToChatNotification,
+  exitAndRemoveTask,
+  hasNativeProcessRestart,
+  requestNotificationPermission,
+} from './src/native/services/mediaControls';
 import { initOtaCrashGuard, checkAndDownloadOta, restartToApplyOta, getCurrentOtaVersion, isOtaUpdateAvailable, getBaseAppVersion, fetchOtaManifest, compareVersions as otaCompareVersions } from './src/native/services/otaService';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
@@ -202,9 +209,8 @@ function MainAppShell() {
 
   useEffect(() => {
     initOtaCrashGuard();
-    if (Platform.OS === 'android' && Platform.Version >= 33) {
-      PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS).catch(() => {});
-    }
+    // Proactively request notification permission on iOS & Android for Lock Screen & Dynamic Island
+    requestNotificationPermission().catch(() => {});
     const task = InteractionManager.runAfterInteractions(() => {
       cleanupOldApkInstallers();
       checkAppUpdates();

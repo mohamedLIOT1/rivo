@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateMediaNotification } from '../../services/mediaControls';
+import { ensurePlaybackPermissions } from './playbackPermissions';
 import { updateAudioProgress } from '../AudioProgressContext';
 import { handlePlaybackStatusUpdate } from './playbackEngine';
 import { resolveTrackPlaybackUri, createAudioSound } from './streamResolverHelper';
@@ -15,8 +16,7 @@ export const useAudioPlaybackCore = ({
   nextSoundPlayingRef, preloadNextTrackForDjMix, completeSeamlessHandoff,
   isMixTransitioningRef, lastMixBridgeUpdateRef, autoDownloadFinishedRef,
   handleDownloadTrack, autoPersistFinishedTrack, broadcastListeningActivity,
-  jamSyncRef, canControlJam = () => true, userTracks = [], currentUser = null,
-  isVocalOnlyRef: externalVocalOnlyRef,
+  jamSyncRef, canControlJam = () => true, userTracks = [], currentUser = null, isVocalOnlyRef: externalVocalOnlyRef,
 }) => {
   const soundRef = useRef(null);
   const isResolvingRef = useRef(false);
@@ -131,14 +131,13 @@ export const useAudioPlaybackCore = ({
       handleDownloadTrack,
       autoDownloadFinishedRef,
       updateMediaNotification,
-      likedTrackIds,
-      isShuffleRef,
+      likedTrackIds, isShuffleRef,
     });
   }, [
     isMixModeRef, activeTransRef, queueRef, nextSoundRef, isMixTransitioningRef,
     completeSeamlessHandoff, preloadNextTrackForDjMix, repeatModeRef,
     autoPersistFinishedTrack, handleDownloadTrack, autoDownloadFinishedRef,
-    likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef
+    likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef,
   ]);
 
   const playTrack = useCallback(async (track, trackList = [], isRetry = false, targetTime = 0, isRemoteParam = false, isSmartMood = false, autoPlay = true) => {
@@ -162,6 +161,7 @@ export const useAudioPlaybackCore = ({
     isLoadingRef.current = true;
     setIsLoading(true);
     if (autoPlay) shouldBePlayingRef.current = true;
+    ensurePlaybackPermissions();
 
     currentTrackRef.current = track;
     setCurrentTrackState(track);

@@ -40,46 +40,46 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.3.8',
+      version: '2.3.9',
       name: 'Rivo Web',
-      notes: 'تحديث v2.3.8 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
     },
     windows: {
-      version: '2.3.8',
+      version: '2.3.9',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.3.8.exe',
+      directFile: 'Rivo-v2.3.9.exe',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
     },
     android: {
-      version: '2.3.8',
-      build: 129,
+      version: '2.3.9',
+      build: 130,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.3.8.apk',
+      directFile: 'Rivo-v2.3.9.apk',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
-      notesEn: 'Update v2.3.8 • Smart Queue, rock-solid audio playback and instant stream recovery.',
+      notes: 'تحديث v2.3.9 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
+      notesEn: 'Update v2.3.9 • Smart Queue, rock-solid audio playback and instant stream recovery.',
       ota: {
         enabled: true,
-        version: '2.3.8',
+        version: '2.3.9',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v2.3.8 • أحدث التحسينات والإصلاحات',
-        notesEn: 'Instant OTA update v2.3.8 • Performance improvements and bug fixes.',
+        notes: 'تحديث هوائي فوري v2.3.9 • أحدث التحسينات والإصلاحات',
+        notesEn: 'Instant OTA update v2.3.9 • Performance improvements and bug fixes.',
         bundleSize: 2958792,
         sizeMb: '2.82 MB'
       }
     },
     ios: {
-      version: '2.3.8',
-      build: 129,
+      version: '2.3.9',
+      build: 130,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.3.8.ipa',
+      directFile: 'Rivo-v2.3.9.ipa',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
+      notes: 'تحديث v2.3.9 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
     }
   }
 };
@@ -95,46 +95,46 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.3.8',
+      version: '2.3.9',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.3.8 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
     },
     windows: {
-      version: '2.3.8',
+      version: '2.3.9',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.3.8.exe',
+      directFile: 'Rivo-v2.3.9.exe',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
     },
     android: {
-      version: '2.3.8',
-      build: 129,
+      version: '2.3.9',
+      build: 130,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.3.8.apk',
+      directFile: 'Rivo-v2.3.9.apk',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
-      notesEn: 'Instant OTA update v2.3.8 • Smart Queue, rock-solid audio playback and instant stream recovery.',
+      notes: 'تحديث v2.3.9 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
+      notesEn: 'Instant OTA update v2.3.9 • Smart Queue, rock-solid audio playback and instant stream recovery.',
       ota: {
         enabled: true,
-        version: '2.3.8',
+        version: '2.3.9',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v2.3.8 • أحدث التحسينات والإصلاحات',
-        notesEn: 'Instant OTA update v2.3.8 • Performance improvements and bug fixes.',
+        notes: 'تحديث هوائي فوري v2.3.9 • أحدث التحسينات والإصلاحات',
+        notesEn: 'Instant OTA update v2.3.9 • Performance improvements and bug fixes.',
         bundleSize: 2958792,
         sizeMb: '2.82 MB'
       }
     },
     ios: {
-      version: '2.3.8',
-      build: 129,
+      version: '2.3.9',
+      build: 130,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.3.8.ipa',
+      directFile: 'Rivo-v2.3.9.ipa',
       mandatory: false,
-      notes: 'تحديث v2.3.8 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
+      notes: 'تحديث v2.3.9 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
     }
   }
 };

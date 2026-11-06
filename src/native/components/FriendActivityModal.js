@@ -26,28 +26,50 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { useLocalization } from '../context/LocalizationContext';
 import UserDetailModal from './UserDetailModal';
 
-function formatCompactPillNative(lastActiveAt) {
-  if (!lastActiveAt) return 'OFFLINE';
+function formatCompactPillNative(lastActiveAt, isRTL = false) {
+  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
   const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return 'OFFLINE';
-  if (diffSec < 60) return 'NOW';
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}M`;
-  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}H`;
+  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
+  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
+  if (diffSec < 3600) {
+    const mins = Math.max(1, Math.floor(diffSec / 60));
+    return isRTL ? `${mins} د` : `${mins}M`;
+  }
+  if (diffSec < 86400) {
+    const hours = Math.floor(diffSec / 3600);
+    return isRTL ? `${hours} س` : `${hours}H`;
+  }
   const days = Math.floor(diffSec / 86400);
-  return `${days}D`;
+  if (days === 1) return isRTL ? 'أمس' : '1D';
+  return isRTL ? `${days} ي` : `${days}D`;
 }
 
-function formatLastSeenSubtitle(lastActiveAt) {
-  if (!lastActiveAt) return 'Offline';
+function formatLastSeenSubtitle(lastActiveAt, isRTL = false) {
+  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'Offline';
   const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return 'Offline';
-  if (diffSec < 60) return 'Active just now';
-  if (diffSec < 3600) return `Active ${Math.floor(diffSec / 60)}m ago`;
-  if (diffSec < 86400) return `Last seen ${Math.floor(diffSec / 3600)}h ago`;
+  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'Offline';
+  if (diffSec < 60) return isRTL ? 'غير متصل • نشط منذ قليل' : 'Offline • Active just now';
+  if (diffSec < 3600) {
+    const mins = Math.max(1, Math.floor(diffSec / 60));
+    return isRTL ? `غير متصل • منذ ${mins} دقيقة` : `Offline • Last seen ${mins}m ago`;
+  }
+  if (diffSec < 86400) {
+    const hours = Math.floor(diffSec / 3600);
+    return isRTL
+      ? (hours === 1 ? 'غير متصل • منذ ساعة' : hours === 2 ? 'غير متصل • منذ ساعتين' : `غير متصل • منذ ${hours} ساعات`)
+      : `Offline • Last seen ${hours}h ago`;
+  }
   const days = Math.floor(diffSec / 86400);
-  return days === 1 ? 'Last seen yesterday' : `Last seen ${days}d ago`;
+  if (isRTL) {
+    if (days === 1) return 'غير متصل • شوهد أمس';
+    if (days === 2) return 'غير متصل • منذ يومين';
+    if (days <= 10) return `غير متصل • منذ ${days} أيام`;
+    return `غير متصل • منذ ${days} يوماً`;
+  }
+  return days === 1 ? 'Offline • Last seen yesterday' : `Offline • Last seen ${days}d ago`;
 }
 
 // Pure memoized card component for peak list performance
@@ -57,6 +79,7 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
   onOpenProfile,
   onListenAlong,
 }) {
+  const { isRTL = false } = useLocalization() || {};
   const rawListening = item.currentListening;
   const isDummyOffline = Boolean(
     rawListening?.title?.toLowerCase() === 'offline' ||
@@ -102,17 +125,17 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
             </Text>
             {isLive ? (
               <View style={styles.liveBadge}>
-                <Radio size={9} color="#0b1110" strokeWidth={3} />
-                <Text style={styles.liveBadgeText}>LIVE</Text>
+                <Radio size={10} color="#0b1110" strokeWidth={3} />
+                <Text style={styles.liveBadgeText}>{isRTL ? 'مباشر' : 'LIVE'}</Text>
               </View>
             ) : item.isOnline ? (
-              <View style={[styles.liveBadge, { backgroundColor: '#1e3a34' }]}>
-                <Text style={[styles.liveBadgeText, { color: '#34d399' }]}>ONLINE</Text>
+              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#1e3a34' : '#d1fae5', borderWidth: 1, borderColor: isDark ? '#065f46' : '#a7f3d0' }]}>
+                <Text style={[styles.liveBadgeText, { color: isDark ? '#34d399' : '#047857' }]}>{isRTL ? 'متصل' : 'ONLINE'}</Text>
               </View>
             ) : (
-              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#27272a' : '#d4d4d8', borderWidth: 1, borderColor: isDark ? '#3f3f46' : '#a1a1aa' }]}>
-                <Text style={[styles.liveBadgeText, { color: isDark ? '#a1a1aa' : '#52525b' }]}>
-                  {formatCompactPillNative(item.lastActiveAt)}
+              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#27272a' : '#e4e4e7', borderWidth: 1, borderColor: isDark ? '#3f3f46' : '#d4d4d8' }]}>
+                <Text style={[styles.liveBadgeText, { color: isDark ? '#d4d4d8' : '#3f3f46' }]}>
+                  {formatCompactPillNative(item.lastActiveAt, isRTL)}
                 </Text>
               </View>
             )}
@@ -145,7 +168,9 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
             </View>
           ) : (
             <Text style={[styles.idleText, !isDark && styles.idleTextLight]} numberOfLines={1}>
-              {item.isOnline ? 'Online • Browsing music' : formatLastSeenSubtitle(item.lastActiveAt)}
+              {item.isOnline
+                ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Browsing music')
+                : formatLastSeenSubtitle(item.lastActiveAt, isRTL)}
             </Text>
           )}
         </View>
@@ -159,7 +184,7 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
           activeOpacity={0.85}
         >
           <Play size={11} color="#0b1110" fill="#0b1110" />
-          <Text style={styles.listenAlongText}>TUNE IN</Text>
+          <Text style={styles.listenAlongText}>{isRTL ? 'استماع' : 'TUNE IN'}</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -563,23 +588,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     flex: 1,
     minWidth: 0,
-    marginRight: 8,
+    marginEnd: 8,
   },
   liveBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#17a398',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    gap: 4,
     flexShrink: 0,
   },
   liveBadgeText: {
     color: '#0b1110',
-    fontSize: 8.5,
-    fontWeight: '900',
-    letterSpacing: 0.4,
+    fontSize: 11,
+    fontWeight: '800',
   },
   trackInfoRow: {
     flexDirection: 'row',

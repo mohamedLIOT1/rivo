@@ -1,20 +1,19 @@
-import React, { useState, useMemo } from 'react';
-import { usePreferences } from '../context/PreferencesContext';
-import { Play, Pause, Plus, Heart, Radio, MessageSquare, Sparkles, Disc, Activity, Trash2, Edit2, MoreVertical } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { usePreferences, useTranslation } from '../context/PreferencesContext';
+import { Play, Plus, Disc } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
-import VerifiedBadge from '../components/VerifiedBadge';
-import { ArtistLinks } from '../utils/artistUtils';
+import HomeTrackCard from '../components/HomeTrackCard';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
 import { sortTracksByPopularity, getGlobalTrackScore } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
-import { normalizeCoverUrl } from '../utils/coverUtils';
+import { handleCoverImageError } from '../utils/coverUtils';
+
 export { getGlobalTrackScore };
 
 export default function HomeScreen({
- 
   tracks = [], 
   playlists = [], 
   albums = [], 
@@ -43,22 +42,22 @@ export default function HomeScreen({
 }) {
   const isDark = globalTheme === 'dark';
   const { showMusic } = usePreferences();
+  const { t, isRTL } = useTranslation();
   const { addToQueue } = useAudioPlayer();
-  const [activeFilter, setActiveFilter] = useState('all');
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
   const [visibleCount, setVisibleCount] = useState(36);
 
-  const isTrackActive = (t) => {
-    if (!currentTrack || !t) return false;
+  const isTrackActive = useCallback((tr) => {
+    if (!currentTrack || !tr) return false;
     const curId = currentTrack.id || currentTrack._id;
-    const tId = t.id || t._id;
+    const tId = tr.id || tr._id;
     return Boolean(curId && tId && String(curId) === String(tId));
-  };
+  }, [currentTrack]);
 
   // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => {
-    return (tracks || []).filter(t => !isQuranContent(t));
+    return (tracks || []).filter(tr => !isQuranContent(tr));
   }, [tracks]);
 
   // Sort tracks by global popularity with intelligent scoring and artist interleaving
@@ -96,14 +95,14 @@ export default function HomeScreen({
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];
 
-  const getGreeting = () => {
+  const getGreetingPrefix = useCallback(() => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  };
+    if (hour < 12) return t('home.greetingMorningShort');
+    if (hour < 18) return t('home.greetingAfternoonShort');
+    return t('home.greetingEveningShort');
+  }, [t]);
 
-  const handlePlaySmartCassette = () => {
+  const handlePlaySmartCassette = useCallback(() => {
     let followed = [];
     try {
       const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
@@ -119,16 +118,28 @@ export default function HomeScreen({
     });
 
     if (smart10.length > 0) {
-      const tagged = smart10.map(t => ({ ...t, isSmartMoodQueue: true }));
+      const tagged = smart10.map(tr => ({ ...tr, isSmartMoodQueue: true }));
       onSelectTrack(tagged[0], tagged);
     } else if (popularTracks.length > 0) {
       onSelectTrack(popularTracks[0], popularTracks.slice(0, 10));
     }
-  };
+  }, [displayTracks, currentUser, popularTracks, onSelectTrack]);
 
   const currentMood = getCurrentTimeMood();
 
+  const getMoodLabel = useCallback((moodId) => {
+    switch (moodId) {
+      case 'morning': return t('home.flowMorning');
+      case 'afternoon': return t('home.flowAfternoon');
+      case 'evening': return t('home.flowEvening');
+      case 'night': return t('home.flowNight');
+      default: return currentMood.label;
+    }
+  }, [t, currentMood.label]);
+
   if (!showMusic) return null;
+
+  const resolvedMoodLabel = getMoodLabel(currentMood.id);
 
   return (
     <div 
@@ -157,25 +168,29 @@ export default function HomeScreen({
           <div className="max-w-xl text-left w-full">
             <div className="inline-flex items-center gap-1.5 bg-[#fdfbf7] text-[#0b1110] px-2.5 py-0.5 rounded-full brutal-border text-[10px] sm:text-xs font-display font-bold mb-2.5 brutal-shadow-sm">
               <span className="w-2 h-2 rounded-full bg-[#17a398] animate-pulse"></span>
-              <span>{currentMood.label}</span>
+              <span>{resolvedMoodLabel}</span>
             </div>
 
             <h1 className="font-display text-2xl sm:text-4xl lg:text-5xl font-black leading-tight mb-2 tracking-tight text-white">
-              {getGreeting()}, <span className="text-[#17a398]">{currentUser?.name ? currentUser.name.split(' ')[0] : 'Listener'}</span>.
+              {getGreetingPrefix()}{isRTL ? '، ' : ', '}
+              <span className="text-[#17a398]">
+                {currentUser?.name ? currentUser.name.split(' ')[0] : t('home.listener')}
+              </span>
+              {isRTL ? '' : '.'}
             </h1>
 
             <p className="text-emerald-100/90 text-xs sm:text-sm font-medium leading-relaxed mb-3.5 line-clamp-2 sm:line-clamp-none">
-              Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.
+              {t('home.heroSubtitle')}
             </p>
 
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button 
                 onClick={handlePlaySmartCassette}
                 className="flex-1 sm:flex-initial bg-[#fdfbf7] hover:bg-white text-[#0b1110] font-display font-black text-xs sm:text-sm px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-2 cursor-pointer"
-                title="Play 10 personalized songs matching your taste and mood"
+                title={t('home.playTopChartsTitle')}
               >
                 <Play size={15} fill="currentColor" />
-                <span>PLAY TOP CHARTS (10)</span>
+                <span>{t('home.playTopCharts')}</span>
               </button>
 
               <button 
@@ -183,7 +198,7 @@ export default function HomeScreen({
                 className="w-full sm:w-auto bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] font-display font-bold text-xs px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus size={15} strokeWidth={2.5} />
-                <span>Add Track</span>
+                <span>{t('home.addTrack')}</span>
               </button>
             </div>
           </div>
@@ -191,14 +206,14 @@ export default function HomeScreen({
           {/* Authentic Rivo Cassette Deck Graphic (Shown on tablets and desktop) */}
           <div 
             onClick={handlePlaySmartCassette}
-            title="Click to play 10 songs matching your mood & followed artists"
+            title={t('home.playTopChartsTitle')}
             className="hidden md:flex relative shrink-0 items-center justify-center self-center lg:self-auto mt-2 lg:mt-0 cursor-pointer"
           >
             <div className="w-56 sm:w-64 bg-[#fdfbf7] text-[#0b1110] rounded-xl brutal-border-thick p-3.5 sm:p-4 brutal-shadow-lg transform rotate-2 hover:rotate-0 transition duration-300">
               <div className="border-2 border-dashed border-[#0b1110] rounded-lg p-2.5 sm:p-3 bg-white text-center">
                 <div className="flex items-center justify-between text-[10px] font-mono font-bold border-b-2 border-black pb-1 mb-2">
-                  <span>RIVO SOUND LAB</span>
-                  <span>HI-FI STEREO</span>
+                  <span>{t('home.soundLab')}</span>
+                  <span>{t('home.hiFiStereo')}</span>
                 </div>
 
                 <div className="py-2">
@@ -206,13 +221,13 @@ export default function HomeScreen({
                     <Disc size={30} className="text-[#0b1110]" strokeWidth={2.2} />
                   </div>
                   <div className="font-display font-black text-lg sm:text-xl text-[#0b1110] leading-tight">
-                    RIVO CASSETTE
+                    {t('home.rivoCassette')}
                   </div>
-                  <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">{currentMood.label}</div>
+                  <div className="text-[10px] sm:text-[11px] text-zinc-600 font-bold">{resolvedMoodLabel}</div>
                 </div>
 
                 <div className="bg-[#0b1110] text-[#17a398] text-[9px] sm:text-[10px] font-mono py-1 rounded mt-1.5 font-bold">
-                  NOW STREAMING • ZERO ADS
+                  {t('home.nowStreaming')}
                 </div>
               </div>
             </div>
@@ -220,15 +235,13 @@ export default function HomeScreen({
             {/* Serrated Starburst Badge Sticker */}
             <div className="sawtooth-badge w-20 h-20 sm:w-24 sm:h-24 bg-[#dc2626] text-white flex flex-col items-center justify-center p-2 text-center absolute -top-3 -right-3 sm:-top-4 sm:-right-4 transform -rotate-12 brutal-border shadow-md">
               <span className="font-display text-[8px] sm:text-[9px] font-bold">100%</span>
-              <span className="font-display font-black text-sm sm:text-base leading-tight">STEREO</span>
-              <span className="text-[7px] sm:text-[8px] font-mono font-bold">TOP PICKS</span>
+              <span className="font-display font-black text-sm sm:text-base leading-tight">{t('home.stereo')}</span>
+              <span className="text-[7px] sm:text-[8px] font-mono font-bold">{t('home.topPicks')}</span>
             </div>
           </div>
 
         </div>
       </section>
-
-
 
       {/* ─────────────────────────────────────────
           FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT
@@ -239,10 +252,10 @@ export default function HomeScreen({
             <div className="flex items-center gap-2">
               <Disc size={20} className="text-amber-400" />
               <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-                Featured Albums
+                {t('home.featuredAlbums')}
               </h2>
               <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-                {displayAlbums.length} {displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}
+                {displayAlbums.length} {displayAlbums.length === 1 ? t('home.album') : t('home.albums')}
               </span>
             </div>
           </div>
@@ -263,7 +276,7 @@ export default function HomeScreen({
                     loading="lazy"
                     decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
+                    onError={handleCoverImageError}
                   />
                   <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <div className="w-9 h-9 rounded-full bg-[#f59e0b] text-black flex items-center justify-center brutal-border brutal-shadow-sm shadow-md">
@@ -289,7 +302,7 @@ export default function HomeScreen({
                     isDark ? 'text-zinc-400' : 'text-zinc-600'
                   }`}
                 >
-                  {alb.artist || 'Artist'}
+                  {alb.artist || t('home.artist')}
                 </div>
               </div>
             ))}
@@ -298,20 +311,20 @@ export default function HomeScreen({
       )}
 
       {/* ─────────────────────────────────────────
-          MOST POPULAR & TOP LISTENED TRACKS (SINGLE UNIFIED SECTION)
+          MOST POPULAR & TOP LISTENED TRACKS
           ───────────────────────────────────────── */}
       <section>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
           <div className="flex items-center gap-2">
             <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-              Most Popular & Top Listened
+              {t('home.mostPopular')}
             </h2>
             <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-              TOP CHARTS • GLOBAL HITS
+              {t('home.topChartsBadge')}
             </span>
           </div>
           <span className="text-[11px] font-mono font-bold text-emerald-100/70">
-            {popularTracks.length} Tracks
+            {t('home.tracksCount', { count: popularTracks.length })}
           </span>
         </div>
 
@@ -319,120 +332,22 @@ export default function HomeScreen({
           {popularTracks.slice(0, visibleCount).map((track, index) => {
             const active = isTrackActive(track);
             const color = badgeColors[index % badgeColors.length];
-            const durationFormatted = track.duration 
-              ? `${Math.floor(track.duration / 60)}:${(track.duration % 60).toString().padStart(2, '0')}`
-              : '3:45';
 
             return (
-              <div 
+              <HomeTrackCard
                 key={track.id || track._id || index}
-                onClick={() => onSelectTrack(track, popularTracks)}
-                className={`rounded-xl brutal-border p-3 flex flex-col justify-between cursor-pointer brutal-shadow-sm hover:brutal-shadow transition ${
-                  isDark 
-                    ? 'bg-[#141d1b] hover:bg-[#1a2623] border-zinc-700' 
-                    : 'bg-[#fdfbf7] hover:bg-white text-[#0b1110]'
-                } ${
-                  active ? (isDark ? 'ring-2 ring-[#17a398] bg-[#1a2623]' : 'ring-2 ring-[#0b1110] bg-white') : ''
-                }`}
-              >
-                <div>
-                  <div 
-                    className="w-full aspect-square rounded-lg brutal-border mb-2.5 p-2 flex flex-col justify-between relative overflow-hidden shrink-0 shadow-inner"
-                    style={{ backgroundColor: color }}
-                  >
-                    {track.cover && (
-                      <img 
-                        src={normalizeCoverUrl(track.cover, track)} 
-                        alt={track.title} 
-                        loading="lazy"
-                        decoding="async"
-                        className="absolute inset-0 w-full h-full object-cover opacity-35" 
-                      />
-                    )}
-                    <div className="flex justify-between items-center z-10">
-                      <span className="text-[8px] font-mono font-bold bg-black/70 px-1.5 py-0.5 rounded uppercase text-white">
-                        HQ AUDIO
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {toggleLike && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleLike(track.id || track._id);
-                            }}
-                            className="p-1 rounded bg-black/50 hover:bg-black text-white hover:text-[#dc2626] transition cursor-pointer"
-                            title="Like"
-                          >
-                            <Heart size={11} fill={track.liked ? '#dc2626' : 'none'} className={track.liked ? 'text-[#dc2626]' : ''} />
-                          </button>
-                        )}
-                        <span className="text-[9px] font-mono font-bold text-white bg-black/50 px-1 rounded">
-                          {durationFormatted}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="z-10 text-center my-auto px-1">
-                      <div className="font-display font-black text-sm text-white drop-shadow-[1px_1px_0px_#000] truncate">
-                        {track.title ? track.title.split('(')[0] : 'Untitled'}
-                      </div>
-                      <ArtistLinks
-                        track={track}
-                        onSelectArtist={onSelectArtist}
-                        className="text-[10px] text-white/90 font-bold truncate block"
-                        linkClassName="hover:underline cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="z-10 text-[8px] font-mono bg-black/60 px-1.5 py-0.5 rounded text-center truncate text-emerald-300 font-bold">
-                      {track.genre || 'Egyptian Rx'}
-                    </div>
-                  </div>
-
-                  <div className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                    {track.title}
-                  </div>
-                  <ArtistLinks
-                    track={track}
-                    onSelectArtist={onSelectArtist}
-                    className={`text-[10px] font-bold truncate mb-2 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-                    linkClassName="hover:underline cursor-pointer"
-                  />
-                </div>
-
-                <div className="flex items-center gap-1.5 w-full">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onSelectTrack(track, popularTracks);
-                    }}
-                    className="flex-1 bg-[#ded2bb] hover:bg-[#17a398] text-[#0b1110] font-display font-black text-[11px] py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    {active && isPlaying ? (
-                      <>
-                        <Pause size={12} fill="currentColor" />
-                        <span>PAUSE</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play size={12} fill="currentColor" />
-                        <span>PLAY</span>
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActionMenuTrack(track);
-                    }}
-                    className="p-1.5 rounded-lg bg-white hover:bg-[#17a398] text-zinc-700 hover:text-black brutal-border brutal-shadow-sm transition cursor-pointer shrink-0"
-                    title="Track options"
-                    aria-label="Track options"
-                  >
-                    <MoreVertical size={14} />
-                  </button>
-                </div>
-              </div>
+                track={track}
+                index={index}
+                isActive={active}
+                isPlaying={isPlaying}
+                isDark={isDark}
+                color={color}
+                onSelectTrack={() => onSelectTrack(track, popularTracks)}
+                toggleLike={toggleLike}
+                onOpenActionMenu={setActionMenuTrack}
+                onSelectArtist={onSelectArtist}
+                t={t}
+              />
             );
           })}
         </div>
@@ -443,7 +358,7 @@ export default function HomeScreen({
               onClick={() => setVisibleCount(prev => prev + 36)}
               className="px-6 py-2.5 rounded-xl brutal-border brutal-shadow-sm font-display font-black text-xs uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer transition active:scale-95"
             >
-              Load More Tracks ({popularTracks.length - visibleCount} remaining)
+              {t('home.loadMoreTracks', { count: popularTracks.length - visibleCount })}
             </button>
           </div>
         )}
@@ -458,9 +373,9 @@ export default function HomeScreen({
             onDeleteTrack(deleteConfirmTrackId);
             setDeleteConfirmTrackId(null);
           }}
-          title="Delete Track?"
-          message="Are you sure you want to remove this track from your library?"
-          confirmText="Delete"
+          title={t('home.deleteTrackConfirmTitle')}
+          message={t('home.deleteTrackConfirmMessage')}
+          confirmText={t('home.delete')}
         />
       )}
 

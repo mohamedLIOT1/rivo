@@ -56,7 +56,7 @@ function ArtistAlbumsSection({
                 <Text style={[styles.albumCardTitle, !isDark && styles.albumCardTitleLight, isRTL && { textAlign: 'right' }]} numberOfLines={1}>
                   {album.name || 'Untitled Album'}
                 </Text>
-                <Text style={[styles.albumCardSub, isRTL && { textAlign: 'right' }]}>
+                <Text style={[styles.albumCardSub, !isDark && styles.albumCardSubLight, isRTL && { textAlign: 'right' }]} numberOfLines={1}>
                   {t('common.albums')} • {t('profile.tracksCount', { count: songCount })}
                 </Text>
               </TouchableOpacity>

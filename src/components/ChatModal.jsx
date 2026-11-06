@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Radio, Music, Loader2, User, Search, MessageSquare, ArrowLeft, Users, Disc, Check, CheckCheck } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import VerifiedBadge from './VerifiedBadge';
+import { usePreferences } from '../context/PreferencesContext';
 
 const getToken = () => {
   try {
@@ -23,6 +24,7 @@ export default function ChatModal({
   globalTheme = 'dark',
   onViewProfile
 }) {
+  const { isRTL = false } = usePreferences() || {};
   const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
   const [activeUser, setActiveUser] = useState(targetUser || null);
   const [messages, setMessages] = useState([]);
@@ -311,7 +313,10 @@ export default function ChatModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none">
+    <div
+      dir={isRTL ? 'rtl' : 'ltr'}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none"
+    >
       <div className={`rounded-2xl w-full max-w-lg md:max-w-xl h-[620px] flex flex-col brutal-shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 ${
         isDark ? 'bg-[#121212] text-white border-2 border-zinc-800' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
       }`}>
@@ -329,12 +334,12 @@ export default function ChatModal({
                   setActiveUser(null);
                   fetchHubData();
                 }}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center brutal-btn cursor-pointer mr-1 brutal-border ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center brutal-btn cursor-pointer me-1 brutal-border ${
                   isDark ? 'bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110]'
                 }`}
-                title="Back to Chats"
+                title={isRTL ? 'الرجوع للمحادثات' : 'Back to Chats'}
               >
-                <ArrowLeft size={16} strokeWidth={2.5} />
+                <ArrowLeft size={16} strokeWidth={2.5} className={isRTL ? 'rotate-180' : ''} />
               </button>
             ) : null}
 
@@ -346,7 +351,7 @@ export default function ChatModal({
                 }
               }}
               className="flex items-center gap-2.5 truncate cursor-pointer hover:opacity-85 transition group"
-              title={activeUser ? "View User Profile" : undefined}
+              title={activeUser ? (isRTL ? 'عرض الملف الشخصي' : 'View User Profile') : undefined}
             >
               {activeUser?.avatar ? (
                 <img 
@@ -366,18 +371,26 @@ export default function ChatModal({
 
               <div className="truncate">
                 <div className="flex items-center gap-1.5 truncate">
-                  <h3 className="font-display font-bold text-sm leading-none text-white truncate group-hover:text-[#17a398] transition-colors">
-                    {activeUser ? activeUser.name : 'Chat'}
+                  <h3
+                    style={{ letterSpacing: 'normal' }}
+                    className="font-bold text-sm leading-none text-white truncate group-hover:text-[#17a398] transition-colors tracking-normal"
+                  >
+                    {activeUser ? activeUser.name : (isRTL ? 'الرسائل' : 'Chat')}
                   </h3>
                   {activeUser && <VerifiedBadge userOrName={activeUser} size={13} />}
                   {(activeUser?.isBot || activeUser?.name === 'Rivo Bot') && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-[#17a398] text-[#082621]">
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#17a398] text-[#082621]">
                       [BOT]
                     </span>
                   )}
                 </div>
-                <span className={`text-[10px] font-mono block mt-0.5 ${isOtherTyping ? 'text-emerald-400 font-bold animate-pulse' : 'text-zinc-400'}`}>
-                  {isOtherTyping ? 'typing...' : (activeUser ? 'Direct Chat • View Profile' : 'Messages & Friends')}
+                <span
+                  style={{ letterSpacing: 'normal' }}
+                  className={`text-[10px] block mt-0.5 tracking-normal ${isOtherTyping ? 'text-emerald-400 font-bold animate-pulse' : 'text-zinc-400'}`}
+                >
+                  {isOtherTyping
+                    ? (isRTL ? 'يكتب الآن...' : 'typing...')
+                    : (activeUser ? (isRTL ? 'محادثة مباشرة • عرض الملف' : 'Direct Chat • View Profile') : (isRTL ? 'الرسائل والأصدقاء' : 'Messages & Friends'))}
                 </span>
               </div>
             </div>
@@ -387,11 +400,12 @@ export default function ChatModal({
             {activeUser && !(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || activeUser?.email === 'bot@rivo.app') && (
               <button
                 onClick={handleSendJamInvite}
-                className="px-2.5 py-1 rounded bg-[#f59e0b] text-[#0b1110] font-display font-black text-[11px] brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer"
-                title="Invite to Jam"
+                style={{ letterSpacing: 'normal' }}
+                className="px-2.5 py-1 rounded bg-[#f59e0b] text-[#0b1110] font-black text-[11px] brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1 cursor-pointer tracking-normal"
+                title={isRTL ? 'دعوة لجلسة جام' : 'Invite to Jam'}
               >
                 <Radio size={12} className="animate-pulse" strokeWidth={2.5} />
-                <span>Jam Invite</span>
+                <span>{isRTL ? 'جلسة جام' : 'Jam Invite'}</span>
               </button>
             )}
 
@@ -408,28 +422,35 @@ export default function ChatModal({
             SUB-HEADER TABS (WHEN IN HUB MODE)
             ───────────────────────────────────────── */}
         {!activeUser && (
-          <div className={`p-2 border-b-2 flex gap-1.5 overflow-x-auto text-xs font-display font-bold shrink-0 ${
-            isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-black'
-          }`}>
+          <div
+            style={{ letterSpacing: 'normal' }}
+            className={`p-2 border-b-2 flex gap-1.5 overflow-x-auto text-xs font-bold shrink-0 tracking-normal ${
+              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-black'
+            }`}
+          >
             <button
+              type="button"
               onClick={() => setActiveTab('chats')}
-              className={`px-3 py-1 rounded brutal-border transition ${
+              style={{ letterSpacing: 'normal' }}
+              className={`px-3 py-1 rounded brutal-border transition font-bold tracking-normal cursor-pointer ${
                 activeTab === 'chats' 
                   ? (isDark ? 'bg-[#17a398] text-black font-black brutal-shadow-sm' : 'bg-[#0b1110] text-white brutal-shadow-sm') 
                   : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-[#0b1110]')
               }`}
             >
-              Chats ({conversations.length})
+              {isRTL ? `المحادثات (${conversations.length})` : `Chats (${conversations.length})`}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('friends')}
-              className={`px-3 py-1 rounded brutal-border transition ${
+              style={{ letterSpacing: 'normal' }}
+              className={`px-3 py-1 rounded brutal-border transition font-bold tracking-normal cursor-pointer ${
                 activeTab === 'friends' 
                   ? (isDark ? 'bg-[#17a398] text-black font-black brutal-shadow-sm' : 'bg-[#0b1110] text-white brutal-shadow-sm') 
                   : (isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-white text-[#0b1110]')
               }`}
             >
-              Friends ({friends.length})
+              {isRTL ? `الأصدقاء (${friends.length})` : `Friends (${friends.length})`}
             </button>
           </div>
         )}
@@ -454,9 +475,9 @@ export default function ChatModal({
                   }`}>
                     <MessageSquare size={28} />
                   </div>
-                  <p className={`text-base font-display font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No messages yet</p>
+                  <p className={`text-base font-black ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{isRTL ? 'لا توجد رسائل بعد' : 'No messages yet'}</p>
                   <p className={`text-xs font-medium mt-1 max-w-xs leading-relaxed ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                    Say hello, share music, or invite {activeUser.name} to a Jam session!
+                    {isRTL ? `قل مرحباً، شارك الموسيقى، أو ادعُ ${activeUser.name} لجلسة استماع مشتركة!` : `Say hello, share music, or invite ${activeUser.name} to a Jam session!`}
                   </p>
                 </div>
               ) : (
@@ -469,37 +490,41 @@ export default function ChatModal({
                   return (
                     <div
                       key={msg._id || idx}
-                      className={`flex flex-col ${isMe ? 'items-end max-w-[85%] ml-auto' : 'items-start max-w-[85%]'}`}
+                      className={`flex flex-col ${isMe ? (isRTL ? 'items-start max-w-[85%] me-auto' : 'items-end max-w-[85%] ms-auto') : (isRTL ? 'items-end max-w-[85%]' : 'items-start max-w-[85%]')}`}
                     >
                       <div
                         className={`p-3 rounded-xl brutal-border brutal-shadow-sm space-y-1 ${
                           isMe
-                            ? 'bg-[#17a398] text-[#082621] font-bold rounded-tr-none'
+                            ? (isRTL ? 'bg-[#17a398] text-[#082621] font-bold rounded-tl-none' : 'bg-[#17a398] text-[#082621] font-bold rounded-tr-none')
                             : isDark
-                              ? 'bg-zinc-800 text-white font-bold border-zinc-700 rounded-tl-none'
-                              : 'bg-white text-[#0b1110] font-bold rounded-tl-none'
+                              ? (isRTL ? 'bg-zinc-800 text-white font-bold border-zinc-700 rounded-tr-none' : 'bg-zinc-800 text-white font-bold border-zinc-700 rounded-tl-none')
+                              : (isRTL ? 'bg-white text-[#0b1110] font-bold rounded-tr-none' : 'bg-white text-[#0b1110] font-bold rounded-tl-none')
                         }`}
                       >
                         {/* Message Meta Header */}
-                        <div className={`flex items-center justify-between border-b pb-1 mb-1 font-mono text-[10px] gap-4 ${
+                        <div className={`flex items-center justify-between border-b pb-1 mb-1 text-[10px] gap-4 tracking-normal ${
                           isMe 
                             ? 'border-black/20 text-[#082621]/80 font-bold' 
                             : isDark ? 'border-zinc-700 text-zinc-400' : 'border-dashed border-zinc-300 text-zinc-500'
                         }`}>
-                          <span className="flex items-center gap-1">
-                            {isMe ? (currentUser?.name || 'You') : (activeUser?.name || 'Friend')}
+                          <span className="flex items-center gap-1 font-sans">
+                            {isMe ? (currentUser?.name || (isRTL ? 'أنت' : 'You')) : (activeUser?.name || (isRTL ? 'صديق' : 'Friend'))}
                             {!isMe && (activeUser?.isBot || activeUser?.name === 'Rivo Bot' || msg.isBot) && (
-                              <span className="px-1 py-0.5 rounded text-[8px] font-mono font-black bg-[#17a398] text-[#082621]">
+                              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-[#17a398] text-[#082621]">
                                 [BOT]
                               </span>
                             )}
                           </span>
-                          <span>{timeFormatted}</span>
+                          <span className="font-mono">{timeFormatted}</span>
                         </div>
 
                         {/* Bolder Chat Text */}
                         {msg.text && (
-                          <p className="break-words font-bold text-[13.5px] md:text-[14px] leading-snug tracking-normal">
+                          <p
+                            dir="auto"
+                            style={{ letterSpacing: 'normal' }}
+                            className="break-words font-sans font-semibold text-[13.5px] md:text-[14px] leading-relaxed tracking-normal"
+                          >
                             {msg.text}
                           </p>
                         )}
@@ -611,6 +636,8 @@ export default function ChatModal({
               <form onSubmit={handleSendMessage} className="flex gap-2">
                 <input
                   type="text"
+                  dir="auto"
+                  style={{ letterSpacing: 'normal' }}
                   value={inputText}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -624,8 +651,8 @@ export default function ChatModal({
                       }, 2500);
                     }
                   }}
-                  placeholder={`Type a message for ${activeUser.name}...`}
-                  className={`flex-1 text-xs font-bold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398] ${
+                  placeholder={isRTL ? `اكتب رسالة إلى ${activeUser.name}...` : `Type a message for ${activeUser.name}...`}
+                  className={`flex-1 text-xs font-sans font-semibold px-3 py-2.5 rounded-lg brutal-border focus:outline-none focus:ring-2 focus:ring-[#17a398] tracking-normal ${
                     isDark 
                       ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' 
                       : 'bg-white border-black text-[#0b1110]'
@@ -634,14 +661,15 @@ export default function ChatModal({
                 <button
                   type="submit"
                   disabled={!inputText.trim() || sending}
-                  className="bg-[#17a398] hover:bg-[#26c4b7] text-black px-4 py-2 rounded-lg font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+                  style={{ letterSpacing: 'normal' }}
+                  className="bg-[#17a398] hover:bg-[#26c4b7] text-black px-4 py-2 rounded-lg font-bold text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 cursor-pointer disabled:opacity-40 tracking-normal shrink-0"
                 >
                   {sending ? (
                     <Loader2 size={14} className="animate-spin text-black" />
                   ) : (
-                    <Send size={14} className="text-black" strokeWidth={2.5} />
+                    <Send size={14} className={`text-black ${isRTL ? 'rotate-180' : ''}`} strokeWidth={2.5} />
                   )}
-                  <span>Send</span>
+                  <span>{isRTL ? 'إرسال' : 'Send'}</span>
                 </button>
               </form>
             </div>
@@ -653,13 +681,15 @@ export default function ChatModal({
           }`}>
             {/* Search Input */}
             <div className="relative mb-3 shrink-0">
-              <Search size={16} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} strokeWidth={2.5} />
+              <Search size={16} className={`absolute start-3.5 top-1/2 -translate-y-1/2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`} strokeWidth={2.5} />
               <input
                 type="text"
-                placeholder="Search friends or conversations..."
+                dir="auto"
+                style={{ letterSpacing: 'normal' }}
+                placeholder={isRTL ? 'ابحث عن أصدقاء أو محادثات...' : 'Search friends or conversations...'}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full brutal-border rounded-xl pl-10 pr-4 py-2 text-xs font-bold focus:outline-none brutal-shadow-sm ${
+                className={`w-full brutal-border rounded-xl ps-10 pe-4 py-2 text-xs font-sans font-semibold focus:outline-none brutal-shadow-sm tracking-normal ${
                   isDark 
                     ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' 
                     : 'bg-white border-black text-[#0b1110] placeholder-zinc-500'
@@ -672,15 +702,15 @@ export default function ChatModal({
               {/* Search Results */}
               {searchQuery.trim() ? (
                 <div>
-                  <p className="text-[10px] font-mono font-bold uppercase text-zinc-500 mb-2">
-                    Search Results ({searchResults.length})
+                  <p className="text-[10px] font-bold uppercase text-zinc-500 mb-2 tracking-normal">
+                    {isRTL ? `نتائج البحث (${searchResults.length})` : `Search Results (${searchResults.length})`}
                   </p>
                   {isSearchingUsers ? (
                     <div className="text-center py-6">
                       <Loader2 size={20} className="animate-spin text-[#17a398] mx-auto" />
                     </div>
                   ) : searchResults.length === 0 ? (
-                    <p className="text-xs text-zinc-500 text-center py-4">No users found</p>
+                    <p className="text-xs text-zinc-500 text-center py-4">{isRTL ? 'لم يتم العثور على مستخدمين' : 'No users found'}</p>
                   ) : (
                     searchResults.map((u) => (
                       <div
@@ -695,17 +725,20 @@ export default function ChatModal({
                             {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.[0] || 'U'}
                           </div>
                           <div className="truncate">
-                            <div className={`flex items-center gap-1.5 font-display font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                            <div className={`flex items-center gap-1.5 font-sans font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
                               <span>{u.name}</span>
                               <VerifiedBadge userOrName={u} size={12} />
                             </div>
-                            <span className="text-[10px] font-mono text-zinc-500">Send Message</span>
+                            <span className="text-[10px] text-zinc-500 tracking-normal">{isRTL ? 'إرسال رسالة' : 'Send Message'}</span>
                           </div>
                         </div>
-                        <button className={`px-3 py-1 font-display font-bold text-[11px] rounded-lg brutal-border ${
-                          isDark ? 'bg-[#17a398] text-black' : 'bg-[#0b1110] text-white'
-                        }`}>
-                          Chat →
+                        <button
+                          style={{ letterSpacing: 'normal' }}
+                          className={`px-3 py-1 font-bold text-[11px] rounded-lg brutal-border tracking-normal ${
+                            isDark ? 'bg-[#17a398] text-black' : 'bg-[#0b1110] text-white'
+                          }`}
+                        >
+                          {isRTL ? 'محادثة ←' : 'Chat →'}
                         </button>
                       </div>
                     ))
@@ -723,8 +756,8 @@ export default function ChatModal({
                       isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white'
                     }`}>
                       <MessageSquare size={32} className="mx-auto text-zinc-400 mb-2" />
-                      <p className={`font-display font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Chats Yet</p>
-                      <p className="text-xs text-zinc-500 mt-1">Search for users above or choose a friend to begin chatting.</p>
+                      <p className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{isRTL ? 'لا توجد محادثات بعد' : 'No Chats Yet'}</p>
+                      <p className="text-xs text-zinc-500 mt-1">{isRTL ? 'ابحث عن مستخدمين بالأعلى أو اختر صديقاً لبدء المحادثة.' : 'Search for users above or choose a friend to begin chatting.'}</p>
                     </div>
                   ) : (
                     conversations.map((conv) => {
@@ -742,25 +775,32 @@ export default function ChatModal({
                             <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
                               {other.avatar ? <img src={other.avatar} alt="" className="w-full h-full object-cover" /> : other.name?.[0] || 'U'}
                             </div>
-                            <div className="truncate flex-1">
-                              <div className={`flex items-center gap-1.5 font-display font-black text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                                <span>{other.name}</span>
+                            <div className="truncate flex-1 min-w-0">
+                              <div className={`flex items-center gap-1.5 font-sans font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                                <span className="truncate">{other.name}</span>
                                 <VerifiedBadge userOrName={other} size={12} />
                                 {(other?.isBot || other?.name === 'Rivo Bot') && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-black bg-[#17a398] text-[#082621]">
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#17a398] text-[#082621]">
                                     [BOT]
                                   </span>
                                 )}
                               </div>
-                              <p className={`text-[11px] font-medium truncate mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-                                {conv.lastMessage?.text || (conv.lastMessage?.track ? '🎵 Shared a track' : 'Started a conversation')}
+                              <p
+                                dir="auto"
+                                style={{ letterSpacing: 'normal' }}
+                                className={`text-[11.5px] font-sans font-medium truncate mt-0.5 tracking-normal ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
+                              >
+                                {conv.lastMessage?.text || (conv.lastMessage?.track ? (isRTL ? '🎵 شارك مقطعاً صوتياً' : '🎵 Shared a track') : (isRTL ? 'بدأ محادثة' : 'Started a conversation'))}
                               </p>
                             </div>
                           </div>
-                          <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded shrink-0 ${
-                            isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
-                          }`}>
-                            Chat
+                          <span
+                            style={{ letterSpacing: 'normal' }}
+                            className={`text-[10px] font-sans font-semibold px-2 py-0.5 rounded shrink-0 tracking-normal ${
+                              isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ede5d3] text-zinc-700'
+                            }`}
+                          >
+                            {isRTL ? 'محادثة' : 'Chat'}
                           </span>
                         </div>
                       );
@@ -775,8 +815,8 @@ export default function ChatModal({
                       isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white'
                     }`}>
                       <Users size={32} className="mx-auto text-zinc-400 mb-2" />
-                      <p className={`font-display font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>No Friends Added Yet</p>
-                      <p className="text-xs text-zinc-500 mt-1">Search and connect with friends on Rivo.</p>
+                      <p className={`font-bold text-sm ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{isRTL ? 'لا يوجد أصدقاء بعد' : 'No Friends Added Yet'}</p>
+                      <p className="text-xs text-zinc-500 mt-1">{isRTL ? 'ابحث وتواصل مع الأصدقاء على ريفو.' : 'Search and connect with friends on Rivo.'}</p>
                     </div>
                   ) : (
                     friends.map((f) => (
@@ -787,20 +827,23 @@ export default function ChatModal({
                           isDark ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-800 text-white' : 'bg-white hover:bg-[#ede5d3]'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <div className="w-10 h-10 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
                             {f.avatar ? <img src={f.avatar} alt="" className="w-full h-full object-cover" /> : f.name?.[0] || 'F'}
                           </div>
-                          <div className="truncate">
-                            <div className={`flex items-center gap-1.5 font-display font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-                              <span>{f.name}</span>
+                          <div className="truncate flex-1 min-w-0">
+                            <div className={`flex items-center gap-1.5 font-sans font-bold text-xs ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                              <span className="truncate">{f.name}</span>
                               <VerifiedBadge userOrName={f} size={12} />
                             </div>
-                            <span className="text-[10px] font-mono text-emerald-500 font-bold">ONLINE</span>
+                            <span className="text-[10px] text-emerald-500 font-bold tracking-normal">{isRTL ? 'متصل' : 'ONLINE'}</span>
                           </div>
                         </div>
-                        <button className="px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-display font-bold text-xs rounded-lg brutal-border brutal-shadow-sm brutal-btn">
-                          Chat →
+                        <button
+                          style={{ letterSpacing: 'normal' }}
+                          className="px-3 py-1 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-bold text-xs rounded-lg brutal-border brutal-shadow-sm brutal-btn tracking-normal"
+                        >
+                          {isRTL ? 'محادثة ←' : 'Chat →'}
                         </button>
                       </div>
                     ))

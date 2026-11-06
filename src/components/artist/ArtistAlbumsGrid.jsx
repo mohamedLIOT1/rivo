@@ -1,6 +1,7 @@
 import React from 'react';
 import { Disc, Play, Edit, Plus } from 'lucide-react';
 import { useTranslation } from '../../context/PreferencesContext';
+import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils';
 
 export default function ArtistAlbumsGrid({
   artistAlbums = [],
@@ -59,10 +60,10 @@ export default function ArtistAlbumsGrid({
             >
               <div className="relative aspect-square mb-2.5 overflow-hidden rounded-lg brutal-border bg-black/10">
                 <img
-                  src={album.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'}
+                  src={normalizeCoverUrl(album.cover)}
                   alt={album.name}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600'; }}
+                  onError={handleCoverImageError}
                 />
                 <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="w-10 h-10 rounded-full bg-[#f59e0b] text-black flex items-center justify-center brutal-border brutal-shadow-sm shadow-md">

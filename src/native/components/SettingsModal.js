@@ -47,13 +47,11 @@ export default function SettingsModal({ visible, onClose }) {
         setLockScreenEnabled(enabled);
       }
     }).catch(() => {});
-    if (Platform.OS === 'android') {
-      isLockScreenEnabled().then((nativeVal) => {
-        if (typeof nativeVal === 'boolean') {
-          setIsLockscreenEnabled(nativeVal);
-        }
-      }).catch(() => {});
-    }
+    isLockScreenEnabled().then((nativeVal) => {
+      if (typeof nativeVal === 'boolean') {
+        setIsLockscreenEnabled(nativeVal);
+      }
+    }).catch(() => {});
   }, []);
 
   const toggleLockscreen = (val) => {
@@ -61,7 +59,8 @@ export default function SettingsModal({ visible, onClose }) {
     AsyncStorage.setItem('@rivo_lockscreen_enabled', String(val)).catch(() => {});
     setLockScreenEnabled(val);
     if (showToast) {
-      showToast(val ? 'Full-Screen Lock Player enabled' : 'Full-Screen Lock Player disabled (Notification bar stays active)', 'info');
+      const label = Platform.OS === 'ios' ? 'Lock Screen & Dynamic Island' : 'Lockscreen Overlay';
+      showToast(val ? `${label} enabled` : `${label} disabled`, 'info');
     }
   };
 

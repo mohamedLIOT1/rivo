@@ -18,7 +18,7 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName, isRadioTrack } from '../utils/quranUtils';
 import { parseLrcLyrics } from '../utils/lrcParser';
-import { normalizeCoverUrl } from '../utils/coverUtils';
+import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
 import { detectTrackGenre } from '../utils/tasteAlgorithm';
 
@@ -1083,7 +1083,7 @@ function FullPlayerModal({
             src={normalizeCoverUrl(track.cover, track)} 
             alt={title} 
             className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
-            onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
+            onError={handleCoverImageError}
           />
           {isActive ? (
             <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
@@ -1351,6 +1351,7 @@ function FullPlayerModal({
               aria-hidden="true"
               className="absolute inset-0 w-full h-full object-cover scale-105 blur-md opacity-20 transition-opacity duration-700" 
               style={{ transform: 'translate3d(0, 0, 0)', willChange: 'opacity' }}
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
             />
             <div 
               className="absolute inset-0"
@@ -1481,7 +1482,7 @@ function FullPlayerModal({
                     background: 'repeating-radial-gradient(circle at 50%, transparent 0, transparent 10px, rgba(255,255,255,0.03) 10px, rgba(255,255,255,0.03) 11px)'
                   }}/>
                   <div className="w-2/5 h-2/5 rounded-full overflow-hidden border-2 border-black shadow-xl z-10">
-                    <img src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} alt={currentTrack?.title || ''} className="w-full h-full object-cover" />
+                    <img src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} alt={currentTrack?.title || ''} className="w-full h-full object-cover" onError={handleCoverImageError} />
                   </div>
                   <div className="absolute w-4 h-4 rounded-full bg-[#ede5d3] border-2 border-[#0b1110] z-20" />
                 </div>
@@ -1505,6 +1506,7 @@ function FullPlayerModal({
                         alt="" 
                         aria-hidden="true"
                         className="absolute inset-0 w-full h-full object-cover filter blur-md opacity-35 scale-125 pointer-events-none"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                     )}
                     {/* Primary Song Image: Centered, never squished or chopped off */}
@@ -1512,6 +1514,7 @@ function FullPlayerModal({
                       src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} 
                       alt={currentTrack?.title || 'Song Cover'}
                       className="relative z-1 max-w-full max-h-full w-full h-full object-contain"
+                      onError={handleCoverImageError}
                       style={{ 
                         transform: isPlaying ? 'scale(1.02)' : 'scale(1)',
                         transition: 'transform 0.4s ease',
@@ -1800,6 +1803,7 @@ function FullPlayerModal({
                   src={normalizeCoverUrl(nextMixTrack.cover, nextMixTrack)} 
                   alt={nextMixTrack.title}
                   className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg object-cover border border-[#17a398]/40 shrink-0" 
+                  onError={handleCoverImageError} 
                 />
                 <div className="flex-1 min-w-0">
                   <div className={`text-xs font-bold truncate leading-tight ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
@@ -2160,10 +2164,10 @@ function FullPlayerModal({
             {/* Header: Track Cover + Info + Close */}
             <div className={`flex items-center gap-3 pb-3 border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'} mb-3`}>
               <img 
-                src={trackMenuTarget.track.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300'} 
+                src={normalizeCoverUrl(trackMenuTarget.track.cover, trackMenuTarget.track)} 
                 alt={trackMenuTarget.track.title} 
                 className="w-12 h-12 rounded-xl object-cover brutal-border shrink-0 bg-black"
-                onError={(e) => { e.target.src = 'https://ui-avatars.com/api/?name=R&background=082621&color=26c4b7'; }}
+                onError={handleCoverImageError}
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-display font-black truncate">{trackMenuTarget.track.title}</p>

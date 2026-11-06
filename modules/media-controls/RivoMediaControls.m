@@ -292,6 +292,11 @@ RCT_EXPORT_METHOD(checkNotificationPermission:(RCTPromiseResolveBlock)resolve re
         [[UNUserNotificationCenter currentNotificationCenter] getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings * _Nonnull settings) {
             BOOL isAllowed = (settings.authorizationStatus == UNAuthorizationStatusAuthorized ||
                               settings.authorizationStatus == UNAuthorizationStatusProvisional);
+            if (@available(iOS 14.0, *)) {
+                if (settings.authorizationStatus == UNAuthorizationStatusEphemeral) {
+                    isAllowed = YES;
+                }
+            }
             resolve(@(isAllowed));
         }];
     } else {
@@ -310,6 +315,27 @@ RCT_EXPORT_METHOD(requestNotificationPermission:(RCTPromiseResolveBlock)resolve 
     } else {
         resolve(@(YES));
     }
+}
+
+RCT_EXPORT_METHOD(openNotificationSettings:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSURL *url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+        if ([[UIApplication sharedApplication] canOpenURL:url]) {
+            [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:^(BOOL success) {
+                resolve(@(success));
+            }];
+        } else {
+            resolve(@(NO));
+        }
+    });
+}
+
+RCT_EXPORT_METHOD(canDrawOverlays:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    resolve(@(YES));
+}
+
+RCT_EXPORT_METHOD(requestOverlayPermission:(RCTPromiseResolveBlock)resolve rejecter:(RCTPromiseRejectBlock)reject) {
+    resolve(@(YES));
 }
 
 RCT_EXPORT_METHOD(showChatNotification:(NSDictionary *)options) {

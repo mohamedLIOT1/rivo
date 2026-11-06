@@ -1,4 +1,4 @@
-import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform, PermissionsAndroid } from 'react-native';
+import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform, PermissionsAndroid, Linking } from 'react-native';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 const { RivoMediaControls } = NativeModules;
@@ -190,38 +190,53 @@ export const subscribeToMediaActions = (callbackOrHandlers) => {
 export const checkNotificationPermission = async () => {
   if (RivoMediaControls && typeof RivoMediaControls.checkNotificationPermission === 'function') {
     try {
-      return await RivoMediaControls.checkNotificationPermission();
+      const res = await RivoMediaControls.checkNotificationPermission();
+      if (typeof res === 'boolean') return res;
     } catch (e) {}
   }
-  if (Platform.OS === 'android' && Platform.Version >= 33) {
-    try {
-      return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-    } catch (e) {}
+  if (Platform.OS === 'android') {
+    if (Platform.Version >= 33) {
+      try {
+        return await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      } catch (e) {}
+    }
+    return true;
   }
-  return true;
+  return false;
 };
 
 export const requestNotificationPermission = async () => {
   if (RivoMediaControls && typeof RivoMediaControls.requestNotificationPermission === 'function') {
     try {
-      return await RivoMediaControls.requestNotificationPermission();
+      const res = await RivoMediaControls.requestNotificationPermission();
+      if (res === true) return true;
     } catch (e) {}
   }
-  if (Platform.OS === 'android' && Platform.Version >= 33) {
-    try {
-      const res = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-      return res === PermissionsAndroid.RESULTS.GRANTED;
-    } catch (e) {}
+  if (Platform.OS === 'android') {
+    if (Platform.Version >= 33) {
+      try {
+        const res = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+        return res === PermissionsAndroid.RESULTS.GRANTED;
+      } catch (e) {}
+    }
+    return true;
   }
-  return true;
+  return false;
 };
 
 export const openNotificationSettings = async () => {
   if (RivoMediaControls && typeof RivoMediaControls.openNotificationSettings === 'function') {
     try {
-      return await RivoMediaControls.openNotificationSettings();
+      const res = await RivoMediaControls.openNotificationSettings();
+      if (res) return true;
     } catch (e) {}
   }
+  try {
+    if (Linking && typeof Linking.openSettings === 'function') {
+      await Linking.openSettings();
+      return true;
+    }
+  } catch (e) {}
   return false;
 };
 
@@ -345,8 +360,15 @@ export const requestOverlayPermission = async () => {
   if (Platform.OS !== 'android') return true;
   if (RivoMediaControls && typeof RivoMediaControls.requestOverlayPermission === 'function') {
     try {
-      return await RivoMediaControls.requestOverlayPermission();
+      const res = await RivoMediaControls.requestOverlayPermission();
+      if (res) return true;
     } catch (e) {}
   }
+  try {
+    if (Linking && typeof Linking.openSettings === 'function') {
+      await Linking.openSettings();
+      return true;
+    }
+  } catch (e) {}
   return false;
 };
