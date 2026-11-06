@@ -3,7 +3,7 @@ import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, 
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
-import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK } from '../utils/coverUtils';
+import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
 
 function MiniPlayer({
   currentTrack,
@@ -283,13 +283,10 @@ function MiniPlayer({
               </div>
               <img 
                 src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
-                alt={currentTrack.title} 
+                alt="" 
+                referrerPolicy="no-referrer"
                 className="relative z-10 w-full h-full object-cover" 
-                onError={(e) => {
-                  if (e.currentTarget.dataset.fallback) return;
-                  e.currentTarget.dataset.fallback = 'true';
-                  e.currentTarget.src = DEFAULT_COVER_FALLBACK;
-                }}
+                onError={handleCoverImageError}
               />
             </div>
 
@@ -366,13 +363,10 @@ function MiniPlayer({
               </div>
               <img 
                 src={normalizeCoverUrl(currentTrack.cover, currentTrack)} 
-                alt={currentTrack.title} 
+                alt="" 
+                referrerPolicy="no-referrer"
                 className="relative z-10 w-full h-full object-cover group-hover:scale-105 transition-transform" 
-                onError={(e) => {
-                  if (e.currentTarget.dataset.fallback) return;
-                  e.currentTarget.dataset.fallback = 'true';
-                  e.currentTarget.src = DEFAULT_COVER_FALLBACK;
-                }}
+                onError={handleCoverImageError}
               />
               <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
                 <Maximize2 size={16} className="text-white" />

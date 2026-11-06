@@ -142,8 +142,10 @@ function FullPlayerModal({
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
     isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
     vocalIsolationStatus,
-    activeTransitions = {},
-    isLoadingTrack: ctxIsLoadingTrack
+    activeTransitions = {},
+
+    isLoadingTrack: ctxIsLoadingTrack
+
   } = useAudioPlayer();
 
   const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
@@ -1512,7 +1514,7 @@ function FullPlayerModal({
                     {/* Primary Song Image: Centered, never squished or chopped off */}
                     <img 
                       src={normalizeCoverUrl(currentTrack?.cover, currentTrack)} 
-                      alt={currentTrack?.title || 'Song Cover'}
+                      alt="" referrerPolicy="no-referrer"
                       className="relative z-1 max-w-full max-h-full w-full h-full object-contain"
                       onError={handleCoverImageError}
                       style={{ 

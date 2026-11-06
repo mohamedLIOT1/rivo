@@ -35,6 +35,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isArabicText } from '../theme/typography';
 import { API_BASE_URL } from '../config';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 
@@ -75,6 +76,8 @@ const AlbumTrackRow = React.memo(({
 }) => {
   const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
   const trackCover = normalizeCoverUri(track.coverUrl || track.cover || coverUri);
+  const isTitleArabic = isArabicText(track?.title);
+  const isArtistArabic = isArabicText(track?.artist || albumArtist);
 
   return (
     <TouchableOpacity
@@ -99,10 +102,25 @@ const AlbumTrackRow = React.memo(({
       <Image source={{ uri: trackCover }} style={styles.trackThumb} resizeMode="cover" fadeDuration={0} />
 
       <View style={styles.trackDetails}>
-        <Text style={[styles.trackTitle, !isDark && styles.trackTitleLight, isCurrent && styles.trackTitleActive]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.trackTitle,
+            !isDark && styles.trackTitleLight,
+            isCurrent && styles.trackTitleActive,
+            isTitleArabic && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
+          ]}
+          numberOfLines={1}
+        >
           {track.title || 'Untitled Track'}
         </Text>
-        <Text style={[styles.trackArtist, !isDark && styles.trackArtistLight]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.trackArtist,
+            !isDark && styles.trackArtistLight,
+            isArtistArabic && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
+          ]}
+          numberOfLines={1}
+        >
           {track.artist || albumArtist}
         </Text>
       </View>
@@ -194,6 +212,13 @@ export default function AlbumDetailModal({
   const { showToast } = useToast();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSaved, setIsSaved] = useState(false);
 
@@ -547,13 +572,13 @@ export default function AlbumDetailModal({
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
             <ArrowLeft size={20} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} style={isRTL && { transform: [{ rotate: '180deg' }] }} />
-            <Text style={[styles.backText, !isDark && styles.backTextLight, isRTL && { letterSpacing: 0 }]}>
+            <Text style={[styles.backText, !isDark && styles.backTextLight, rtlTextStyle]}>
               {isRTL ? 'رجوع' : 'RETURN'}
             </Text>
           </TouchableOpacity>
 
           <View style={[styles.batchBadge, !isDark && styles.batchBadgeLight]}>
-            <Text style={[styles.batchText, !isDark && styles.batchTextLight, isRTL && { letterSpacing: 0 }]}>
+            <Text style={[styles.batchText, !isDark && styles.batchTextLight, rtlTextStyle]}>
               {isRTL ? `وصفة صوتية رسمية • تشغيلة #${batchNumber}` : `OFFICIAL AUDIO PRESCRIPTION • BATCH #${batchNumber}`}
             </Text>
           </View>
@@ -591,25 +616,44 @@ export default function AlbumDetailModal({
                   {/* Title & Meta Info */}
                   <View style={styles.heroInfo}>
                     <View style={[styles.albumBadge, isPlaylist && { borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-                      <Text style={[styles.albumBadgeText, isPlaylist && { color: '#f59e0b' }, isRTL && { letterSpacing: 0 }]}>
+                      <Text style={[styles.albumBadgeText, isPlaylist && { color: '#f59e0b' }, rtlTextStyle]}>
                         {isPlaylist ? (isRTL ? 'قائمة تشغيل رسمية' : 'OFFICIAL PLAYLIST') : (isRTL ? 'ألبوم رسمي' : 'OFFICIAL ALBUM')}
                       </Text>
                     </View>
 
-                    <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={2}>
+                    <Text
+                      style={[
+                        styles.albumTitle,
+                        !isDark && styles.albumTitleLight,
+                        (isRTL || isArabicText(albumTitle)) && {
+                          letterSpacing: 0,
+                          fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+                        },
+                      ]}
+                      numberOfLines={2}
+                    >
                       {albumTitle}
                     </Text>
 
                     <TouchableOpacity
                       onPress={() => {
                         if (onSelectArtist && !isPlaylist) {
-                          onClose();
-                          onSelectArtist(albumArtist);
+                           onClose();
+                           onSelectArtist(albumArtist);
                         }
                       }}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.albumArtist, !isDark && styles.albumArtistLight, isRTL && { letterSpacing: 0 }]}>
+                      <Text
+                        style={[
+                          styles.albumArtist,
+                          !isDark && styles.albumArtistLight,
+                          (isRTL || isArabicText(albumArtist)) && {
+                            letterSpacing: 0,
+                            fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+                          },
+                        ]}
+                      >
                         {isPlaylist ? (isRTL ? 'إعداد: ' : 'Curated by ') : (isRTL ? 'ألبوم للفنان: ' : 'Album by ')}
                         <Text style={styles.artistHighlight}>{albumArtist}</Text>
                       </Text>
@@ -617,30 +661,30 @@ export default function AlbumDetailModal({
 
                     <View style={styles.statsPillRow}>
                       <View style={[styles.statsPill, !isDark && styles.statsPillLight, isPlaylist && { backgroundColor: 'rgba(23,163,152,0.18)', borderColor: '#17a398' }]}>
-                        <Text style={[styles.statsPillText, !isDark && styles.statsPillTextLight, isPlaylist && { color: '#17a398' }, isRTL && { letterSpacing: 0 }]}>
+                        <Text style={[styles.statsPillText, !isDark && styles.statsPillTextLight, isPlaylist && { color: '#17a398' }, rtlTextStyle]}>
                           {isPlaylist ? (isRTL ? 'قائمة تشغيل' : 'PLAYLIST') : (isRTL ? 'ألبوم' : 'ALBUM')}
                         </Text>
                       </View>
                       {(album?.isMix || (album?.name && album.name.toLowerCase().includes('mix'))) && (
                         <View style={[styles.statsPill, { backgroundColor: 'rgba(245,158,11,0.18)', borderColor: '#f59e0b', marginLeft: 4 }]}>
-                          <Text style={[styles.statsPillText, { color: '#f59e0b' }, isRTL && { letterSpacing: 0 }]}>
+                          <Text style={[styles.statsPillText, { color: '#f59e0b' }, rtlTextStyle]}>
                             {isRTL ? 'مكس DJ' : 'DJ MIX'}
                           </Text>
                         </View>
                       )}
                       {isPlaylist && (
                         <View style={[styles.statsPill, { backgroundColor: album?.isPublic !== false ? 'rgba(23,163,152,0.15)' : 'rgba(107,114,128,0.15)', borderColor: album?.isPublic !== false ? '#17a398' : '#4b5563', marginLeft: 4 }]}>
-                          <Text style={[styles.statsPillText, { color: album?.isPublic !== false ? '#17a398' : '#9ca3af' }, isRTL && { letterSpacing: 0 }]}>
+                          <Text style={[styles.statsPillText, { color: album?.isPublic !== false ? '#17a398' : '#9ca3af' }, rtlTextStyle]}>
                             {isRTL ? (album?.isPublic !== false ? 'عام' : 'خاص') : (album?.isPublic !== false ? 'PUBLIC' : 'PRIVATE')}
                           </Text>
                         </View>
                       )}
                       <Text style={styles.statsDot}>•</Text>
-                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight, isRTL && { letterSpacing: 0 }]}>
+                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight, rtlTextStyle]}>
                         {effectiveAlbumTracks.length} {isRTL ? 'مقاطع' : 'TRACKS'}
                       </Text>
                       <Text style={styles.statsDot}>•</Text>
-                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight, isRTL && { letterSpacing: 0 }]}>
+                      <Text style={[styles.statsMeta, !isDark && styles.statsMetaLight, rtlTextStyle]}>
                         {totalMinutes} {isRTL ? 'دقيقة' : 'MIN'}
                       </Text>
                     </View>
@@ -670,7 +714,7 @@ export default function AlbumDetailModal({
                     activeOpacity={0.8}
                   >
                     <ListPlus size={15} color="#26c4b7" strokeWidth={2.2} />
-                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, rtlTextStyle]}>
                       {isRTL ? 'إضافة للانتظار' : (isPlaylist ? 'QUEUE PLAYLIST' : 'QUEUE ALL')}
                     </Text>
                   </TouchableOpacity>
@@ -686,7 +730,7 @@ export default function AlbumDetailModal({
                     ) : (
                       <BookmarkPlus size={15} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.2} />
                     )}
-                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, rtlTextStyle]}>
                       {isSaved ? (isRTL ? 'محفوظ' : 'SAVED') : (isRTL ? 'حفظ' : 'SAVE')}
                     </Text>
                   </TouchableOpacity>
@@ -698,7 +742,7 @@ export default function AlbumDetailModal({
                     activeOpacity={0.8}
                   >
                     <Download size={15} color="#26c4b7" strokeWidth={2.2} />
-                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, rtlTextStyle]}>
                       {isRTL ? `تنزيل الكل (${effectiveAlbumTracks.length})` : `DOWNLOAD (${effectiveAlbumTracks.length})`}
                     </Text>
                   </TouchableOpacity>
@@ -710,7 +754,7 @@ export default function AlbumDetailModal({
                     activeOpacity={0.8}
                   >
                     <Shuffle size={15} color="#f59e0b" strokeWidth={2.2} />
-                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.actionBtnText, !isDark && styles.actionBtnTextLight, rtlTextStyle]}>
                       {isRTL ? 'عشوائي' : 'SHUFFLE'}
                     </Text>
                   </TouchableOpacity>
@@ -720,7 +764,7 @@ export default function AlbumDetailModal({
                 <View style={[styles.searchBar, !isDark && styles.searchBarLight]}>
                   <Search size={16} color={!isDark ? '#57534e' : '#6b7280'} style={{ marginRight: 8 }} />
                   <TextInput
-                    style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && { textAlign: 'right' }]}
+                    style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && { textAlign: 'right' }, rtlTextStyle]}
                     placeholder={isRTL ? 'ابحث في قائمة المقاطع...' : 'Search in prescription list...'}
                     placeholderTextColor={!isDark ? '#78716c' : '#6b7280'}
                     value={searchQuery}
@@ -732,11 +776,11 @@ export default function AlbumDetailModal({
 
               {/* Table Header matching Image 3 */}
               <View style={[styles.tableHeader, !isDark && styles.tableHeaderLight]}>
-                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 34 }, isRTL && { letterSpacing: 0 }]}>#</Text>
-                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { flex: 1, paddingLeft: 8 }, isRTL && { letterSpacing: 0 }]}>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 34 }, rtlTextStyle]}>#</Text>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { flex: 1, paddingLeft: 8 }, rtlTextStyle]}>
                   {isRTL ? 'العنوان والفنان' : 'TITLE & ARTIST'}
                 </Text>
-                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 90, textAlign: 'right' }, isRTL && { letterSpacing: 0 }]}>
+                <Text style={[styles.colHeader, !isDark && styles.colHeaderLight, { width: 90, textAlign: 'right' }, rtlTextStyle]}>
                   {isRTL ? 'إجراءات' : 'ACTIONS'}
                 </Text>
               </View>

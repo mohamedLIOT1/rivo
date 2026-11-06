@@ -226,7 +226,7 @@ export default function ListeningActivityPanel({
       <div
         onClick={(e) => e.stopPropagation()}
         dir={isRTL ? 'rtl' : 'ltr'}
-        className={`w-full max-w-lg h-[600px] max-h-[85vh] rounded-2xl flex flex-col brutal-shadow-lg brutal-border-thick overflow-hidden animate-in zoom-in-95 duration-200 md:w-full md:h-full md:max-w-none md:max-h-none md:rounded-none md:border-y-0 md:border-r-0 md:border-l-[2.5px] md:rtl:border-l-0 md:rtl:border-r-[2.5px] md:shadow-none md:animate-none transition-colors ${
+        className={`w-full max-w-lg h-auto min-h-[360px] max-h-[85vh] rounded-2xl flex flex-col brutal-shadow-lg brutal-border-thick overflow-hidden animate-in zoom-in-95 duration-200 md:w-full md:h-full md:max-w-none md:max-h-none md:rounded-none md:border-y-0 md:border-r-0 md:border-l-[2.5px] md:rtl:border-l-0 md:rtl:border-r-[2.5px] md:shadow-none md:animate-none transition-colors ${
           isDark ? 'bg-[#101716] border-zinc-800 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
         }`}
       >

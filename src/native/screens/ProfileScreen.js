@@ -44,6 +44,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
@@ -78,6 +79,14 @@ function ProfileScreen({
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
   const { showToast } = useToast();
+  const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(currentUser?.name || '');
@@ -617,7 +626,7 @@ function ProfileScreen({
         {/* Public Playlists Section */}
         <View style={styles.sectionHeader}>
           <Disc size={16} color="#17a398" strokeWidth={2.5} />
-          <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>
+          <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>
             PUBLIC PLAYLISTS ({vCrates.length})
           </Text>
         </View>
@@ -981,7 +990,7 @@ function ProfileScreen({
           <View style={styles.playlistSectionHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Disc size={16} color="#17a398" strokeWidth={2.5} />
-              <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>
+              <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>
                 YOUR PLAYLISTS ({playlists.length})
               </Text>
             </View>
@@ -1084,7 +1093,7 @@ function ProfileScreen({
             activeOpacity={0.85}
           >
             <LogOut size={16} color="#ef4444" strokeWidth={2.5} />
-            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight]}>LOG OUT</Text>
+            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight, rtlTextStyle]}>{t('auth.logout') || 'LOG OUT'}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -1093,7 +1102,7 @@ function ProfileScreen({
             activeOpacity={0.85}
           >
             <LogIn size={16} color="#0b1110" strokeWidth={2.8} />
-            <Text style={styles.signInBtnText}>SIGN IN / REGISTER</Text>
+            <Text style={[styles.signInBtnText, rtlTextStyle]}>{t('auth.signIn') || 'SIGN IN / REGISTER'}</Text>
           </TouchableOpacity>
         )}
       </View>

@@ -1,48 +1,28 @@
 import React, { memo, useState } from 'react';
-import { Play, Radio, MessageSquare, Disc, Clock, User } from 'lucide-react';
+import { Play, Radio, MessageSquare, Disc, Clock, User, Volume2 } from 'lucide-react';
 import VerifiedBadge from '../VerifiedBadge';
 import { usePreferences } from '../../context/PreferencesContext';
-
-function formatTimeAgo(dateStr, isRTL) {
-  if (!dateStr) return '';
-  const diffSec = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return '';
-  if (diffSec < 60) return isRTL ? 'الآن' : 'just now';
-  if (diffSec < 3600) {
-    const mins = Math.max(1, Math.floor(diffSec / 60));
-    return isRTL ? `منذ ${mins} د` : `${mins}m ago`;
-  }
-  if (diffSec < 86400) {
-    const hours = Math.floor(diffSec / 3600);
-    return isRTL
-      ? (hours === 1 ? 'منذ ساعة' : hours === 2 ? 'منذ ساعتين' : `منذ ${hours} س`)
-      : `${hours}h ago`;
-  }
-  const days = Math.floor(diffSec / 86400);
-  if (isRTL) {
-    if (days === 1) return 'أمس';
-    if (days === 2) return 'منذ يومين';
-    return `منذ ${days} ي`;
-  }
-  return days === 1 ? 'yesterday' : `${days}d ago`;
-}
+import { normalizeCoverUrl, MUSIC_PLACEHOLDER_SVG, handleCoverImageError } from '../../utils/coverUtils';
 
 function formatBadgePill(lastActiveAt, isRTL) {
   if (!lastActiveAt) return isRTL ? 'غير متصل' : 'Offline';
   const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
   if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'Offline';
-  if (diffSec < 60) return isRTL ? 'الآن' : 'Now';
+  if (diffSec < 60) return isRTL ? 'نشط الآن' : 'Active now';
   if (diffSec < 3600) {
     const mins = Math.max(1, Math.floor(diffSec / 60));
-    return isRTL ? `${mins} د` : `${mins}m`;
+    return isRTL ? `منذ ${mins} دقيقة` : `${mins}m ago`;
   }
   if (diffSec < 86400) {
     const hours = Math.floor(diffSec / 3600);
-    return isRTL ? `${hours} س` : `${hours}h`;
+    return isRTL
+      ? (hours === 1 ? 'منذ ساعة' : hours === 2 ? 'منذ ساعتين' : `منذ ${hours} ساعات`)
+      : `${hours}h ago`;
   }
   const days = Math.floor(diffSec / 86400);
-  if (days === 1) return isRTL ? 'أمس' : '1d';
-  return isRTL ? `${days} ي` : `${days}d`;
+  if (days === 1) return isRTL ? 'منذ أمس' : 'Yesterday';
+  if (days === 2) return isRTL ? 'منذ يومين' : '2d ago';
+  return isRTL ? `منذ ${days} أيام` : `${days}d ago`;
 }
 
 function ActivityListItemComponent({
@@ -69,209 +49,107 @@ function ActivityListItemComponent({
 
   const trackTitle = listening?.title || listening?.name || '';
   const trackArtist = listening?.artist || '';
+  const trackCover = listening?.cover || listening?.coverUrl || '';
 
   return (
     <div
-      className={`group relative px-3 py-2.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
+      className={`group relative p-3 rounded-2xl border transition-all duration-200 flex flex-col gap-2.5 ${
         isDark
-          ? 'bg-[#141d1b] border-[#263330] hover:border-[#384c47] hover:bg-[#182320]'
+          ? 'bg-[#141d1b] border-[#22332f] hover:border-[#384c47] hover:bg-[#182320]'
           : 'bg-[#ede5d3] border-[#0b1110] hover:bg-[#f6eedf]'
       }`}
     >
-      {/* Left side: Avatar + Friend Info + Track */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-        {/* Friend Avatar (w-10 h-10) with crisp status ring */}
+      {/* ── Top Row: User Avatar + Name + Status Pill + Direct Actions ── */}
+      <div className="flex items-center justify-between gap-2">
+        {/* Left: Avatar + Friend Name */}
         <div
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenUserProfile?.(friend);
-          }}
-          className="relative shrink-0 cursor-pointer"
-          title={friend.name || 'User'}
+          onClick={() => onOpenUserProfile?.(friend)}
+          className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
+          title={friend.name || 'Friend'}
         >
-          <div
-            className={`w-10 h-10 rounded-full p-[2px] transition-transform group-hover:scale-105 ${
-              isLive
-                ? 'ring-2 ring-[#10b981] bg-[#10b981]/20 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
-                : isOnline
-                ? 'ring-2 ring-emerald-400 bg-emerald-400/20'
-                : isDark
-                ? 'ring-1.5 ring-zinc-600 bg-zinc-800'
-                : 'ring-1.5 ring-zinc-400 bg-zinc-200'
-            }`}
-          >
-            {hasAvatar ? (
-              <img
-                src={friend.avatar}
-                alt={friend.name || 'Friend'}
-                onError={() => setImgError(true)}
-                className="w-full h-full rounded-full object-cover"
-              />
+          {/* Avatar with Status Ring */}
+          <div className="relative shrink-0">
+            <div
+              className={`w-10 h-10 rounded-full p-[2px] transition-transform group-hover:scale-105 ${
+                isLive
+                  ? 'ring-2 ring-[#10b981] bg-[#10b981]/20 shadow-[0_0_8px_rgba(16,185,129,0.4)]'
+                  : isOnline
+                  ? 'ring-2 ring-emerald-400 bg-emerald-400/20'
+                  : isDark
+                  ? 'ring-1.5 ring-zinc-600 bg-zinc-800'
+                  : 'ring-1.5 ring-zinc-400 bg-zinc-200'
+              }`}
+            >
+              {hasAvatar ? (
+                <img
+                  src={friend.avatar}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  onError={() => setImgError(true)}
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full rounded-full bg-[#17a398] flex items-center justify-center font-black text-xs text-[#0b1110] select-none">
+                  {friend.name ? friend.name[0].toUpperCase() : 'U'}
+                </div>
+              )}
+            </div>
+
+            {/* Status Dot */}
+            {isLive ? (
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#10b981] border-2 border-[#141d1b] rounded-full animate-pulse shadow-[0_0_6px_#10b981]" />
+            ) : isOnline ? (
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#141d1b] rounded-full" />
             ) : (
-              <div className="w-full h-full rounded-full bg-[#17a398] flex items-center justify-center font-black text-xs text-[#0b1110] select-none">
-                {friend.name ? friend.name[0].toUpperCase() : 'U'}
-              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border-2 border-[#141d1b] rounded-full" />
             )}
           </div>
 
-          {/* Crisp Status Dot */}
-          {isLive ? (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#10b981] border-2 border-[#141d1b] rounded-full animate-pulse shadow-[0_0_6px_#10b981]"
-              title="Listening Live"
-            />
-          ) : isOnline ? (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#141d1b] rounded-full"
-              title="Online"
-            />
-          ) : (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border-2 border-[#141d1b] rounded-full"
-              title="Offline"
-            />
-          )}
-        </div>
-
-        {/* Friend Info & Song Details */}
-        <div className="flex-1 min-w-0">
-          {/* Top Row: Name + Verified Badge */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenUserProfile?.(friend);
-              }}
-              className={`text-xs font-bold truncate cursor-pointer hover:underline ${
-                isDark ? 'text-white' : 'text-[#082621]'
-              } ${isRTL ? 'font-sans' : ''}`}
-              title={friend.name || 'Friend'}
-            >
-              {friend.name || 'Friend'}
-            </span>
-            {friend.isVerified && <VerifiedBadge userOrName={friend} size={12} />}
-          </div>
-
-          {/* Second Row: Track Status or Offline Details */}
-          {isLive && hasTrack ? (
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                onPlayFriendTrack?.(friend);
-              }}
-              className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-90 transition mt-0.5"
-              title={`${isRTL ? 'يستمع إلى' : 'Listening'}: ${trackTitle}${trackArtist ? ` • ${trackArtist}` : ''}`}
-            >
-              <Disc
-                size={11}
-                className="shrink-0 text-[#26c4b7] animate-spin"
-                style={{ animationDuration: '3s' }}
-                strokeWidth={2.4}
-              />
-              <p className="text-[11px] truncate leading-tight text-[#26c4b7] font-medium flex-1 min-w-0">
-                <span className="font-bold text-white">{trackTitle}</span>
-                {trackArtist && <span className="opacity-80"> • {trackArtist}</span>}
-              </p>
+          {/* Name + Verified */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`text-xs font-bold truncate hover:underline ${
+                  isDark ? 'text-white' : 'text-[#082621]'
+                } ${isRTL ? 'font-sans tracking-normal' : ''}`}
+              >
+                {friend.name || 'Friend'}
+              </span>
+              {friend.isVerified && <VerifiedBadge userOrName={friend} size={13} />}
             </div>
-          ) : hasTrack ? (
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                onPlayFriendTrack?.(friend);
-              }}
-              className="flex items-center gap-1.5 min-w-0 w-full cursor-pointer hover:opacity-90 transition mt-0.5"
-              title={`${isRTL ? 'آخر تشغيل' : 'Last played'}: ${trackTitle}${trackArtist ? ` • ${trackArtist}` : ''}`}
-            >
-              <Disc size={11} className="shrink-0 text-zinc-400 group-hover:text-[#26c4b7] transition-colors" strokeWidth={1.8} />
-              <p className={`text-[11px] truncate leading-tight flex-1 min-w-0 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>
-                <span className={`text-[10px] ${isRTL ? 'font-sans' : ''} ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-                  {isRTL ? 'آخر تشغيل: ' : 'Last played: '}
-                </span>
-                <span className={`font-semibold ${isDark ? 'text-zinc-200 group-hover:text-white' : 'text-zinc-900'} transition-colors`}>
-                  {trackTitle}
-                </span>
-                {trackArtist && <span className={`${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}> • {trackArtist}</span>}
-              </p>
-            </div>
-          ) : (
-            <p
-              dir="auto"
-              className={`text-[11px] truncate leading-tight flex-1 min-w-0 mt-0.5 ${isRTL ? 'font-sans' : ''} ${
-                isDark ? 'text-zinc-400' : 'text-zinc-600'
-              }`}
-            >
-              {isOnline
-                ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Exploring music')
-                : friend.lastActiveAt
-                ? (isRTL ? `غير متصل • ${formatTimeAgo(friend.lastActiveAt, true)}` : `Offline • Last seen ${formatTimeAgo(friend.lastActiveAt, false)}`)
-                : (isRTL ? 'غير متصل' : 'Offline')}
-            </p>
-          )}
-        </div>
-      </div>
 
-      {/* Right Side: Status Pill on rest, Quick Actions on Hover */}
-      <div className="shrink-0 flex items-center justify-end relative">
-        {/* REST STATE: Status / Time Pill */}
-        <div className="flex items-center group-hover:hidden transition-all">
-          {isLive ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-[#17a398] text-[#0b1110] shadow-xs uppercase">
-              <Radio size={9} strokeWidth={3} className="shrink-0 animate-pulse" />
-              <span className={isRTL ? 'font-sans' : ''}>{isRTL ? 'مباشر' : 'LIVE'}</span>
-            </span>
-          ) : isOnline ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-400 border border-emerald-800/60">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className={isRTL ? 'font-sans' : ''}>{isRTL ? 'متصل' : 'ONLINE'}</span>
-            </span>
-          ) : (
+            {/* Status Text under Name */}
             <span
-              className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${isRTL ? 'font-sans' : ''} ${
-                isDark
-                  ? 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/50'
-                  : 'bg-[#ded4c1] text-zinc-700 border border-[#0b1110]/20'
-              }`}
-            >
-              <Clock size={10} className="shrink-0 text-zinc-400" />
-              <span>{formatBadgePill(friend.lastActiveAt, isRTL)}</span>
-            </span>
-          )}
-        </div>
-
-        {/* HOVER STATE: 1-Tap Tune In / Play + Jam + Chat Quick Actions */}
-        <div className="hidden group-hover:flex items-center gap-1 transition-all">
-          {/* 1-Tap Tune in / Play track button */}
-          {hasTrack && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onPlayFriendTrack?.(friend);
-              }}
-              className={`flex items-center justify-center rounded-lg brutal-border cursor-pointer transition shadow-xs ${
+              className={`text-[10px] block truncate mt-0.5 ${
                 isLive
-                  ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] px-2 py-1 text-[10px] font-black gap-1 uppercase'
-                  : isDark
-                  ? 'w-7 h-7 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110]'
-                  : 'w-7 h-7 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110]'
-              }`}
-              title={isLive ? (isRTL ? 'استماع مباشر' : 'Tune In') : (isRTL ? 'تشغيل المقطع' : 'Play Track')}
+                  ? 'text-[#10b981] font-bold'
+                  : isOnline
+                  ? 'text-emerald-400 font-semibold'
+                  : 'text-zinc-400'
+              } ${isRTL ? 'font-sans tracking-normal' : ''}`}
             >
-              <Play size={10} fill="#0b1110" color="#0b1110" className={!isLive ? 'ms-0.5' : ''} />
-              {isLive && <span className={isRTL ? 'font-sans' : ''}>{isRTL ? 'استماع' : 'TUNE IN'}</span>}
-            </button>
-          )}
+              {isLive
+                ? (isRTL ? 'يستمع الآن على ريفو' : 'Listening live on Rivo')
+                : isOnline
+                ? (isRTL ? 'متصل الآن' : 'Online now')
+                : formatBadgePill(friend.lastActiveAt, isRTL)}
+            </span>
+          </div>
+        </div>
 
-          {/* Jam Invite button */}
+        {/* Right: Quick Action Buttons */}
+        <div className="flex items-center gap-1 shrink-0">
+          {/* Jam Invite */}
           {onStartJamWithUser && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onStartJamWithUser(friend);
               }}
-              className={`w-7 h-7 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg shadow-xs ${
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                 isDark
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
+                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
               }`}
               title={isRTL ? `دعوة ${friend.name || ''} للجام` : `Invite ${friend.name || 'friend'} to Jam`}
             >
@@ -279,17 +157,17 @@ function ActivityListItemComponent({
             </button>
           )}
 
-          {/* Chat button */}
+          {/* Chat Message */}
           {openChatModal && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 openChatModal(friend);
               }}
-              className={`w-7 h-7 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg shadow-xs ${
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                 isDark
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
+                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
               }`}
               title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
             >
@@ -297,17 +175,17 @@ function ActivityListItemComponent({
             </button>
           )}
 
-          {/* View Profile fallback if no chat/jam */}
-          {!openChatModal && !onStartJamWithUser && onOpenUserProfile && (
+          {/* Profile */}
+          {onOpenUserProfile && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenUserProfile(friend);
               }}
-              className={`w-7 h-7 brutal-border flex items-center justify-center transition cursor-pointer rounded-lg shadow-xs ${
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                 isDark
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white hover:bg-zinc-100 text-[#0b1110]'
+                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
               }`}
               title={isRTL ? 'الملف الشخصي' : 'Profile'}
             >
@@ -316,6 +194,101 @@ function ActivityListItemComponent({
           )}
         </div>
       </div>
+
+      {/* ── Bottom Section: Dedicated Track Card (or Idle state) ── */}
+      {hasTrack ? (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlayFriendTrack?.(friend);
+          }}
+          className={`px-2.5 py-2 rounded-xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all ${
+            isLive
+              ? isDark
+                ? 'bg-[#0d1f1c] border-[#17a398]/40 hover:border-[#17a398]'
+                : 'bg-[#e2f4ef] border-[#17a398] hover:bg-[#d5eee8]'
+              : isDark
+              ? 'bg-[#0b1110]/80 border-zinc-800 hover:border-zinc-700'
+              : 'bg-white/80 border-[#0b1110]/15 hover:bg-white'
+          }`}
+          title={isRTL ? `تشغيل: ${trackTitle}` : `Play: ${trackTitle}`}
+        >
+          {/* Track Cover Thumbnail (36x36) */}
+          <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-black/30 bg-[#0b1110]">
+            <img
+              src={normalizeCoverUrl(trackCover, listening)}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={handleCoverImageError}
+              className="w-full h-full object-cover"
+            />
+            {isLive && (
+              <div className="absolute inset-0 bg-[#10b981]/20 flex items-center justify-center">
+                <Volume2 size={13} className="text-[#10b981] animate-pulse" />
+              </div>
+            )}
+          </div>
+
+          {/* Track Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span
+                className={`text-[9.5px] font-bold uppercase shrink-0 ${
+                  isLive ? 'text-[#10b981]' : isDark ? 'text-zinc-400' : 'text-zinc-600'
+                } ${isRTL ? 'font-sans tracking-normal' : 'font-mono'}`}
+              >
+                {isLive
+                  ? (isRTL ? '▶ يستمع الآن' : '▶ LIVE')
+                  : (isRTL ? '📻 آخر استماع' : '📻 LAST PLAYED')}
+              </span>
+            </div>
+            <p
+              className={`text-xs font-bold truncate mt-0.5 ${
+                isDark ? 'text-zinc-100 group-hover:text-white' : 'text-[#0b1110]'
+              } ${isRTL ? 'font-sans tracking-normal' : ''}`}
+            >
+              {trackTitle}
+            </p>
+            {trackArtist && (
+              <p
+                className={`text-[10px] truncate ${
+                  isDark ? 'text-zinc-400' : 'text-zinc-600'
+                } ${isRTL ? 'font-sans tracking-normal' : ''}`}
+              >
+                {trackArtist}
+              </p>
+            )}
+          </div>
+
+          {/* Quick Play Action Button */}
+          <div
+            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform hover:scale-105 shadow-xs ${
+              isLive
+                ? 'bg-[#10b981] text-[#0b1110]'
+                : 'bg-[#17a398] text-[#0b1110]'
+            }`}
+          >
+            <Play size={11} fill="#0b1110" color="#0b1110" className="ms-0.5" />
+          </div>
+        </div>
+      ) : (
+        <div
+          className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-2 ${
+            isDark ? 'bg-[#0b1110]/40 border-zinc-800/60' : 'bg-white/40 border-[#0b1110]/10'
+          }`}
+        >
+          <Disc size={12} className="text-zinc-500 shrink-0" />
+          <span
+            className={`text-[10.5px] text-zinc-400 truncate ${
+              isRTL ? 'font-sans tracking-normal' : ''
+            }`}
+          >
+            {isOnline
+              ? (isRTL ? 'يتصفح الموسيقى وقوائم التشغيل' : 'Browsing music & playlists')
+              : (isRTL ? 'لم يستمع لأي مقطع مؤخراً' : 'No recent listening activity')}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

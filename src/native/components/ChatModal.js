@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -47,6 +47,13 @@ export default function ChatModal({
   const { showToast } = useToast();
   const { isDark = true } = useTheme();
   const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
 
   const [activeUser, setActiveUser] = useState(initialTargetUser);
   const [conversations, setConversations] = useState(() => getCachedConversations());
@@ -552,10 +559,10 @@ export default function ChatModal({
                     <MessageSquare size={16} color="#17a398" strokeWidth={2.5} />
                   </View>
                   <View>
-                    <Text style={[styles.title, !isDark && styles.titleLight]}>
+                    <Text style={[styles.title, !isDark && styles.titleLight, rtlTextStyle]}>
                       {isRTL ? 'الرسائل المباشرة' : 'DIRECT MESSAGES'}
                     </Text>
-                    <Text style={[styles.subTitle, !isDark && styles.subTitleLight]}>
+                    <Text style={[styles.subTitle, !isDark && styles.subTitleLight, rtlTextStyle]}>
                       {isRTL ? 'تواصل مع المستمعين الذين تتابعهم' : 'Chat with followed listeners'}
                     </Text>
                   </View>
@@ -592,7 +599,7 @@ export default function ChatModal({
                     style={[styles.tabBtn, activeTab === 'chats' && styles.tabBtnActive]}
                     onPress={() => setActiveTab('chats')}
                   >
-                    <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'chats' && styles.tabBtnTextActive]}>
+                    <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'chats' && styles.tabBtnTextActive, rtlTextStyle]}>
                       {isRTL ? `المحادثات (${conversations.length})` : `CHATS (${conversations.length})`}
                     </Text>
                   </TouchableOpacity>
@@ -601,7 +608,7 @@ export default function ChatModal({
                     style={[styles.tabBtn, activeTab === 'friends' && styles.tabBtnActive]}
                     onPress={() => setActiveTab('friends')}
                   >
-                    <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'friends' && styles.tabBtnTextActive]}>
+                    <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'friends' && styles.tabBtnTextActive, rtlTextStyle]}>
                       {isRTL ? `المتابعون (${friends.length})` : `FOLLOWING (${friends.length})`}
                     </Text>
                   </TouchableOpacity>

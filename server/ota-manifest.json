@@ -3,9 +3,9 @@
   "version": "2.4.0",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.9.6",
-  "notes": "تحديث شامل v2.4.0: تعريب حقيقي متكامل لكافة الشاشات وإصلاح تقطيع الحروف العربية وعرض آخر استماع للأصدقاء وإصلاح ويدجت شاشة القفل",
+  "notes": "تحديث هوائي فوري (4.66 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
   "notesEn": "Instant in-app OTA update (4.66 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 4885939,
+  "bundleSize": 4889888,
   "sizeMb": "4.66 MB",
-  "updatedAt": "2026-11-06T13:04:06.822Z"
+  "updatedAt": "2026-11-06T13:36:40.593Z"
 }

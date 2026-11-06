@@ -41,7 +41,14 @@ export function getTypographyStyle(baseStyle = {}, isRTL = false, textContent = 
   }
 
   // Replace monospace with clean Arabic font
-  if (sanitized.fontFamily === 'monospace' || sanitized.fontFamily === 'Menlo' || sanitized.fontFamily === 'Space Mono') {
+  if (
+    sanitized.fontFamily === 'monospace' ||
+    sanitized.fontFamily === 'Menlo' ||
+    sanitized.fontFamily === 'Space Mono' ||
+    sanitized.fontFamily === 'Courier' ||
+    sanitized.fontFamily === 'Courier-Bold' ||
+    sanitized.fontFamily === 'Courier New'
+  ) {
     sanitized.fontFamily = getArabicFontFamily();
   }
 

@@ -1,5 +1,5 @@
 import { LOGO_BASE64 } from './src/native/assets/logoBase64';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   SafeAreaView,
   TextInput,
@@ -101,6 +101,14 @@ const BETA_TESTER_EMAILS = [
 
 function MainAppShell() {
   const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+      textTransform: 'none',
+    } : null
+  ), [isRTL]);
   const { appMode } = useConnectivity();
   const isOnline = appMode === 'online';
   const { socket } = useSocket();
@@ -703,6 +711,14 @@ function MainAppShell() {
  */
 function NativeAppShell() {
   const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+      textTransform: 'none',
+    } : null
+  ), [isRTL]);
   const { currentUser, isAuthLoaded, tracks: userTracks = [], albums: userAlbums = [] } = useUser();
   const { appMode, setAppMode } = useConnectivity();
   const { navStyle, visibleMenuItems, firstVisibleTab, hiddenMenuItems, isLoaded: isNavLoaded } = useNavPreferences();
@@ -1225,7 +1241,7 @@ function NativeAppShell() {
         >
           <View style={[styles.menuSheet, !isDark && styles.menuSheetLight]}>
             <View style={[styles.menuHeader, !isDark && styles.menuHeaderLight]}>
-              <Text style={[styles.menuTitle, !isDark && styles.menuTitleLight]}>{t('nav.rivoMenu')}</Text>
+              <Text style={[styles.menuTitle, !isDark && styles.menuTitleLight, rtlTextStyle]}>{t('nav.rivoMenu')}</Text>
               <TouchableOpacity onPress={handleCloseMenu} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={18} color={isDark ? '#ffffff' : '#475569'} strokeWidth={2.5} />
               </TouchableOpacity>
@@ -1233,7 +1249,7 @@ function NativeAppShell() {
 
             {/* Category: Community & Live */}
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.communityLive')}</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight, rtlTextStyle]}>{t('nav.communityLive')}</Text>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1276,7 +1292,7 @@ function NativeAppShell() {
 
             {/* Category: Music & Library */}
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.library')}</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight, rtlTextStyle]}>{t('nav.library')}</Text>
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1320,7 +1336,7 @@ function NativeAppShell() {
 
             {/* Category: System */}
             <View style={styles.menuSection}>
-              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight]}>{t('nav.preferences')}</Text>
+              <Text style={[styles.menuSectionHeader, !isDark && styles.menuSectionHeaderLight, rtlTextStyle]}>{t('nav.preferences')}</Text>
               {/* Theme Toggle inside Drawer */}
               <TouchableOpacity
                 style={styles.menuItem}
@@ -1370,7 +1386,7 @@ function NativeAppShell() {
             {/* Version Information Footer */}
             <View style={[styles.menuFooter, !isDark && styles.menuFooterLight]}>
               <Text style={[styles.menuFooterVersion, !isDark && styles.menuFooterVersionLight]}>{FULL_VERSION}</Text>
-              <Text style={styles.menuFooterSub}>{t('nav.brandingSubtitle')}</Text>
+              <Text style={[styles.menuFooterSub, rtlTextStyle]}>{t('nav.brandingSubtitle')}</Text>
             </View>
           </View>
         </TouchableOpacity>

@@ -336,6 +336,13 @@ export default function MiniMixerModal({
   onSaveTransition,
 }) {
   const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
   const trackA = fromTrack;
   const trackB = toTrack;
 
@@ -753,9 +760,9 @@ export default function MiniMixerModal({
               </View>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.sheetTitle}>{isRTL ? 'تعديل الانتقال الصوتي' : 'Edit Transition'}</Text>
+                  <Text style={[styles.sheetTitle, rtlTextStyle]}>{isRTL ? 'تعديل الانتقال الصوتي' : 'Edit Transition'}</Text>
                   <View style={styles.rivoBadge}>
-                    <Text style={styles.rivoBadgeText}>{isRTL ? 'مكس تلقائي (Automix)' : 'Rivo Automix'}</Text>
+                    <Text style={[styles.rivoBadgeText, rtlTextStyle]}>{isRTL ? 'مكس تلقائي (Automix)' : 'Rivo Automix'}</Text>
                   </View>
                 </View>
                 <Text style={styles.sheetSubtitle} numberOfLines={1}>
@@ -774,11 +781,11 @@ export default function MiniMixerModal({
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Layers size={14} color="#10b981" />
-                  <Text style={styles.sectionTitle}>{isRTL ? 'نقاط الانتقال ومناطق التداخل بالويف فورم' : 'WAVEFORM CUE POINTS & ZONE RESIZING'}</Text>
+                  <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'نقاط الانتقال ومناطق التداخل بالويف فورم' : 'WAVEFORM CUE POINTS & ZONE RESIZING'}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <MoveHorizontal size={11} color="#10b981" />
-                  <Text style={styles.sectionHint}>{isRTL ? 'اسحب الويف فورم لضبط نقطة الانتقال' : 'Drag waveform to set cues'}</Text>
+                  <Text style={[styles.sectionHint, rtlTextStyle]}>{isRTL ? 'اسحب الويف فورم لضبط نقطة الانتقال' : 'Drag waveform to set cues'}</Text>
                 </View>
               </View>
 
@@ -1087,7 +1094,7 @@ export default function MiniMixerModal({
             {/* ── 2. TRANSITION STYLE • RIVO PRESETS (2-COLUMN GRID) ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>{isRTL ? 'نمط الانتقال • قوالب ريفو' : 'TRANSITION STYLE • RIVO PRESETS'}</Text>
+                <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'نمط الانتقال • قوالب ريفو' : 'TRANSITION STYLE • RIVO PRESETS'}</Text>
                 <Text style={styles.sectionBadgeText}>{isRTL ? (activeStyleObj.badgeAr || activeStyleObj.badge) : activeStyleObj.badge}</Text>
               </View>
 
@@ -1133,7 +1140,7 @@ export default function MiniMixerModal({
             {/* ── 3. DURATION & QUANTIZED BARS ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>{isRTL ? 'المدة والمقاييس الموسيقية' : 'DURATION & QUANTIZED BARS'}</Text>
+                <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'المدة والمقاييس الموسيقية' : 'DURATION & QUANTIZED BARS'}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Text style={styles.barsValText}>{bars} {isRTL ? 'مقياس' : (bars === 1 ? 'Bar' : 'Bars')}</Text>
                   <Text style={{ color: '#64748b', fontSize: 11 }}>•</Text>
@@ -1321,7 +1328,7 @@ export default function MiniMixerModal({
               ) : (
                 <Play size={14} color="#fff" fill="#fff" />
               )}
-              <Text style={styles.auditionBtnText}>
+              <Text style={[styles.auditionBtnText, rtlTextStyle]}>
                 {isPreviewing
                   ? (isRTL ? 'إيقاف المعاينة' : 'Stop Audition')
                   : (isRTL ? 'معاينة الانتقال' : 'Audition Transition')}
@@ -1330,11 +1337,11 @@ export default function MiniMixerModal({
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TouchableOpacity onPress={onClose} style={styles.cancelBtn} activeOpacity={0.7}>
-                <Text style={styles.cancelBtnText}>{isRTL ? 'إلغاء' : 'Cancel'}</Text>
+                <Text style={[styles.cancelBtnText, rtlTextStyle]}>{isRTL ? 'إلغاء' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSave} style={styles.saveBtn} activeOpacity={0.8}>
                 <Check size={14} color="#0b1110" strokeWidth={3} />
-                <Text style={styles.saveBtnText}>{isRTL ? 'حفظ الانتقال' : 'Save Transition'}</Text>
+                <Text style={[styles.saveBtnText, rtlTextStyle]}>{isRTL ? 'حفظ الانتقال' : 'Save Transition'}</Text>
               </TouchableOpacity>
             </View>
           </View>

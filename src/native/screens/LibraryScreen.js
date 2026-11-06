@@ -1478,12 +1478,12 @@ function LibraryScreen({
                 <View style={styles.playlistAddHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                     <Sparkles size={14} color="#17a398" strokeWidth={2.5} />
-                    <Text style={styles.playlistAddTitle} numberOfLines={1}>
+                    <Text style={[styles.playlistAddTitle, rtlTextStyle]} numberOfLines={1}>
                       {songSearchQuery.trim()
-                        ? `SEARCH RESULTS (${searchResultsForAdd.length})`
+                        ? (isRTL ? `نتائج البحث (${searchResultsForAdd.length})` : `SEARCH RESULTS (${searchResultsForAdd.length})`)
                         : ((selectedView?.isMix || isMixMode || (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) || isOffline)
-                  ? `VAULT DOWNLOADS FOR "${selectedView.name}"`
-                  : `AI RECOMMENDATIONS FOR "${selectedView.name}"`)}
+                  ? (isRTL ? `تنزيلات الخزنة لـ "${selectedView.name}"` : `VAULT DOWNLOADS FOR "${selectedView.name}"`)
+                  : (isRTL ? `ترشيحات الذكاء الاصطناعي لـ "${selectedView.name}"` : `AI RECOMMENDATIONS FOR "${selectedView.name}"`))}
                     </Text>
                   </View>
                   {!songSearchQuery.trim() && (
@@ -1498,7 +1498,7 @@ function LibraryScreen({
                       ) : (
                         <>
                           <RefreshCw size={11} color="#17a398" />
-                          <Text style={styles.refreshAiText}>REFRESH</Text>
+                          <Text style={[styles.refreshAiText, rtlTextStyle]}>{isRTL ? 'تحديث' : 'REFRESH'}</Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -1508,8 +1508,8 @@ function LibraryScreen({
                 <View style={styles.searchAddInputRow}>
                   <Search size={14} color="#6b7280" />
                   <TextInput
-                    style={styles.searchAddInput}
-                    placeholder="Search songs to add to this crate..."
+                    style={[styles.searchAddInput, rtlTextStyle]}
+                    placeholder={isRTL ? 'ابحث عن مقاطع لإضافتها للقائمة...' : 'Search songs to add to this crate...'}
                     placeholderTextColor="#6b7280"
                     value={songSearchQuery}
                     onChangeText={setSongSearchQuery}
@@ -1543,7 +1543,7 @@ function LibraryScreen({
                             {recTrack.title}
                           </Text>
                           <Text style={styles.recItemArtist} numberOfLines={1}>
-                            {recTrack.artist || 'Unknown Artist'}
+                            {recTrack.artist || (isRTL ? 'فنان غير معروف' : 'Unknown Artist')}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -1557,12 +1557,12 @@ function LibraryScreen({
                         {isJustAdded ? (
                           <>
                             <Check size={12} color="#082621" strokeWidth={3} />
-                            <Text style={styles.quickAddBtnTextDone}>ADDED</Text>
+                            <Text style={[styles.quickAddBtnTextDone, rtlTextStyle]}>{isRTL ? 'تمت الإضافة' : 'ADDED'}</Text>
                           </>
                         ) : (
                           <>
                             <Plus size={12} color="#082621" strokeWidth={3} />
-                            <Text style={styles.quickAddBtnText}>ADD</Text>
+                            <Text style={[styles.quickAddBtnText, rtlTextStyle]}>{isRTL ? 'إضافة' : 'ADD'}</Text>
                           </>
                         )}
                       </TouchableOpacity>

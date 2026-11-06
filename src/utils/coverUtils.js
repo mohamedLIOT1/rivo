@@ -53,6 +53,9 @@ export function handleCoverImageError(e, fallback = DEFAULT_COVER_FALLBACK) {
   const target = e.currentTarget;
   if (target.dataset.hasFallback) return;
   target.dataset.hasFallback = 'true';
+  try {
+    target.removeAttribute('alt');
+  } catch {}
   target.src = fallback;
 }
 
