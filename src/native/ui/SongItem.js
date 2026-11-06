@@ -8,6 +8,7 @@ import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { getTrackMusicalData, getCamelotColor } from '../utils/musicAnalysis';
 import { isQuranContent } from '../../utils/quranUtils';
+import { isArabicText } from '../theme/typography';
 
 function areEqualSongItem(prev, next) {
   const prevId = String(prev.track?._id || prev.track?.id || '');
@@ -66,6 +67,9 @@ export const SongItemPure = React.memo(function SongItemPure({
 
   const coverSourceUri = imageError ? normalizeCoverUri(null, track) : normalizeCoverUri(rawCover, track);
 
+  const isTitleArabic = isArabicText(track?.title);
+  const isArtistArabic = isArabicText(track?.artist);
+
   return (
     <TouchableOpacity
       style={[
@@ -92,11 +96,26 @@ export const SongItemPure = React.memo(function SongItemPure({
 
       {/* Title & Artist */}
       <View style={styles.info}>
-        <Text style={[styles.title, !isDark && styles.titleLight, isCurrent && styles.activeTitle]} numberOfLines={1}>
+        <Text
+          style={[
+            styles.title,
+            !isDark && styles.titleLight,
+            isCurrent && styles.activeTitle,
+            isTitleArabic && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
+          ]}
+          numberOfLines={1}
+        >
           {track.title || 'Untitled'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
-          <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.artist,
+              !isDark && styles.artistLight,
+              isArtistArabic && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
+            ]}
+            numberOfLines={1}
+          >
             {track.artist || 'Unknown Artist'}
           </Text>
           {isDownloaded && (
