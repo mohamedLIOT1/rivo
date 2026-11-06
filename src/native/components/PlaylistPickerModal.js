@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, A
 import { X, Plus, FolderPlus, Music, Check } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 
@@ -12,6 +13,7 @@ const PlaylistItemRow = React.memo(function PlaylistItemRow({
   item,
   isProcessing,
   onSelect,
+  isRTL,
 }) {
   const count = Array.isArray(item.tracks) ? item.tracks.length : 0;
   return (
@@ -25,17 +27,21 @@ const PlaylistItemRow = React.memo(function PlaylistItemRow({
         <Music size={16} color={colors.mint} />
       </View>
       <View style={{ flex: 1, marginLeft: 10 }}>
-        <Text style={styles.playlistName} numberOfLines={1}>
+        <Text style={[styles.playlistName, isRTL && styles.rtlText]} numberOfLines={1}>
           {item.name}
         </Text>
-        <Text style={styles.playlistCount}>{count} TRACKS</Text>
+        <Text style={[styles.playlistCount, isRTL && styles.rtlText]}>
+          {count} {isRTL ? 'مقاطع' : 'TRACKS'}
+        </Text>
       </View>
       {isProcessing ? (
         <ActivityIndicator size="small" color={colors.teal} />
       ) : (
         <View style={styles.addPill}>
           <Check size={14} color={colors.ink} />
-          <Text style={styles.addPillText}>ADD</Text>
+          <Text style={[styles.addPillText, isRTL && styles.rtlText]}>
+            {isRTL ? 'إضافة' : 'ADD'}
+          </Text>
         </View>
       )}
     </TouchableOpacity>
@@ -45,6 +51,7 @@ const PlaylistItemRow = React.memo(function PlaylistItemRow({
 export default function PlaylistPickerModal({ visible, track, onClose }) {
   const { playlists, createPlaylist, addToPlaylist, token } = useUser();
   const { showToast } = useToast();
+  const { isRTL } = useTranslation();
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [addingId, setAddingId] = useState(null);
@@ -55,7 +62,7 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
 
   const handleCreateAndAdd = async () => {
     if (!newPlaylistName.trim()) {
-      showToast('Please enter a playlist name', 'warning');
+      showToast(isRTL ? 'برجاء كتابة اسم القائمة' : 'Please enter a playlist name', 'warning');
       return;
     }
     if (!token) {
@@ -105,9 +112,10 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
         item={item}
         isProcessing={addingId === pId}
         onSelect={handleSelectPlaylist}
+        isRTL={isRTL}
       />
     );
-  }, [addingId, handleSelectPlaylist]);
+  }, [addingId, handleSelectPlaylist, isRTL]);
 
   return (
     <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'fade'} transparent onRequestClose={onClose}>
@@ -118,10 +126,12 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
             {/* Header */}
             <View style={styles.header}>
               <View style={{ flex: 1 }}>
-                <CassetteTag label="PLAYLIST" bg={colors.ink} textColor={colors.mint} />
-                <Text style={styles.title}>ADD TO PLAYLIST</Text>
-                <Text style={styles.subTitle} numberOfLines={1}>
-                  "{track.title}" - {track.artist || 'Unknown'}
+                <CassetteTag label={isRTL ? 'قائمة تشغيل' : 'PLAYLIST'} bg={colors.ink} textColor={colors.mint} />
+                <Text style={[styles.title, isRTL && styles.rtlText]}>
+                  {isRTL ? 'إضافة إلى قائمة تشغيل' : 'ADD TO PLAYLIST'}
+                </Text>
+                <Text style={[styles.subTitle, isRTL && styles.rtlText]} numberOfLines={1}>
+                  "{track.title}" - {track.artist || (isRTL ? 'فنان غير معروف' : 'Unknown')}
                 </Text>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -132,8 +142,8 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
             {/* Quick Create Box */}
             <View style={styles.createBox}>
               <TextInput
-                style={styles.input}
-                placeholder="New Playlist Name..."
+                style={[styles.input, isRTL && { textAlign: 'right' }]}
+                placeholder={isRTL ? 'اسم القائمة الجديدة...' : 'New Playlist Name...'}
                 placeholderTextColor={colors.grayText}
                 value={newPlaylistName}
                 onChangeText={setNewPlaylistName}
@@ -148,19 +158,27 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
                 ) : (
                   <>
                     <Plus size={16} color={colors.ink} strokeWidth={3} />
-                    <Text style={styles.createBtnText}>NEW</Text>
+                    <Text style={[styles.createBtnText, isRTL && styles.rtlText]}>
+                      {isRTL ? 'إنشاء' : 'NEW'}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
             </View>
 
             {/* Playlist Items */}
-            <Text style={styles.sectionLabel}>YOUR PLAYLISTS ({playlists.length})</Text>
+            <Text style={[styles.sectionLabel, isRTL && styles.rtlText]}>
+              {isRTL ? `قوائم التشغيل الخاصة بك (${playlists.length})` : `YOUR PLAYLISTS (${playlists.length})`}
+            </Text>
             {playlists.length === 0 ? (
               <View style={styles.emptyBox}>
                 <FolderPlus size={32} color={colors.teal} />
-                <Text style={styles.emptyText}>No playlists found.</Text>
-                <Text style={styles.emptySub}>Create your first one above!</Text>
+                <Text style={[styles.emptyText, isRTL && styles.rtlText]}>
+                  {isRTL ? 'لا توجد قوائم تشغيل حتى الآن.' : 'No playlists found.'}
+                </Text>
+                <Text style={[styles.emptySub, isRTL && styles.rtlText]}>
+                  {isRTL ? 'أنشئ قائمتك الأولى بالأعلى!' : 'Create your first one above!'}
+                </Text>
               </View>
             ) : (
               <FlatList
@@ -347,5 +365,9 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     color: colors.ink,
+  },
+  rtlText: {
+    letterSpacing: 0,
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'normal',
   },
 });

@@ -44,17 +44,17 @@ import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 const DISPENSARY_GENRES = [
-  { id: 'rap', label: 'EGYPTIAN RAP', color: '#17a398', tag: 'TRAP / DRILL' },
-  { id: 'indie', label: 'INDIE ARABIC', color: '#f59e0b', tag: 'ACOUSTIC' },
-  { id: 'mahraganat', label: 'MAHRAGANAT', color: '#dc2626', tag: 'STREET BASS' },
-  { id: 'tarab', label: 'TARAB RETRO', color: '#8b5cf6', tag: 'CLASSIC CASSETTE' },
-  { id: 'lofi', label: 'CAIRO LOFI', color: '#06b6d4', tag: 'CHILL BEATS' },
-  { id: 'electronic', label: 'CLUB SYNTH', color: '#ec4899', tag: 'TECHNO / HOUSE' },
-  { id: 'pop', label: 'ARABIC POP', color: '#10b981', tag: 'TOP CHARTS' },
-  { id: 'shaabi', label: 'SHAABI RETRO', color: '#f97316', tag: 'VINTAGE TAPE' },
-  { id: 'rock', label: 'ORIENTAL ROCK', color: '#ef4444', tag: 'DISTORTION' },
-  { id: 'quran', label: 'QURAN TARTIL', color: '#047857', tag: 'RECITATION' },
-  { id: 'ambient', label: 'NIGHT AMBIENT', color: '#6366f1', tag: 'FOCUS DEEP' },
+  { id: 'rap', label: 'EGYPTIAN RAP', labelAr: 'راب مصري', color: '#17a398', tag: 'TRAP / DRILL', tagAr: 'تراب / دريل' },
+  { id: 'indie', label: 'INDIE ARABIC', labelAr: 'إندي عربي', color: '#f59e0b', tag: 'ACOUSTIC', tagAr: 'أكوستيك' },
+  { id: 'mahraganat', label: 'MAHRAGANAT', labelAr: 'مهرجانات', color: '#dc2626', tag: 'STREET BASS', tagAr: 'بيز شارع' },
+  { id: 'tarab', label: 'TARAB RETRO', labelAr: 'طرب زمان', color: '#8b5cf6', tag: 'CLASSIC CASSETTE', tagAr: 'كاسيت أصلي' },
+  { id: 'lofi', label: 'CAIRO LOFI', labelAr: 'كايرو لوفاي', color: '#06b6d4', tag: 'CHILL BEATS', tagAr: 'أجواء هادية' },
+  { id: 'electronic', label: 'CLUB SYNTH', labelAr: 'كلوب سينث', color: '#ec4899', tag: 'TECHNO / HOUSE', tagAr: 'تكنو / هاوس' },
+  { id: 'pop', label: 'ARABIC POP', labelAr: 'بوب عربي', color: '#10b981', tag: 'TOP CHARTS', tagAr: 'الأكثر رواجاً' },
+  { id: 'shaabi', label: 'SHAABI RETRO', labelAr: 'شعبي قديم', color: '#f97316', tag: 'VINTAGE TAPE', tagAr: 'شريط قديم' },
+  { id: 'rock', label: 'ORIENTAL ROCK', labelAr: 'روك شرقي', color: '#ef4444', tag: 'DISTORTION', tagAr: 'ديستورشن' },
+  { id: 'quran', label: 'QURAN TARTIL', labelAr: 'ترتيل القرآن', color: '#047857', tag: 'RECITATION', tagAr: 'تلاوات خاشعة' },
+  { id: 'ambient', label: 'NIGHT AMBIENT', labelAr: 'أجواء ليلية', color: '#6366f1', tag: 'FOCUS DEEP', tagAr: 'أجواء ليلية' },
 ];
 
 function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', onQueryChange }) {
@@ -84,6 +84,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
 
   const [query, setQuery] = useState(initialQuery || '');
 
@@ -388,7 +389,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         <View style={styles.genresSection}>
           <View style={styles.sectionTitleRow}>
             <Disc size={16} color={colors.mint} />
-            <Text style={styles.sectionHeading}>{t('search.genresMoods')}</Text>
+            <Text style={[styles.sectionHeading, rtlTextStyle]}>{t('search.genresMoods')}</Text>
           </View>
 
           <View style={styles.genresGrid}>
@@ -400,8 +401,8 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                 onPress={() => setSelectedGenre(g.id)}
               >
                 <View style={styles.genreCardInner}>
-                  <Text style={styles.genreLabel}>{g.label}</Text>
-                  <Text style={styles.genreTag}>{g.tag}</Text>
+                  <Text style={[styles.genreLabel, rtlTextStyle]}>{isRTL && g.labelAr ? g.labelAr : g.label}</Text>
+                  <Text style={[styles.genreTag, rtlTextStyle]}>{isRTL && g.tagAr ? g.tagAr : g.tag}</Text>
                   <View style={styles.genreDecoDisc}>
                     <Disc size={36} color="rgba(0,0,0,0.2)" />
                   </View>
@@ -417,11 +418,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         <View style={styles.peopleSection}>
           <View style={styles.sectionTitleRow}>
             <Users size={16} color="#06b6d4" strokeWidth={2.4} />
-            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight, rtlTextStyle]}>
               {t('search.peopleListeners')}
             </Text>
             <View style={[styles.countBadge, { backgroundColor: 'rgba(6,182,212,0.15)', borderColor: '#06b6d4' }]}>
-              <Text style={[styles.countBadgeText, { color: '#06b6d4' }]}>{userResults.length}</Text>
+              <Text style={[styles.countBadgeText, { color: '#06b6d4' }, rtlTextStyle]}>{userResults.length}</Text>
             </View>
             {isSearchingUsers && (
               <ActivityIndicator size="small" color="#06b6d4" style={{ marginLeft: 6 }} />
@@ -432,7 +433,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             activeFilter === 'people' && (
               <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
                 <Users size={36} color="#06b6d4" />
-                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>{t('search.noListenersFound')}</Text>
+                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }, rtlTextStyle]}>{t('search.noListenersFound')}</Text>
                 <Text style={styles.emptySub}>{t('search.noListenersSub')}</Text>
               </View>
             )
@@ -474,7 +475,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                     </View>
 
                     <View style={styles.personInfo}>
-                      <Text style={[styles.personName, !isDark && styles.personNameLight]} numberOfLines={1}>
+                      <Text style={[styles.personName, !isDark && styles.personNameLight, rtlTextStyle]} numberOfLines={1}>
                         {u.name}
                       </Text>
                       <Text style={styles.personSub} numberOfLines={1}>
@@ -483,7 +484,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                     </View>
 
                     <View style={styles.personActionBtn}>
-                      <Text style={styles.personActionText}>View</Text>
+                      <Text style={[styles.personActionText, rtlTextStyle]}>View</Text>
                       <ArrowRight size={11} color="#06b6d4" />
                     </View>
                   </TouchableOpacity>
@@ -499,11 +500,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         <View style={styles.artistsSection}>
           <View style={styles.sectionTitleRow}>
             <Users size={16} color="#17a398" strokeWidth={2.4} />
-            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight, rtlTextStyle]}>
               {t('search.artists')}
             </Text>
             <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{matchingArtists.length}</Text>
+              <Text style={[styles.countBadgeText, rtlTextStyle]}>{matchingArtists.length}</Text>
             </View>
           </View>
 
@@ -525,7 +526,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                       fadeDuration={0}
                     />
                   </View>
-                  <Text style={[styles.artistName, !isDark && styles.artistNameLight]} numberOfLines={1}>
+                  <Text style={[styles.artistName, !isDark && styles.artistNameLight, rtlTextStyle]} numberOfLines={1}>
                     {artist.name}
                   </Text>
                   <Text style={styles.artistCountPill}>
@@ -543,11 +544,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         <View style={styles.albumsSection}>
           <View style={styles.sectionTitleRow}>
             <Layers size={16} color="#f59e0b" strokeWidth={2.4} />
-            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight]}>
+            <Text style={[styles.sectionHeading, !isDark && styles.sectionHeadingLight, rtlTextStyle]}>
               {t('search.albums')}
             </Text>
             <View style={[styles.countBadge, { backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b' }]}>
-              <Text style={[styles.countBadgeText, { color: '#f59e0b' }]}>{matchingAlbums.length}</Text>
+              <Text style={[styles.countBadgeText, { color: '#f59e0b' }, rtlTextStyle]}>{matchingAlbums.length}</Text>
             </View>
           </View>
 
@@ -572,7 +573,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
                       fadeDuration={0}
                     />
                   </View>
-                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
+                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight, rtlTextStyle]} numberOfLines={1}>
                     {alb.name}
                   </Text>
                   <Text style={styles.albumArtist} numberOfLines={1}>
@@ -588,7 +589,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       {/* ── SONGS SECTION HEADER ── */}
       {isShowingSongs && filteredTracks.length > 0 && (
         <View style={styles.resultsHeader}>
-          <Text style={styles.resultsCount}>
+          <Text style={[styles.resultsCount, rtlTextStyle]}>
             {t('search.foundSongs', { count: filteredTracks.length })}
           </Text>
         </View>
@@ -609,6 +610,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     onSelectArtist,
     onSelectAlbum,
     colors.mint,
+    rtlTextStyle,
   ]);
 
   const renderFooter = useCallback(() => {
@@ -619,38 +621,38 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         onPress={() => setVisibleSongLimit((prev) => prev + 25)}
         activeOpacity={0.8}
       >
-        <Text style={styles.loadMoreText}>
+        <Text style={[styles.loadMoreText, rtlTextStyle]}>
           {t('search.showMore', { count: filteredTracks.length - visibleSongLimit })}
         </Text>
       </TouchableOpacity>
     );
-  }, [isShowingSongs, filteredTracks.length, visibleSongLimit, isDark]);
+  }, [isShowingSongs, filteredTracks.length, visibleSongLimit, isDark, rtlTextStyle]);
 
   const renderEmpty = useCallback(() => {
     if (!isShowingSongs || filteredTracks.length > 0) return null;
     return (
       <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
         <Disc size={36} color={colors.teal} />
-        <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }]}>{t('search.noSongsFound')}</Text>
+        <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }, rtlTextStyle]}>{t('search.noSongsFound')}</Text>
         <Text style={styles.emptySub}>{t('search.noSongsSub')}</Text>
       </View>
     );
-  }, [isShowingSongs, filteredTracks.length, isDark, colors.teal]);
+  }, [isShowingSongs, filteredTracks.length, isDark, colors.teal, rtlTextStyle]);
 
   return (
     <View style={[styles.container, !isDark && styles.containerLight]}>
       {/* Header & Search Bar */}
       <View style={[styles.searchHeader, !isDark && styles.searchHeaderLight]}>
         <View style={styles.headerTitleRow}>
-          <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>{t('search.exploreSearch')}</Text>
+          <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight, rtlTextStyle]}>{t('search.exploreSearch')}</Text>
           <CassetteTag label={isOffline ? t('search.offlineSongs') : t('search.onlineSongs')} bg={colors.ink} textColor={colors.mint} />
         </View>
 
         <View style={[styles.inputContainer, !isDark && styles.inputContainerLight]}>
           <SearchIcon size={18} color={!isDark ? '#0b1110' : colors.ink} style={styles.searchIcon} />
           <TextInput
-            style={[styles.searchInput, !isDark && { color: '#0b1110' }]}
-            placeholder={t('search.placeholder')}
+            style={[styles.searchInput, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}
+            placeholder={isRTL ? 'ابحث عن أغاني، فنانين، ألبومات...' : t('search.placeholder')}
             placeholderTextColor={!isDark ? '#78716c' : colors.grayText}
             value={query}
             onChangeText={(txt) => {
@@ -674,15 +676,17 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             accessibilityLabel="Song Radar"
           >
             <Mic size={14} color="#10b981" />
-            <Text style={styles.radarQuickBtnText}>RADAR</Text>
+            <Text style={[styles.radarQuickBtnText, rtlTextStyle]}>{isRTL ? 'رادار' : 'RADAR'}</Text>
           </TouchableOpacity>
         </View>
 
         {/* Selected Genre Banner */}
         {selectedGenre && (
           <View style={styles.activeGenreBanner}>
-            <Text style={styles.activeGenreText}>
-              FILTERING: {DISPENSARY_GENRES.find((g) => g.id === selectedGenre)?.label}
+            <Text style={[styles.activeGenreText, rtlTextStyle]}>
+              {isRTL
+                ? `تصفية حسب: ${DISPENSARY_GENRES.find((g) => g.id === selectedGenre)?.labelAr || DISPENSARY_GENRES.find((g) => g.id === selectedGenre)?.label}`
+                : `FILTERING: ${DISPENSARY_GENRES.find((g) => g.id === selectedGenre)?.label}`}
             </Text>
             <TouchableOpacity onPress={() => setSelectedGenre(null)} style={styles.removeGenreBtn}>
               <X size={12} color={colors.ink} />
@@ -698,7 +702,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               onPress={() => setActiveFilter('all')}
               activeOpacity={0.8}
             >
-              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'all' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'all' && styles.filterPillTextActive, rtlTextStyle]}>
                 {t('search.filterAll')}
               </Text>
             </TouchableOpacity>
@@ -709,7 +713,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               activeOpacity={0.8}
             >
               <Music size={12} color={activeFilter === 'songs' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'songs' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'songs' && styles.filterPillTextActive, rtlTextStyle]}>
                 {t('search.filterSongs', { count: filteredTracks.length })}
               </Text>
             </TouchableOpacity>
@@ -720,7 +724,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               activeOpacity={0.8}
             >
               <Users size={12} color={activeFilter === 'artists' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'artists' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'artists' && styles.filterPillTextActive, rtlTextStyle]}>
                 {t('search.artists')} ({matchingArtists.length})
               </Text>
             </TouchableOpacity>
@@ -731,7 +735,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               activeOpacity={0.8}
             >
               <Layers size={12} color={activeFilter === 'albums' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'albums' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'albums' && styles.filterPillTextActive, rtlTextStyle]}>
                 {t('search.albums')} ({matchingAlbums.length})
               </Text>
             </TouchableOpacity>
@@ -742,7 +746,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               activeOpacity={0.8}
             >
               <Users size={12} color={activeFilter === 'people' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} style={{ marginRight: 4 }} />
-              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'people' && styles.filterPillTextActive]}>
+              <Text style={[styles.filterPillText, !isDark && styles.filterPillTextLight, activeFilter === 'people' && styles.filterPillTextActive, rtlTextStyle]}>
                 {t('search.filterPeople', { count: userResults.length })}
               </Text>
             </TouchableOpacity>

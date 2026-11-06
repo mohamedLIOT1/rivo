@@ -237,8 +237,7 @@ module.exports = function (io, updateConfig = {}) {
                   io.emit('activity:updated', {
                     userId: uidStr,
                     isOnline: false,
-                    isLive: false,
-                    currentListening: { isPlaying: false }
+                    isLive: false
                   });
 
                   try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}

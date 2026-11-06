@@ -52,6 +52,7 @@ import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -69,6 +70,8 @@ const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
   cardWidth,
   onSelect,
 }) {
+  const { isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   return (
     <TouchableOpacity
       style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth }]}
@@ -87,28 +90,32 @@ const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
           <Disc size={28} color={colors.mint} />
         )}
       </View>
-      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
+      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]} numberOfLines={1}>
         {playlist.name}
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
-        <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }]}>
-          {(playlist.tracks || playlist.trackIds || []).length} TRACKS
+        <Text style={[styles.playlistCardCount, !isDark && { color: '#57534e' }, rtlTextStyle]}>
+          {(playlist.tracks || playlist.trackIds || []).length} {isRTL ? 'مقاطع' : 'TRACKS'}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
           {playlist.isMix && (
             <View style={{ backgroundColor: '#17a398', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3, marginRight: 2 }}>
-              <Text style={{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }}>🎛️ MIX</Text>
+              <Text style={[{ fontSize: 8, color: '#0b1110', fontWeight: '900', fontFamily: 'monospace' }, rtlTextStyle]}>🎛️ {isRTL ? 'مكس' : 'MIX'}</Text>
             </View>
           )}
           {playlist.isPublic !== false ? (
             <>
               <Globe size={10} color="#17a398" />
-              <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }}>PUB</Text>
+              <Text style={[{ fontSize: 9, color: '#17a398', fontWeight: '800', fontFamily: 'monospace' }, rtlTextStyle]}>
+                {isRTL ? 'عام' : 'PUB'}
+              </Text>
             </>
           ) : (
             <>
               <Lock size={10} color="#9ca3af" />
-              <Text style={{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }}>PRIV</Text>
+              <Text style={[{ fontSize: 9, color: '#9ca3af', fontWeight: '800', fontFamily: 'monospace' }, rtlTextStyle]}>
+                {isRTL ? 'خاص' : 'PRIV'}
+              </Text>
             </>
           )}
         </View>
@@ -163,6 +170,8 @@ function LibraryScreen({
   const { showToast } = useToast();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const isOffline = appMode === 'offline';
   const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
   const likedSet = useMemo(() => new Set((likedTrackIds || []).map(String)), [likedTrackIds]);
@@ -1084,9 +1093,13 @@ function LibraryScreen({
             <Heart size={28} color={colors.rust} fill={colors.rust} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
-            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
-            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} SONGS SAVED</Text>
+            <CassetteTag label={isRTL ? 'المفضلة' : 'FAVORITES'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+              {isRTL ? 'الأغاني المفضلة' : 'LIKED SONGS'}
+            </Text>
+            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }, rtlTextStyle]}>
+              {isRTL ? `${likedTracks.length} مقطع محفوظ` : `${likedTracks.length} SONGS SAVED`}
+            </Text>
           </View>
           <View style={styles.cardArrowPill}>
             <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -1106,9 +1119,13 @@ function LibraryScreen({
             <Download size={24} color={colors.ink} />
           </View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <CassetteTag label="OFFLINE STORAGE" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
-            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }]}>OFFLINE VAULT</Text>
-            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }]}>PLAY ANYWHERE WITHOUT WI-FI</Text>
+            <CassetteTag label={isRTL ? 'الخزنة المحلية' : 'OFFLINE STORAGE'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+            <Text style={[styles.likedBannerTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+              {isRTL ? 'الخزنة المحلية' : 'OFFLINE VAULT'}
+            </Text>
+            <Text style={[styles.likedBannerSub, !isDark && { color: '#57534e' }, rtlTextStyle]}>
+              {isRTL ? 'استمع في أي مكان بدون إنترنت' : 'PLAY ANYWHERE WITHOUT WI-FI'}
+            </Text>
           </View>
           <View style={styles.cardArrowPill}>
             <Play size={14} color={colors.ink} fill={colors.ink} />
@@ -1118,21 +1135,25 @@ function LibraryScreen({
 
       {/* User Playlists */}
       <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
-        <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }]}>YOUR PLAYLISTS ({playlists.length})</Text>
-        <CassetteTag label="COLLECTION" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+        <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+          {isRTL ? `قوائم التشغيل الخاصة بك (${playlists.length})` : `YOUR PLAYLISTS (${playlists.length})`}
+        </Text>
+        <CassetteTag label={isRTL ? 'المجموعات' : 'COLLECTION'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
       </View>
     </View>
-  ), [isDark, colors, likedTracks.length, onNavigateOffline, playlists.length]);
+  ), [isDark, colors, likedTracks.length, onNavigateOffline, playlists.length, isRTL, rtlTextStyle]);
 
   const renderPlaylistsEmpty = useCallback(() => (
     <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
       <FolderHeart size={36} color={colors.teal} />
-      <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No playlists created yet</Text>
-      <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
+      <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+        {isRTL ? 'لم تقم بإنشاء أي قائمة بعد' : 'No playlists created yet'}
+      </Text>
+      <Text style={[styles.emptySub, !isDark && { color: '#57534e' }, rtlTextStyle]}>
         Create custom playlists to organize your favorite songs.
       </Text>
     </View>
-  ), [isDark, colors]);
+  ), [isDark, colors, rtlTextStyle]);
 
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
@@ -1144,26 +1165,30 @@ function LibraryScreen({
               <ArrowLeft size={18} color={colors.ink} />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 10 }}>
-              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]} numberOfLines={1}>
-                {selectedView === 'liked' ? 'LIKED RECORDINGS' : selectedView.name}
+              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]} numberOfLines={1}>
+                {selectedView === 'liked' ? (isRTL ? 'الأغاني المفضلة' : 'LIKED RECORDINGS') : selectedView.name}
               </Text>
-              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>
-                PLAYLIST •{' '}
+              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                {isRTL ? 'قائمة تشغيل' : 'PLAYLIST'} •{' '}
                 {selectedView === 'liked'
-                  ? `${likedTracks.length} SONGS`
-                  : `${(selectedView.tracks || selectedView.trackIds || []).length} SONGS`}
+                  ? `${likedTracks.length} ${isRTL ? 'مقاطع' : 'SONGS'}`
+                  : `${(selectedView.tracks || selectedView.trackIds || []).length} ${isRTL ? 'مقاطع' : 'SONGS'}`}
               </Text>
             </View>
           </View>
         ) : (
           <View style={styles.headerMainRow}>
             <View>
-              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>YOUR LIBRARY</Text>
-              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>PLAYLISTS & DOWNLOADS</Text>
+              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                {isRTL ? 'مكتبتك الموسيقية' : 'YOUR LIBRARY'}
+              </Text>
+              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                {isRTL ? 'قوائم التشغيل والتنزيلات' : 'PLAYLISTS & DOWNLOADS'}
+              </Text>
             </View>
             <TouchableOpacity style={styles.newPlaylistBtn} onPress={onOpenCreatePlaylist}>
               <Plus size={16} color={colors.ink} strokeWidth={3} />
-              <Text style={styles.newPlaylistBtnText}>NEW</Text>
+              <Text style={[styles.newPlaylistBtnText, rtlTextStyle]}>{isRTL ? 'جديدة' : 'NEW'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -1184,16 +1209,20 @@ function LibraryScreen({
                       <Heart size={32} color={colors.rust} fill={colors.rust} />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <CassetteTag label="FAVORITES" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
-                      <Text style={[styles.likedHeroTitle, !isDark && { color: '#0b1110' }]}>LIKED SONGS</Text>
-                      <Text style={[styles.likedHeroSub, !isDark && { color: '#57534e' }]}>{likedTracks.length} songs preserved</Text>
+                      <CassetteTag label={isRTL ? 'المفضلة' : 'FAVORITES'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+                      <Text style={[styles.likedHeroTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }]}>
+                        {isRTL ? 'الأغاني المفضلة' : 'LIKED SONGS'}
+                      </Text>
+                      <Text style={[styles.likedHeroSub, !isDark && { color: '#57534e' }, isRTL && { textAlign: 'right' }]}>
+                        {isRTL ? `${likedTracks.length} مقطع محفوظ` : `${likedTracks.length} songs preserved`}
+                      </Text>
                       <View style={styles.likedBtnRow}>
                         <TouchableOpacity
                           style={styles.playHeroBtn}
                           onPress={() => handlePlayLiked(false)}
                         >
                           <Play size={14} color={colors.ink} fill={colors.ink} />
-                          <Text style={styles.playHeroBtnText}>PLAY ALL</Text>
+                          <Text style={styles.playHeroBtnText}>{isRTL ? 'تشغيل الكل' : 'PLAY ALL'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.shuffleHeroBtn}
@@ -1210,14 +1239,18 @@ function LibraryScreen({
                   <View style={styles.loadingLikedBox}>
                     <ActivityIndicator size="large" color={colors.mint} />
                     <Text style={[styles.loadingLikedText, !isDark && { color: '#0b1110' }]}>
-                      RETRIEVING LIKED RECORDINGS...
+                      {isRTL ? 'جاري جلب أغانيك المفضلة...' : 'RETRIEVING LIKED RECORDINGS...'}
                     </Text>
                   </View>
                 ) : likedTracks.length === 0 ? (
                   <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
                     <Heart size={36} color={colors.rust} />
-                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>No liked recordings yet</Text>
-                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>Tap the heart icon on any tape to archive it here.</Text>
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>
+                      {isRTL ? 'لا توجد أغانٍ مفضلة بعد' : 'No liked recordings yet'}
+                    </Text>
+                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
+                      {isRTL ? 'اضغط على رمز القلب في أي مقطع لحفظه هنا.' : 'Tap the heart icon on any tape to archive it here.'}
+                    </Text>
                   </View>
                 ) : null}
               </View>
@@ -1249,7 +1282,11 @@ function LibraryScreen({
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <CassetteTag label={(!isSelectedPlQuran && isMixActive) ? "🎛️ DJ MIX" : (isSelectedPlQuran ? "QURAN PLAYLIST" : "CRATE PLAYLIST")} bg={!isDark ? '#0b1110' : colors.ink} textColor={(!isSelectedPlQuran && isMixActive) ? '#f59e0b' : colors.tealLight} />
+                          <CassetteTag
+                            label={(!isSelectedPlQuran && isMixActive) ? (isRTL ? "🎛️ مكس DJ" : "🎛️ DJ MIX") : (isSelectedPlQuran ? (isRTL ? "قائمة قرآن" : "QURAN PLAYLIST") : (isRTL ? "قائمة تشغيل" : "CRATE PLAYLIST"))}
+                            bg={!isDark ? '#0b1110' : colors.ink}
+                            textColor={(!isSelectedPlQuran && isMixActive) ? '#f59e0b' : colors.tealLight}
+                          />
                           <TouchableOpacity
                             style={[
                               styles.visibilityHeroPill,
@@ -1264,12 +1301,16 @@ function LibraryScreen({
                             ) : selectedView.isPublic !== false ? (
                               <>
                                 <Globe size={11} color="#17a398" />
-                                <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>PUBLIC</Text>
+                                <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>
+                                  {isRTL ? 'عام' : 'PUBLIC'}
+                                </Text>
                               </>
                             ) : (
                               <>
                                 <Lock size={11} color="#9ca3af" />
-                                <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>PRIVATE</Text>
+                                <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>
+                                  {isRTL ? 'خاص' : 'PRIVATE'}
+                                </Text>
                               </>
                             )}
                           </TouchableOpacity>
@@ -1281,7 +1322,9 @@ function LibraryScreen({
                           activeOpacity={0.7}
                         >
                           <Edit3 size={11} color={!isDark ? '#082621' : colors.mint} />
-                          <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>EDIT</Text>
+                          <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>
+                            {isRTL ? 'تعديل' : 'EDIT'}
+                          </Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1296,12 +1339,16 @@ function LibraryScreen({
                           {isReordering ? (
                             <>
                               <Check size={11} color="#000000" />
-                              <Text style={[styles.editHeroPillText, { color: '#000000', fontWeight: 'bold' }]}>DONE</Text>
+                              <Text style={[styles.editHeroPillText, { color: '#000000', fontWeight: 'bold' }]}>
+                                {isRTL ? 'تم' : 'DONE'}
+                              </Text>
                             </>
                           ) : (
                             <>
                               <Sliders size={11} color={!isDark ? '#082621' : colors.mint} />
-                              <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>REORDER</Text>
+                              <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>
+                                {isRTL ? 'ترتيب' : 'REORDER'}
+                              </Text>
                             </>
                           )}
                         </TouchableOpacity>
@@ -1312,12 +1359,14 @@ function LibraryScreen({
                           activeOpacity={0.7}
                         >
                           <Trash2 size={11} color="#ef4444" />
-                          <Text style={[styles.editHeroPillText, { color: '#ef4444' }]}>DELETE</Text>
+                          <Text style={[styles.editHeroPillText, { color: '#ef4444' }]}>
+                            {isRTL ? 'حذف' : 'DELETE'}
+                          </Text>
                         </TouchableOpacity>
                       </View>
-                      <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }]}>{selectedView.name}</Text>
-                      <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }]}>
-                        {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} recordings compiled
+                      <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }]}>{selectedView.name}</Text>
+                      <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }, isRTL && { textAlign: 'right' }]}>
+                        {(selectedView.tracks || selectedView.trackIds || activePlaylistTracks || []).length} {isRTL ? 'مقطع مسجل' : 'recordings compiled'}
                       </Text>
                       <View style={styles.likedBtnRow}>
                         <TouchableOpacity
@@ -1325,7 +1374,9 @@ function LibraryScreen({
                           onPress={() => handlePlayPlaylist(selectedView, false)}
                         >
                           <Play size={14} color={colors.ink} fill={colors.ink} />
-                          <Text style={styles.playHeroBtnText}>{(!isSelectedPlQuran && selectedView.isMix) ? "PLAY DJ MIX" : "PLAY"}</Text>
+                          <Text style={styles.playHeroBtnText}>
+                            {(!isSelectedPlQuran && selectedView.isMix) ? (isRTL ? "تشغيل مكس DJ" : "PLAY DJ MIX") : (isRTL ? "تشغيل" : "PLAY")}
+                          </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.shuffleHeroBtn}
@@ -1339,7 +1390,7 @@ function LibraryScreen({
                           activeOpacity={0.8}
                         >
                           <ListPlus size={13} color="#17a398" />
-                          <Text style={styles.queueHeroBtnText}>QUEUE</Text>
+                          <Text style={styles.queueHeroBtnText}>{isRTL ? 'إضافة للانتظار' : 'QUEUE'}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
@@ -1353,7 +1404,7 @@ function LibraryScreen({
                             <Download size={13} color={colors.ink} />
                           )}
                           <Text style={styles.downloadHeroBtnText}>
-                            {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : 'DOWNLOAD ALL'}
+                            {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : (isRTL ? 'تنزيل الكل' : 'DOWNLOAD ALL')}
                           </Text>
                         </TouchableOpacity>
 
@@ -1372,7 +1423,7 @@ function LibraryScreen({
                               styles.mixHeroBtnText,
                               isMixActive ? styles.mixHeroBtnTextActive : styles.mixHeroBtnTextInactive
                             ]}>
-                              {isMixActive ? 'Mix: ON' : 'Mix'}
+                              {isMixActive ? (isRTL ? 'المكس: مفعّل' : 'Mix: ON') : (isRTL ? 'مكس' : 'Mix')}
                             </Text>
                           </TouchableOpacity>
                         )}
@@ -1391,7 +1442,7 @@ function LibraryScreen({
                               <Wand2 size={11} color="#10b981" />
                             )}
                             <Text style={styles.autoMixHeroBtnText}>
-                              {isAutoMixingAll ? 'Mixing...' : 'Auto-Mix All'}
+                              {isAutoMixingAll ? (isRTL ? 'جاري الدمج...' : 'Mixing...') : (isRTL ? 'دمج تلقائي للكل' : 'Auto-Mix All')}
                             </Text>
                           </TouchableOpacity>
                         )}
@@ -1403,14 +1454,18 @@ function LibraryScreen({
                 {isLoadingTracks && activePlaylistTracks.length === 0 ? (
                   <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 40 }]}>
                     <ActivityIndicator size="large" color="#17a398" />
-                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, { marginTop: 12 }]}>Loading playlist tracks...</Text>
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, { marginTop: 12 }]}>
+                      {isRTL ? 'جاري تحميل مقاطع قائمة التشغيل...' : 'Loading playlist tracks...'}
+                    </Text>
                   </View>
                 ) : activePlaylistTracks.length === 0 ? (
                   <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 24 }]}>
                     <Disc size={36} color={colors.mint} />
-                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>This crate is empty</Text>
-                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }]}>
-                      Search below or pick from AI recommendations to add songs instantly!
+                    <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>
+                      {isRTL ? 'قائمة التشغيل هذه فارغة' : 'This crate is empty'}
+                    </Text>
+                    <Text style={[styles.emptySub, !isDark && { color: '#57534e' }, isRTL && { textAlign: 'center' }]}>
+                      {isRTL ? 'ابحث أدناه أو اختر من ترشيحات الذكاء الاصطناعي لإضافة أغانٍ فوراً!' : 'Search below or pick from AI recommendations to add songs instantly!'}
                     </Text>
                   </View>
                 ) : null}
@@ -1571,7 +1626,9 @@ function LibraryScreen({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: isDark ? '#111a18' : '#fdfbf7' }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalTitle, { color: isDark ? colors.paper : colors.ink }]}>EDIT CRATE</Text>
+              <Text style={[styles.modalTitle, { color: isDark ? colors.paper : colors.ink }, rtlTextStyle]}>
+                {isRTL ? 'تعديل قائمة التشغيل' : 'EDIT CRATE'}
+              </Text>
               <TouchableOpacity onPress={() => setIsEditModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={20} color={isDark ? colors.paper : colors.ink} />
               </TouchableOpacity>
@@ -1598,16 +1655,22 @@ function LibraryScreen({
                     activeOpacity={0.8}
                   >
                     <FolderPlus size={14} color={colors.ink} />
-                    <Text style={styles.pickFileBtnText}>CHOOSE PHOTO</Text>
+                    <Text style={[styles.pickFileBtnText, rtlTextStyle]}>
+                      {isRTL ? 'اختيار صورة' : 'CHOOSE PHOTO'}
+                    </Text>
                   </TouchableOpacity>
-                  <Text style={styles.pickFileHint}>Upload JPG/PNG from device</Text>
+                  <Text style={[styles.pickFileHint, rtlTextStyle]}>
+                    {isRTL ? 'تحميل JPG/PNG من الهاتف' : 'Upload JPG/PNG from device'}
+                  </Text>
                 </View>
               </View>
 
               {/* Quick Pick From Playlist Tracks */}
               {activePlaylistTracks && activePlaylistTracks.length > 0 && (
                 <View style={{ marginTop: 12 }}>
-                  <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>OR USE TRACK ARTWORK:</Text>
+                  <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
+                    {isRTL ? 'أو استخدم غلاف أحد المقاطع:' : 'OR USE TRACK ARTWORK:'}
+                  </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 4 }}>
                     {activePlaylistTracks.slice(0, 8).map((t, idx) => {
                       const tCover = t.cover || t.coverUrl;
@@ -1635,44 +1698,52 @@ function LibraryScreen({
 
               {/* Title input */}
               <View style={{ marginTop: 14 }}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>PLAYLIST TITLE</Text>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
+                  {isRTL ? 'عنوان قائمة التشغيل' : 'PLAYLIST TITLE'}
+                </Text>
                 <TextInput
                   value={editName}
                   onChangeText={setEditName}
-                  placeholder="e.g. My Favorite Tracks"
+                  placeholder={isRTL ? 'مثال: أغانيا المفضلة' : 'e.g. My Favorite Tracks'}
                   placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, isRTL && { textAlign: 'right' }, rtlTextStyle]}
                 />
               </View>
 
               {/* Description input */}
               <View style={{ marginTop: 12 }}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>DESCRIPTION (OPTIONAL)</Text>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
+                  {isRTL ? 'الوصف (اختياري)' : 'DESCRIPTION (OPTIONAL)'}
+                </Text>
                 <TextInput
                   value={editDesc}
                   onChangeText={setEditDesc}
-                  placeholder="Describe this collection..."
+                  placeholder={isRTL ? 'اكتب وصفاً لهذه القائمة...' : 'Describe this collection...'}
                   placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, isRTL && { textAlign: 'right' }, rtlTextStyle]}
                 />
               </View>
 
               {/* Custom Cover URL */}
               <View style={{ marginTop: 12 }}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>IMAGE URL (OPTIONAL)</Text>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
+                  {isRTL ? 'رابط صورة مباشر (اختياري)' : 'IMAGE URL (OPTIONAL)'}
+                </Text>
                 <TextInput
                   value={editCover.startsWith('file://') ? '' : editCover}
                   onChangeText={setEditCover}
                   placeholder="https://images... / direct image link"
                   placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }]}
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, rtlTextStyle]}
                   autoCapitalize="none"
                 />
               </View>
 
               {/* Visibility toggle in modal */}
               <View style={{ marginTop: 14 }}>
-                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }]}>PLAYLIST VISIBILITY</Text>
+                <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
+                  {isRTL ? 'خصوصية القائمة' : 'PLAYLIST VISIBILITY'}
+                </Text>
                 <TouchableOpacity
                   style={{
                     flexDirection: 'row',
@@ -1695,10 +1766,12 @@ function LibraryScreen({
                     )}
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontWeight: '900', color: editIsPublic ? '#17a398' : '#e2e8f0', fontSize: 13, fontFamily: 'monospace' }}>
-                        {editIsPublic ? 'PUBLIC PLAYLIST' : 'PRIVATE PLAYLIST'}
+                        {isRTL ? (editIsPublic ? 'قائمة عامة' : 'قائمة خاصة') : (editIsPublic ? 'PUBLIC PLAYLIST' : 'PRIVATE PLAYLIST')}
                       </Text>
                       <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
-                        {editIsPublic ? 'Visible to other listeners & appears in search' : 'Only visible to you in your library'}
+                        {isRTL
+                          ? (editIsPublic ? 'مرئية للمستمعين الآخرين وتظهر في البحث' : 'مرئية لك فقط في مكتبتك')
+                          : (editIsPublic ? 'Visible to other listeners & appears in search' : 'Only visible to you in your library')}
                       </Text>
                     </View>
                   </View>
@@ -1722,7 +1795,9 @@ function LibraryScreen({
                 activeOpacity={0.8}
               >
                 <Trash2 size={13} color="#ef4444" />
-                <Text style={[styles.modalCancelBtnText, { color: '#ef4444' }]}>DELETE</Text>
+                <Text style={[styles.modalCancelBtnText, { color: '#ef4444' }]}>
+                  {isRTL ? 'حذف' : 'DELETE'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1730,7 +1805,9 @@ function LibraryScreen({
                 onPress={() => setIsEditModalOpen(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalCancelBtnText}>CANCEL</Text>
+                <Text style={styles.modalCancelBtnText}>
+                  {isRTL ? 'إلغاء' : 'CANCEL'}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1744,7 +1821,9 @@ function LibraryScreen({
                 ) : (
                   <>
                     <Check size={14} color={colors.ink} strokeWidth={2.5} />
-                    <Text style={styles.modalSaveBtnText}>SAVE CRATE</Text>
+                    <Text style={styles.modalSaveBtnText}>
+                      {isRTL ? 'حفظ التعديلات' : 'SAVE CRATE'}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>

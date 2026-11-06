@@ -104,6 +104,7 @@ function HomeScreen({
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const isOffline = appMode === 'offline';
   const [activeFilter, setActiveFilter] = useState(initialFilter);
 
@@ -199,6 +200,22 @@ function HomeScreen({
 
   const currentMood = getCurrentTimeMood();
 
+  const getMoodLabel = useCallback((mood) => {
+    if (!isRTL) return mood?.label ? mood.label.toUpperCase() : 'MUSIC FLOW';
+    switch (mood?.id) {
+      case 'morning':
+        return 'انتعاش الصباح';
+      case 'afternoon':
+        return 'أجواء الظهيرة';
+      case 'evening':
+        return 'حماس المساء';
+      case 'night':
+        return 'سكون الليل';
+      default:
+        return 'أجواء موسيقية';
+    }
+  }, [isRTL]);
+
   const handlePlaySmartCassette = useCallback(() => {
     const pool = displayTracks.length > 0 ? displayTracks : (userTracks || []);
     const smart10 = getSmartTasteAndMoodTracks({
@@ -239,23 +256,23 @@ function HomeScreen({
         {/* Top Pill Badge */}
         <View style={[styles.labPill, !isDark && styles.labPillLight]}>
           <View style={[styles.pulseDot, isOffline && { backgroundColor: '#f59e0b' }]} />
-          <Text style={[styles.labPillText, !isDark && styles.labPillTextLight]}>
-            {isOffline ? (isRTL ? '📼 الخزنة المحلية • استهلاك صفر للبيانات' : '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION') : `🎵 ${currentMood.label.toUpperCase()}`}
+          <Text style={[styles.labPillText, !isDark && styles.labPillTextLight, rtlTextStyle]}>
+            {isOffline ? (isRTL ? '📼 الخزنة المحلية • استهلاك صفر للبيانات' : '📼 OFFLINE VAULT • ZERO DATA CONSUMPTION') : `🎵 ${getMoodLabel(currentMood)}`}
           </Text>
         </View>
 
         {/* Heading */}
-        <Text style={[styles.greetingTitle, !isDark && styles.greetingTitleLight]}>
-          {getGreeting()},{' '}
+        <Text style={[styles.greetingTitle, !isDark && styles.greetingTitleLight, isRTL && { textAlign: 'right' }]}>
+          {getGreeting()}{isRTL ? '، ' : ', '}
           <Text style={{ color: '#17a398' }}>
-            {currentUser?.name ? currentUser.name.split(' ')[0] : (isRTL ? 'مستمع' : 'Listener')}.
+            {currentUser?.name ? currentUser.name.split(' ')[0] : (isRTL ? 'مستمع' : 'Listener')}
           </Text>
         </Text>
 
-        <Text style={[styles.heroSubtitle, !isDark && styles.heroSubtitleLight]}>
+        <Text style={[styles.heroSubtitle, !isDark && styles.heroSubtitleLight, isRTL && { textAlign: 'right' }]}>
           {isOffline
-            ? 'Playing your downloaded songs directly from local storage. 100% offline, zero data usage.'
-            : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.'}
+            ? (isRTL ? 'تشغيل أغانيك المنزلة مباشرة من ذاكرة الهاتف. بدون إنترنت وبدون استهلاك للبيانات.' : 'Playing your downloaded songs directly from local storage. 100% offline, zero data usage.')
+            : (isRTL ? 'استمع للراب المصري، الإندي، كاسيت زمان، وقوائم مخصصة لذوقك. صوت نقي 24-بت وبدون إعلانات.' : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.')}
         </Text>
 
         {/* 2 Primary CTA Buttons (Matching Image 3) */}
@@ -266,7 +283,7 @@ function HomeScreen({
             activeOpacity={0.85}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
-            <Text style={styles.playTopChartsBtnText}>{isRTL ? 'تشغيل قائمة الأفضل (10)' : 'PLAY TOP CHARTS (10)'}</Text>
+            <Text style={[styles.playTopChartsBtnText, rtlTextStyle]}>{isRTL ? 'تشغيل قائمة الأفضل (10)' : 'PLAY TOP CHARTS (10)'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -275,7 +292,7 @@ function HomeScreen({
             activeOpacity={0.85}
           >
             <Plus size={15} color="#0b1110" strokeWidth={2.5} />
-            <Text style={styles.addTrackBtnText}>{isRTL ? '+ إضافة مقطع' : '+ Add Track'}</Text>
+            <Text style={[styles.addTrackBtnText, rtlTextStyle]}>{isRTL ? '+ إضافة مقطع' : '+ Add Track'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -288,12 +305,14 @@ function HomeScreen({
           <View style={styles.albumsHeaderRow}>
             <View style={styles.albumsTitleGroup}>
               <Disc size={18} color="#f59e0b" strokeWidth={2.4} />
-              <Text style={[styles.albumsSectionTitle, !isDark && styles.albumsSectionTitleLight]}>
+              <Text style={[styles.albumsSectionTitle, !isDark && styles.albumsSectionTitleLight, rtlTextStyle]}>
                 {isRTL ? 'ألبومات مميزة' : 'Featured Albums'}
               </Text>
               <View style={styles.albumsCountPill}>
-                <Text style={styles.albumsCountText}>
-                  {displayAlbums.length} {displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}
+                <Text style={[styles.albumsCountText, rtlTextStyle]}>
+                  {isRTL
+                    ? `${displayAlbums.length} ألبوم`
+                    : `${displayAlbums.length} ${displayAlbums.length === 1 ? 'ALBUM' : 'ALBUMS'}`}
                 </Text>
               </View>
             </View>
@@ -319,9 +338,9 @@ function HomeScreen({
           SECTION HEADER & FILTER PILLS
           ───────────────────────────────────────── */}
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionTitle}>{isRTL ? 'التشغيل اليومي والمفضلة' : 'Daily Rotation & Favorites'}</Text>
+        <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'التشغيل اليومي والمفضلة' : 'Daily Rotation & Favorites'}</Text>
         <View style={styles.topTracksBadge}>
-          <Text style={styles.topTracksText}>{isRTL ? 'الأكثر استماعاً' : 'TOP TRACKS'}</Text>
+          <Text style={[styles.topTracksText, rtlTextStyle]}>{isRTL ? 'الأكثر استماعاً' : 'TOP TRACKS'}</Text>
         </View>
       </View>
 
@@ -332,7 +351,7 @@ function HomeScreen({
           onPress={() => setActiveFilter('all')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
+          <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive, rtlTextStyle]}>
             {t('common.all')}
           </Text>
         </TouchableOpacity>
@@ -342,7 +361,7 @@ function HomeScreen({
           onPress={() => setActiveFilter('music')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.filterPillText, activeFilter === 'music' && styles.filterPillTextActive]}>
+          <Text style={[styles.filterPillText, activeFilter === 'music' && styles.filterPillTextActive, rtlTextStyle]}>
             {t('nav.music')}
           </Text>
         </TouchableOpacity>
@@ -353,14 +372,14 @@ function HomeScreen({
             onPress={() => setActiveFilter('downloaded')}
             activeOpacity={0.8}
           >
-            <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive]}>
+            <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive, rtlTextStyle]}>
               {isRTL ? `المحملة (${downloadedTracks.length})` : `Downloaded (${downloadedTracks.length})`}
             </Text>
           </TouchableOpacity>
         )}
       </View>
     </View>
-  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth]);
+  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -370,8 +389,10 @@ function HomeScreen({
           onPress={() => setVisibleCount((c) => c + 30)}
           activeOpacity={0.8}
         >
-          <Text style={styles.loadMoreText}>
-            + LOAD MORE TRACKS ({displayTracks.length - visibleCount} MORE)
+          <Text style={[styles.loadMoreText, rtlTextStyle]}>
+            {isRTL
+              ? `+ عرض المزيد من المقاطع (متبقي ${displayTracks.length - visibleCount})`
+              : `+ LOAD MORE TRACKS (${displayTracks.length - visibleCount} MORE)`}
           </Text>
         </TouchableOpacity>
       );
@@ -380,17 +401,17 @@ function HomeScreen({
     if (displayTracks.length === 0) {
       return (
         <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>
+          <Text style={[styles.emptyText, rtlTextStyle]}>
             {isOffline
-              ? 'No offline songs saved yet.\nDownload songs while connected to listen offline here!'
-              : 'Loading tracks...'}
+              ? (isRTL ? 'لا توجد أغانٍ محفوظة بدون إنترنت بعد.\nقم بتحميل الأغاني أثناء الاتصال بالإنترنت للاستماع إليها هنا!' : 'No offline songs saved yet.\nDownload songs while connected to listen offline here!')
+              : (isRTL ? 'جاري تحميل المقاطع...' : 'Loading tracks...')}
           </Text>
         </View>
       );
     }
 
     return null;
-  }, [displayTracks.length, visibleCount, isOffline]);
+  }, [displayTracks.length, visibleCount, isOffline, isRTL, rtlTextStyle]);
 
   const handlePlaySong = useCallback((track) => {
     playTrack(track, displayTracks);

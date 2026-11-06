@@ -23,11 +23,19 @@ const ITEM_CIRCLE_SIZE = 50;
 const ARC_RADIUS = 124; // Expanded radial distance for comfortable spacing
 
 export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = false }) {
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
   const { isDark } = useTheme();
   const { visibleMenuItems } = useNavPreferences();
   const [isOpen, setIsOpen] = useState(false);
   const [dockedSide, setDockedSide] = useState(null); // null | 'left' | 'right' | 'top' | 'bottom'
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+      textTransform: 'none',
+    } : null
+  ), [isRTL]);
 
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -433,6 +441,7 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
                           styles.arcLabel,
                           isDark ? styles.arcLabelDark : styles.arcLabelLight,
                           active && styles.arcLabelActive,
+                          rtlTextStyle,
                         ]}
                         numberOfLines={1}
                       >

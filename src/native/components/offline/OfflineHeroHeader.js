@@ -10,6 +10,7 @@ import {
 } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import CassetteTag from '../../ui/CassetteTag';
+import { useTranslation } from '../../context/LocalizationContext';
 
 export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
   styles,
@@ -34,6 +35,9 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
   handleImportFolder,
   handleScanVault,
 }) {
+  const { isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
+
   return (
     <View>
       {/* Offline Storage Status Card */}
@@ -41,11 +45,11 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
         <View style={styles.heroShadow} />
         <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
           <View style={styles.topRow}>
-            <CassetteTag label="NO WI-FI REQUIRED" bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
+            <CassetteTag label={isRTL ? 'بدون إنترنت' : 'NO WI-FI REQUIRED'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
           </View>
 
-          <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight]}>{t('offline.title')}</Text>
-          <Text style={[styles.heroSub, !isDark && styles.heroSubLight, { marginBottom: 12 }]}>
+          <Text style={[styles.heroTitle, !isDark && styles.heroTitleLight, rtlTextStyle]}>{t('offline.title')}</Text>
+          <Text style={[styles.heroSub, !isDark && styles.heroSubLight, { marginBottom: 12 }, rtlTextStyle]}>
             {t('offline.subtitle')}
           </Text>
 
@@ -54,11 +58,11 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
             <View style={styles.vaultInfoRow}>
               <HardDrive size={13} color={colors.mint} />
               <Text style={[styles.vaultPathText, !isDark && styles.vaultPathTextLight]} numberOfLines={1}>
-                {storageInfo?.folderLabel || 'Internal Storage'}
+                {storageInfo?.folderLabel || (isRTL ? 'ذاكرة الهاتف الداخلية' : 'Internal Storage')}
               </Text>
             </View>
             <Text style={[styles.vaultSizeText, !isDark && styles.vaultSizeTextLight]}>
-              {formatBytes(storageUsed)} • {offlineTracksCount} SONGS
+              {formatBytes(storageUsed)} • {offlineTracksCount} {isRTL ? 'مقطع' : 'SONGS'}
             </Text>
           </View>
 
@@ -71,7 +75,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
               activeOpacity={0.8}
             >
               <FolderPlus size={14} color={colors.ink} />
-              <Text style={styles.heroActionText}>{t('offline.importBtn')}</Text>
+              <Text style={[styles.heroActionText, rtlTextStyle]}>{t('offline.importBtn')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -81,7 +85,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
               activeOpacity={0.8}
             >
               <HardDrive size={13} color={colors.ink} />
-              <Text style={styles.heroActionText}>{t('offline.folderBtn')}</Text>
+              <Text style={[styles.heroActionText, rtlTextStyle]}>{t('offline.folderBtn')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -91,7 +95,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
               activeOpacity={0.8}
             >
               <RefreshCw size={13} color={colors.mint} />
-              <Text style={styles.heroActionTextSec}>{t('offline.scanBtn')}</Text>
+              <Text style={[styles.heroActionTextSec, rtlTextStyle]}>{t('offline.scanBtn')}</Text>
             </TouchableOpacity>
 
             {offlineTracksCount > 0 && (
@@ -108,7 +112,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
                 activeOpacity={0.8}
               >
                 <CheckSquare size={13} color={isSelectMode ? '#ffffff' : colors.mint} />
-                <Text style={[styles.heroActionTextSec, isSelectMode && { color: '#ffffff' }]}>
+                <Text style={[styles.heroActionTextSec, isSelectMode && { color: '#ffffff' }, rtlTextStyle]}>
                   {isSelectMode ? t('offline.cancelBtn') : t('offline.selectBtn')}
                 </Text>
               </TouchableOpacity>
@@ -120,8 +124,8 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
             <View style={styles.vaultSearchBar}>
               <Search size={16} color="#6b7280" style={{ marginRight: 8 }} />
               <TextInput
-                style={styles.vaultSearchInput}
-                placeholder="Search in offline vault by title, artist, album..."
+                style={[styles.vaultSearchInput, isRTL && { textAlign: 'right' }]}
+                placeholder={isRTL ? 'ابحث في الخزنة المحلية بالعنوان، الفنان، الألبوم...' : 'Search in offline vault by title, artist, album...'}
                 placeholderTextColor="#6b7280"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -165,10 +169,11 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
                   styles.folderTabText,
                   !isDark && styles.folderTabTextLight,
                   folderTab === 'all' && styles.folderTabTextActive,
+                  rtlTextStyle,
                 ]}
                 numberOfLines={1}
               >
-                ALL ({offlineTracksCount})
+                {isRTL ? `الكل (${offlineTracksCount})` : `ALL (${offlineTracksCount})`}
               </Text>
             </TouchableOpacity>
 
@@ -186,10 +191,11 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
                   styles.folderTabText,
                   !isDark && styles.folderTabTextLight,
                   folderTab === 'music' && styles.folderTabTextActive,
+                  rtlTextStyle,
                 ]}
                 numberOfLines={1}
               >
-                🎵 MUSIC ({musicCount})
+                {isRTL ? `🎵 موسيقى (${musicCount})` : `🎵 MUSIC (${musicCount})`}
               </Text>
             </TouchableOpacity>
 
@@ -207,10 +213,11 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
                   styles.folderTabText,
                   !isDark && styles.folderTabTextLight,
                   folderTab === 'quran' && styles.folderTabTextActive,
+                  rtlTextStyle,
                 ]}
                 numberOfLines={1}
               >
-                📖 QURAN ({quranCount})
+                {isRTL ? `📖 قرآن (${quranCount})` : `📖 QURAN (${quranCount})`}
               </Text>
             </TouchableOpacity>
           </View>

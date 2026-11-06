@@ -125,9 +125,23 @@ export default function ListeningActivityPanel({
       setActivities((prev) =>
         prev.map((friend) => {
           if (String(friend.id) === String(data.userId)) {
+            let nextListening = friend.currentListening;
+            if (data.currentListening !== undefined) {
+              if (data.currentListening && (data.currentListening.title || data.currentListening.name)) {
+                nextListening = data.currentListening;
+              } else if (friend.currentListening) {
+                nextListening = {
+                  ...friend.currentListening,
+                  isPlaying: Boolean(data.currentListening?.isPlaying)
+                };
+              }
+            } else if (data.isOnline === false && nextListening) {
+              nextListening = { ...nextListening, isPlaying: false };
+            }
+
             return {
               ...friend,
-              currentListening: data.currentListening !== undefined ? data.currentListening : friend.currentListening,
+              currentListening: nextListening,
               lastActiveAt: data.lastActiveAt || friend.lastActiveAt,
               isLive: data.isLive !== undefined ? Boolean(data.isLive) : (data.isOnline !== undefined ? (data.isOnline && friend.isLive) : friend.isLive),
               isOnline: data.isOnline !== undefined ? Boolean(data.isOnline) : friend.isOnline

@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { Heart } from 'lucide-react-native';
 import { styles } from './fullPlayerStyles';
+import { useTranslation } from '../../context/LocalizationContext';
+import { isArabicText } from '../../theme/typography';
 
 export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
   currentTrack,
@@ -10,7 +12,18 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
   toggleLikeTrack,
   vocalIsolationStatus,
 }) {
-  const genre = currentTrack?.genre || 'MUSIC';
+  const { isRTL } = useTranslation();
+  const rawGenre = currentTrack?.genre || 'MUSIC';
+  const displayGenre = isRTL
+    ? (String(rawGenre).toUpperCase() === 'MUSIC'
+        ? 'موسيقى'
+        : String(rawGenre).toUpperCase() === 'QURAN'
+          ? 'القرآن الكريم'
+          : String(rawGenre).toUpperCase())
+    : String(rawGenre).toUpperCase();
+
+  const isTitleArabic = isRTL || isArabicText(currentTrack?.title);
+  const isArtistArabic = isRTL || isArabicText(currentTrack?.artist);
 
   return (
     <View>
@@ -41,14 +54,40 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
       <View style={styles.trackInfoRow}>
         <View style={{ flex: 1, paddingRight: 8 }}>
           <View style={styles.genreBadge}>
-            <Text style={styles.genreBadgeText}>
-              {String(genre).toUpperCase()}
+            <Text
+              style={[
+                styles.genreBadgeText,
+                (isRTL || isArabicText(displayGenre)) && {
+                  letterSpacing: 0,
+                  fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+                },
+              ]}
+            >
+              {displayGenre}
             </Text>
           </View>
-          <Text style={styles.songTitle} numberOfLines={1}>
+          <Text
+            style={[
+              styles.songTitle,
+              isTitleArabic && {
+                letterSpacing: 0,
+                fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+              },
+            ]}
+            numberOfLines={1}
+          >
             {currentTrack?.title || 'Untitled Track'}
           </Text>
-          <Text style={styles.songArtist} numberOfLines={1}>
+          <Text
+            style={[
+              styles.songArtist,
+              isArtistArabic && {
+                letterSpacing: 0,
+                fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+              },
+            ]}
+            numberOfLines={1}
+          >
             {currentTrack?.artist || 'Unknown Artist'}
           </Text>
         </View>

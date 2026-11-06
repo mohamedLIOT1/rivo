@@ -26,6 +26,7 @@ import { useTranslation } from '../context/LocalizationContext';
 
 export default function SettingsModal({ visible, onClose }) {
   const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
   const { isDark, toggleTheme } = useTheme();
@@ -113,10 +114,10 @@ export default function SettingsModal({ visible, onClose }) {
       const data = await res.json();
       if (data.code) {
         setLinkCode(data.code);
-        showToast('Send code to Rivo Bot on Discord!', 'info');
+        showToast(isRTL ? 'أرسل الرمز لبوت ريفو على ديسكورد!' : 'Send code to Rivo Bot on Discord!', 'info');
       }
     } catch {
-      showToast('Failed to generate code', 'error');
+      showToast(isRTL ? 'فشل إنشاء الرمز' : 'Failed to generate code', 'error');
     } finally {
       setDiscordLoading(false);
     }
@@ -124,7 +125,7 @@ export default function SettingsModal({ visible, onClose }) {
 
   const handleLinkDiscordToken = async () => {
     if (!tokenInput || tokenInput.length < 30) {
-      showToast('Please enter a valid token', 'error');
+      showToast(isRTL ? 'يرجى إدخال توكن صالح' : 'Please enter a valid token', 'error');
       return;
     }
     setDiscordLoading(true);
@@ -142,12 +143,12 @@ export default function SettingsModal({ visible, onClose }) {
         setDiscordStatus({ linked: true, username: data.username, enabled: true });
         setShowTokenInput(false);
         setTokenInput('');
-        showToast(`Linked as @${data.username}!`, 'success');
+        showToast(isRTL ? `تم الربط كـ @${data.username}!` : `Linked as @${data.username}!`, 'success');
       } else {
-        showToast(data.error || 'Failed to link Discord', 'error');
+        showToast(data.error || (isRTL ? 'فشل ربط ديسكورد' : 'Failed to link Discord'), 'error');
       }
     } catch {
-      showToast('Failed to connect to Rivo server', 'error');
+      showToast(isRTL ? 'فشل الاتصال بسيرفر ريفو' : 'Failed to connect to Rivo server', 'error');
     } finally {
       setDiscordLoading(false);
     }
@@ -166,21 +167,26 @@ export default function SettingsModal({ visible, onClose }) {
         body: JSON.stringify({ enabled: nextState })
       });
       setDiscordStatus({ ...discordStatus, enabled: nextState });
-      showToast(`Discord Rich Presence ${nextState ? 'Enabled' : 'Disabled'}`, 'info');
+      showToast(
+        isRTL
+          ? `مزامنة ديسكورد ${nextState ? 'مفعلة' : 'معطلة'}`
+          : `Discord Rich Presence ${nextState ? 'Enabled' : 'Disabled'}`,
+        'info'
+      );
     } catch {
-      showToast('Failed to toggle Discord sync', 'error');
+      showToast(isRTL ? 'فشل تغيير حالة مزامنة ديسكورد' : 'Failed to toggle Discord sync', 'error');
     }
   };
 
   const handleUnlinkDiscord = async () => {
     if (!token) return;
     Alert.alert(
-      'UNLINK DISCORD',
-      'Disconnect your Discord account from Rivo Rich Presence?',
+      isRTL ? 'فصل ديسكورد' : 'UNLINK DISCORD',
+      isRTL ? 'هل تريد إلغاء ربط حساب ديسكورد بمزامنة ريفو؟' : 'Disconnect your Discord account from Rivo Rich Presence?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: isRTL ? 'إلغاء' : 'Cancel', style: 'cancel' },
         {
-          text: 'Unlink',
+          text: isRTL ? 'فصل' : 'Unlink',
           style: 'destructive',
           onPress: async () => {
             try {
@@ -189,9 +195,9 @@ export default function SettingsModal({ visible, onClose }) {
                 headers: { Authorization: `Bearer ${token}` }
               });
               setDiscordStatus({ linked: false, username: '', enabled: false });
-              showToast('Discord account unlinked', 'info');
+              showToast(isRTL ? 'تم إلغاء ربط حساب ديسكورد' : 'Discord account unlinked', 'info');
             } catch {
-              showToast('Failed to unlink Discord', 'error');
+              showToast(isRTL ? 'فشل إلغاء ربط ديسكورد' : 'Failed to unlink Discord', 'error');
             }
           }
         }
@@ -268,7 +274,7 @@ export default function SettingsModal({ visible, onClose }) {
             <View style={[styles.header, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
               <View style={{ flex: 1 }}>
                 <CassetteTag label={t('settings.systemConsole')} bg={colors.ink} textColor={colors.mint} />
-                <Text style={[styles.headerTitle, { color: textTitle }]}>{t('settings.title')}</Text>
+                <Text style={[styles.headerTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.title')}</Text>
               </View>
               <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: cardBg, borderColor }]}>
                 <X size={20} color={textTitle} />
@@ -289,13 +295,13 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Compass size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.navigationInterface')}</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.navigationInterface')}</Text>
                 </View>
 
                 {/* Navigation Style Toggle Switch */}
                 <View style={[styles.switchRow, { marginTop: 8 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.floatingNavTitle')}</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.floatingNavTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
                       {t('settings.floatingNavDesc')}
                     </Text>
@@ -326,6 +332,7 @@ export default function SettingsModal({ visible, onClose }) {
                         style={[
                           styles.navStyleBtnText,
                           navStyle === 'classic' ? styles.navStyleBtnTextActive : { color: textTitle },
+                          rtlTextStyle,
                         ]}
                       >
                         {t('settings.classicTabsLabel')}
@@ -346,6 +353,7 @@ export default function SettingsModal({ visible, onClose }) {
                         style={[
                           styles.navStyleBtnText,
                           navStyle === 'fab' ? styles.navStyleBtnTextActive : { color: textTitle },
+                          rtlTextStyle,
                         ]}
                       >
                         {t('settings.floatingHubLabel')}
@@ -357,7 +365,7 @@ export default function SettingsModal({ visible, onClose }) {
                 {/* Theme Mode Toggle Row */}
                 <View style={[styles.switchRow, { marginTop: 14 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.darkThemeTitle')}</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.darkThemeTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
                       {isDark ? t('settings.darkThemeDescDark') : t('settings.darkThemeDescLight')}
                     </Text>
@@ -398,7 +406,7 @@ export default function SettingsModal({ visible, onClose }) {
                               strokeWidth={2.4}
                             />
                           </View>
-                          <Text style={[styles.switchTitle, { color: visible ? textTitle : textMuted }]}>
+                          <Text style={[styles.switchTitle, { color: visible ? textTitle : textMuted }, rtlTextStyle]}>
                             {t(`nav.${item.id}`, item.label)}
                           </Text>
                         </View>
@@ -429,7 +437,7 @@ export default function SettingsModal({ visible, onClose }) {
               {Platform.OS === 'android' && (
                 <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor, marginTop: -4 }]}>
                   <View style={{ padding: 4 }}>
-                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: colors.mint, marginBottom: 4, letterSpacing: 0.5 }}>
+                    <Text style={[{ fontSize: 11.5, fontWeight: '800', color: colors.mint, marginBottom: 4, letterSpacing: 0.5 }, rtlTextStyle]}>
                       📱 HOME SCREEN APP WIDGETS
                     </Text>
                     <Text style={{ fontSize: 11, color: textMuted, lineHeight: 16 }}>
@@ -443,13 +451,17 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Radio size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>DISCORD RICH PRESENCE</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>
+                    {isRTL ? 'مزامنة ديسكورد (Discord Rich Presence)' : 'DISCORD RICH PRESENCE'}
+                  </Text>
                 </View>
 
                 {discordStatus?.linked ? (
                   <View style={{ gap: 12, marginTop: 4 }}>
                     <View style={styles.infoRow}>
-                      <Text style={[styles.label, { color: textMuted }]}>Linked Profile:</Text>
+                      <Text style={[styles.label, { color: textMuted }, rtlTextStyle]}>
+                        {isRTL ? 'الحساب المرتبط:' : 'Linked Profile:'}
+                      </Text>
                       <View style={styles.discordUserPill}>
                         <View style={styles.greenDot} />
                         <Text style={styles.discordUserText}>@{discordStatus.username}</Text>
@@ -458,8 +470,12 @@ export default function SettingsModal({ visible, onClose }) {
 
                     <View style={styles.switchRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.switchTitle, { color: textTitle }]}>Sync Playing Track</Text>
-                        <Text style={[styles.switchDesc, { color: textMuted }]}>Displays "Listening to Rivo" on your Discord</Text>
+                        <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>
+                          {isRTL ? 'مزامنة حالة الاستماع مع ديسكورد' : 'Sync Playing Track'}
+                        </Text>
+                        <Text style={[styles.switchDesc, { color: textMuted }, rtlTextStyle]}>
+                          {isRTL ? 'يعرض "يستمع إلى ريفو" في حسابك على ديسكورد' : 'Displays "Listening to Rivo" on your Discord'}
+                        </Text>
                       </View>
                       <Switch
                         value={discordStatus.enabled}
@@ -471,20 +487,28 @@ export default function SettingsModal({ visible, onClose }) {
 
                     <TouchableOpacity style={styles.unlinkBtn} onPress={handleUnlinkDiscord} activeOpacity={0.8}>
                       <Unlink size={14} color={colors.crimson} />
-                      <Text style={styles.unlinkBtnText}>DISCONNECT DISCORD</Text>
+                      <Text style={[styles.unlinkBtnText, rtlTextStyle]}>
+                        {isRTL ? 'فصل ديسكورد' : 'DISCONNECT DISCORD'}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   <View style={{ gap: 10, marginTop: 4 }}>
-                    <Text style={[styles.aboutText, { color: textMuted }]}>
-                      Sync your music status live to your Discord profile as "Listening to Rivo".
+                    <Text style={[styles.aboutText, { color: textMuted }, rtlTextStyle]}>
+                      {isRTL
+                        ? 'قم بمزامنة موسيقاك مباشرة على حساب ديسكورد كحالة "Listening to Rivo".'
+                        : 'Sync your music status live to your Discord profile as "Listening to Rivo".'}
                     </Text>
 
                     {linkCode ? (
                       <View style={styles.codeBox}>
-                        <Text style={styles.codeLabel}>YOUR LINK CODE:</Text>
+                        <Text style={[styles.codeLabel, rtlTextStyle]}>
+                          {isRTL ? 'رمز الربط الخاص بك:' : 'YOUR LINK CODE:'}
+                        </Text>
                         <Text style={styles.codeText}>{linkCode}</Text>
-                        <Text style={styles.codeDesc}>Send this code in DM to @RIVO bot on Discord.</Text>
+                        <Text style={[styles.codeDesc, rtlTextStyle]}>
+                          {isRTL ? 'أرسل هذا الرمز في رسالة خاصة إلى بوت @RIVO على ديسكورد.' : 'Send this code in DM to @RIVO bot on Discord.'}
+                        </Text>
                       </View>
                     ) : (
                       <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
@@ -497,7 +521,9 @@ export default function SettingsModal({ visible, onClose }) {
                           {discordLoading ? (
                             <ActivityIndicator size="small" color={colors.ink} />
                           ) : (
-                            <Text style={styles.primaryBtnText}>GET LINK CODE</Text>
+                            <Text style={[styles.primaryBtnText, rtlTextStyle]}>
+                              {isRTL ? 'إنشاء رمز الربط' : 'GET LINK CODE'}
+                            </Text>
                           )}
                         </TouchableOpacity>
 
@@ -506,8 +532,10 @@ export default function SettingsModal({ visible, onClose }) {
                           onPress={() => setShowTokenInput(!showTokenInput)}
                           activeOpacity={0.8}
                         >
-                          <Text style={[styles.secBtnText, { color: textTitle }]}>
-                            {showTokenInput ? 'CANCEL' : 'ENTER TOKEN'}
+                          <Text style={[styles.secBtnText, { color: textTitle }, rtlTextStyle]}>
+                            {showTokenInput
+                              ? (isRTL ? 'إلغاء' : 'CANCEL')
+                              : (isRTL ? 'إدخال التوكن' : 'ENTER TOKEN')}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -518,7 +546,7 @@ export default function SettingsModal({ visible, onClose }) {
                         <TextInput
                           value={tokenInput}
                           onChangeText={setTokenInput}
-                          placeholder="Paste Discord User Token..."
+                          placeholder={isRTL ? 'الصق توكن مستخدم ديسكورد...' : 'Paste Discord User Token...'}
                           placeholderTextColor="#6b7280"
                           secureTextEntry
                           style={[styles.inputBox, { backgroundColor: isDark ? '#0a100e' : '#ffffff', color: textTitle, borderColor }]}
@@ -529,7 +557,9 @@ export default function SettingsModal({ visible, onClose }) {
                           disabled={discordLoading}
                           activeOpacity={0.8}
                         >
-                          <Text style={styles.primaryBtnText}>VERIFY & CONNECT</Text>
+                          <Text style={[styles.primaryBtnText, rtlTextStyle]}>
+                            {isRTL ? 'تحقق وربط' : 'VERIFY & CONNECT'}
+                          </Text>
                         </TouchableOpacity>
                       </View>
                     )}
@@ -541,12 +571,12 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Volume2 size={18} color={colors.teal} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.audioPreferences')}</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.audioPreferences')}</Text>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.vocalIsolationTitle')}</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.vocalIsolationTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>
                       {t('settings.vocalIsolationDesc')}
                     </Text>
@@ -564,12 +594,12 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Volume2 size={18} color={colors.teal} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.appExperience')}</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.appExperience')}</Text>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 10 }]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.hapticTitle')}</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.hapticTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>{t('settings.hapticDesc')}</Text>
                   </View>
                   <Switch
@@ -585,7 +615,7 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <HardDrive size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.offlineVaultStorage')}</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.offlineVaultStorage')}</Text>
                 </View>
 
                 <View style={styles.infoRow}>
@@ -610,7 +640,7 @@ export default function SettingsModal({ visible, onClose }) {
                     activeOpacity={0.8}
                   >
                     <FolderPlus size={14} color={colors.ink} />
-                    <Text style={styles.storageActionText}>{t('settings.localImportTitle')}</Text>
+                    <Text style={[styles.storageActionText, rtlTextStyle]}>{t('settings.localImportTitle')}</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -620,13 +650,13 @@ export default function SettingsModal({ visible, onClose }) {
                     activeOpacity={0.8}
                   >
                     <RefreshCw size={13} color={colors.mint} />
-                    <Text style={styles.storageActionTextSec}>{t('settings.scanVaultTitle')}</Text>
+                    <Text style={[styles.storageActionTextSec, rtlTextStyle]}>{t('settings.scanVaultTitle')}</Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 12 }]}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }]}>{t('settings.autoDownloadFinishedTitle')}</Text>
+                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.autoDownloadFinishedTitle')}</Text>
                     <Text style={[styles.switchDesc, { color: textMuted }]}>{t('settings.autoDownloadFinishedDesc')}</Text>
                   </View>
                   <Switch
@@ -642,7 +672,7 @@ export default function SettingsModal({ visible, onClose }) {
               <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                 <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                   <Server size={18} color={colors.mint} />
-                  <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.audioCloudMatrix')}</Text>
+                  <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.audioCloudMatrix')}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={[styles.label, { color: textMuted }]}>{t('settings.serverStatus')}</Text>
@@ -654,7 +684,7 @@ export default function SettingsModal({ visible, onClose }) {
                   <Text style={[styles.label, { color: textMuted }]}>{t('common.info')}:</Text>
                   <View style={styles.statusPill}>
                     <View style={styles.greenDot} />
-                    <Text style={styles.statusText}>{t('settings.onlineStatus')}</Text>
+                    <Text style={[styles.statusText, rtlTextStyle]}>{t('settings.onlineStatus')}</Text>
                   </View>
                 </View>
                 <View style={styles.infoRow}>
@@ -668,7 +698,7 @@ export default function SettingsModal({ visible, onClose }) {
                 <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
                   <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
                     <ShieldCheck size={18} color={colors.teal} />
-                    <Text style={[styles.sectionTitle, { color: textTitle }]}>{t('settings.accountDetails')}</Text>
+                    <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.accountDetails')}</Text>
                   </View>
                   <View style={styles.infoRow}>
                     <Text style={[styles.label, { color: textMuted }]}>{t('settings.loggedInAs')}</Text>
@@ -680,7 +710,7 @@ export default function SettingsModal({ visible, onClose }) {
                   </View>
                   <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
                     <LogOut size={16} color={colors.rust} />
-                    <Text style={styles.logoutBtnText}>{t('settings.logout')}</Text>
+                    <Text style={[styles.logoutBtnText, rtlTextStyle]}>{t('settings.logout')}</Text>
                   </TouchableOpacity>
                 </View>
               )}

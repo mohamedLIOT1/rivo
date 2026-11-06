@@ -4,6 +4,7 @@ import { Disc, Check, FolderDown, Trash2, Play, Pause } from 'lucide-react-nativ
 import { colors } from '../../theme/colors';
 import { normalizeCoverUri } from '../../utils/coverUtils';
 import { isQuranContent } from '../../../utils/quranUtils';
+import { useTranslation } from '../../context/LocalizationContext';
 
 function areEqualOfflineItem(prev, next) {
   return (
@@ -32,6 +33,8 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
   onDelete,
   styles,
 }) {
+  const { isRTL } = useTranslation();
+
   return (
     <TouchableOpacity
       activeOpacity={0.8}
@@ -94,7 +97,11 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
                 track?.isLocalImport && !isQuranContent(track) && { color: colors.mint },
               ]}
             >
-              {isQuranContent(track) ? 'HOLY QURAN' : track?.isLocalImport ? 'IMPORTED MP3' : 'OFFLINE SONG'}
+              {isQuranContent(track)
+                ? (isRTL ? 'القرآن الكريم' : 'HOLY QURAN')
+                : track?.isLocalImport
+                  ? (isRTL ? 'ملف مستورد' : 'IMPORTED MP3')
+                  : (isRTL ? 'محفوظ أوفلاين' : 'OFFLINE SONG')}
             </Text>
           </View>
         </View>

@@ -155,20 +155,46 @@ router.post('/listening-activity', auth, async (req, res) => {
     const { track, isPlaying, currentTime } = req.body;
     const now = new Date();
     const curSec = Math.max(0, Number(currentTime) || 0);
-    const updateData = {
-      lastActiveAt: now,
-      currentListening: track ? {
-        id: track.id || track._id,
-        title: track.title,
-        artist: track.artist,
-        cover: track.cover,
-        audioUrl: track.audioUrl,
-        duration: track.duration,
+
+    const currentUser = await User.findById(req.user.id);
+    if (!currentUser) return res.status(404).json({ error: 'User not found' });
+
+    let updatedListening = null;
+    const hasNewTrack = track && (track.title || track.name);
+
+    if (hasNewTrack) {
+      updatedListening = {
+        id: track.id || track._id || currentUser.currentListening?.id,
+        title: track.title || track.name,
+        artist: track.artist || currentUser.currentListening?.artist || '',
+        cover: track.cover || track.coverUrl || currentUser.currentListening?.cover || '',
+        audioUrl: track.audioUrl || currentUser.currentListening?.audioUrl || '',
+        duration: track.duration || currentUser.currentListening?.duration || 0,
         isPlaying: Boolean(isPlaying),
         currentTime: curSec,
         updatedAt: now
-      } : null
+      };
+    } else if (currentUser.currentListening && (currentUser.currentListening.title || currentUser.currentListening.name)) {
+      // Preserve existing track details, only mark isPlaying: false
+      updatedListening = {
+        id: currentUser.currentListening.id,
+        title: currentUser.currentListening.title,
+        artist: currentUser.currentListening.artist || '',
+        cover: currentUser.currentListening.cover || '',
+        audioUrl: currentUser.currentListening.audioUrl || '',
+        duration: currentUser.currentListening.duration || 0,
+        isPlaying: false,
+        currentTime: curSec || currentUser.currentListening.currentTime || 0,
+        updatedAt: now
+      };
+    }
+
+    const updateData = {
+      lastActiveAt: now
     };
+    if (updatedListening) {
+      updateData.currentListening = updatedListening;
+    }
 
     const user = await User.findByIdAndUpdate(req.user.id, { $set: updateData }, { new: true });
     const uidStr = String(user._id);
@@ -182,11 +208,11 @@ router.post('/listening-activity', auth, async (req, res) => {
         currentListening: user.currentListening,
         lastActiveAt: user.lastActiveAt,
         isOnline,
-        isLive: Boolean(isPlaying && isOnline)
+        isLive: Boolean(user.currentListening?.isPlaying && isOnline)
       });
     }
 
-    try { discordActivity.handleUserListening(user, track, isPlaying, curSec); } catch (e) {}
+    try { discordActivity.handleUserListening(user, track || user.currentListening, isPlaying, curSec); } catch (e) {}
 
     res.json({ success: true, currentListening: user.currentListening });
   } catch (e) {

@@ -40,6 +40,7 @@ import {
 } from '../utils/musicAnalysis';
 import { API_BASE_URL } from '../config';
 import { resolveAudioStream } from '../services/youtubeResolver';
+import { useTranslation } from '../context/LocalizationContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -67,57 +68,78 @@ const TRANSITION_STYLES = [
   {
     id: 'auto',
     name: 'Auto',
+    nameAr: 'تلقائي',
     desc: 'Smart AI: analyzes BPM & harmonic key to craft the ideal transition',
+    descAr: 'ذكاء اصطناعي ذكي: يحلل الإيقاع والمفتاح الهارموني لصنع انتقال مثالي',
     icon: Wand2,
     badge: 'AI Smart',
+    badgeAr: 'ذكي تلقائي',
     color: '#10b981',
   },
   {
     id: 'rise',
     name: 'Rise',
+    nameAr: 'تصاعد',
     desc: 'High-pass tension sweep with punchy bass drop on the first downbeat',
+    descAr: 'تصاعد تشويقي بترددات عالية مع هبوط بيز قوي على أول إيقاع',
     icon: Zap,
     badge: 'Buildup & Drop',
+    badgeAr: 'تصاعد وهبوط',
     color: '#f59e0b',
   },
   {
     id: 'blend',
     name: 'Blend',
+    nameAr: 'اندماج سلس',
     desc: 'Balanced 3-band EQ crossfade with sub-bass frequency swap',
+    descAr: 'تلاشي متوازن عبر معادل الصوت مع تبديل ترددات البيز الفرعي',
     icon: Activity,
     badge: 'Bass Swap',
+    badgeAr: 'تبديل البيز',
     color: '#10b981',
   },
   {
     id: 'wave',
     name: 'Wave',
+    nameAr: 'موجة',
     desc: 'Low-pass wave sweep rhythmically washing out highs into the new track',
+    descAr: 'موجة فلتر هابطة تمهد إيقاعياً لدخول المقطع الجديد بسلاسة',
     icon: Radio,
     badge: 'Filter Sweep',
+    badgeAr: 'مسح الترددات',
     color: '#06b6d4',
   },
   {
     id: 'melt',
     name: 'Melt',
+    nameAr: 'ذوبان',
     desc: 'Harmonic frequency melting crossfade, ideal for melodic & vocal changes',
+    descAr: 'ذوبان نغمي وتوافقي، مثالي للألحان وتغيرات الصوت الغنائي',
     icon: Sparkles,
     badge: 'Harmonic Morph',
+    badgeAr: 'تحول نغمي',
     color: '#a855f7',
   },
   {
     id: 'slam',
     name: 'Slam',
+    nameAr: 'صدمة',
     desc: 'Instant downbeat cut directly on the beat with zero overlapping clutter',
+    descAr: 'قطع فوري ودقيق على ضربة الإيقاع بدون أي تداخل صوتي',
     icon: Music2,
     badge: 'Downbeat Cut',
+    badgeAr: 'قطع على الإيقاع',
     color: '#ef4444',
   },
   {
     id: 'fade',
     name: 'Fade',
+    nameAr: 'تلاشي',
     desc: 'Classic equal-power crossfade preserving constant acoustic loudness',
+    descAr: 'تلاشي كلاسيكي متساوي القدرة للحفاظ على استقرار مستوى الصوت',
     icon: Volume2,
     badge: 'Equal-Power',
+    badgeAr: 'قوة متساوية',
     color: '#3b82f6',
   },
 ];
@@ -313,6 +335,7 @@ export default function MiniMixerModal({
   transition,
   onSaveTransition,
 }) {
+  const { t, isRTL } = useTranslation();
   const trackA = fromTrack;
   const trackB = toTrack;
 
@@ -730,9 +753,9 @@ export default function MiniMixerModal({
               </View>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.sheetTitle}>Edit Transition</Text>
+                  <Text style={styles.sheetTitle}>{isRTL ? 'تعديل الانتقال الصوتي' : 'Edit Transition'}</Text>
                   <View style={styles.rivoBadge}>
-                    <Text style={styles.rivoBadgeText}>Rivo Automix</Text>
+                    <Text style={styles.rivoBadgeText}>{isRTL ? 'مكس تلقائي (Automix)' : 'Rivo Automix'}</Text>
                   </View>
                 </View>
                 <Text style={styles.sheetSubtitle} numberOfLines={1}>
@@ -751,11 +774,11 @@ export default function MiniMixerModal({
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Layers size={14} color="#10b981" />
-                  <Text style={styles.sectionTitle}>WAVEFORM CUE POINTS & ZONE RESIZING</Text>
+                  <Text style={styles.sectionTitle}>{isRTL ? 'نقاط الانتقال ومناطق التداخل بالويف فورم' : 'WAVEFORM CUE POINTS & ZONE RESIZING'}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <MoveHorizontal size={11} color="#10b981" />
-                  <Text style={styles.sectionHint}>Drag waveform to set cues</Text>
+                  <Text style={styles.sectionHint}>{isRTL ? 'اسحب الويف فورم لضبط نقطة الانتقال' : 'Drag waveform to set cues'}</Text>
                 </View>
               </View>
 
@@ -765,7 +788,7 @@ export default function MiniMixerModal({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={[styles.deckDot, { backgroundColor: '#ef4444' }]} />
                     <Text style={styles.deckName} numberOfLines={1}>
-                      Deck A: {trackA?.title}
+                      {isRTL ? 'المقطع أ:' : 'Deck A:'} {trackA?.title}
                     </Text>
                     <View style={[styles.camelotPill, { backgroundColor: fromColor.bg, borderColor: fromColor.border }]}>
                       <Text style={[styles.camelotText, { color: fromColor.text }]}>{dataA.key}</Text>
@@ -789,13 +812,13 @@ export default function MiniMixerModal({
                         <Play size={10} color="#f87171" fill="#f87171" />
                       )}
                       <Text style={[styles.soloBtnText, soloPlayingDeck === 'A' && styles.soloBtnTextActive]}>
-                        {soloPlayingDeck === 'A' ? 'Stop' : 'Preview Mix-Out'}
+                        {soloPlayingDeck === 'A' ? (isRTL ? 'إيقاف' : 'Stop') : (isRTL ? 'معاينة الخروج' : 'Preview Mix-Out')}
                       </Text>
                     </TouchableOpacity>
 
                     {/* Mix-Out Steppers */}
                     <View style={styles.stepperBox}>
-                      <Text style={styles.stepperPrefix}>Mix-Out:</Text>
+                      <Text style={styles.stepperPrefix}>{isRTL ? 'نقطة الخروج:' : 'Mix-Out:'}</Text>
                       <TouchableOpacity
                         onPress={() => setMixOutPoint(p => Math.max(5, p - 1))}
                         style={styles.stepBtn}
@@ -816,10 +839,10 @@ export default function MiniMixerModal({
                 {/* Subline Timing Info */}
                 <View style={styles.timingSubline}>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#f87171', fontWeight: 'bold' }}>
-                    Mix-Out: {formatTime(mixOutPoint)} / {formatTime(durA)} ({Math.round((mixOutPoint / durA) * 100)}%)
+                    {isRTL ? 'نقطة الخروج' : 'Mix-Out'}: {formatTime(mixOutPoint)} / {formatTime(durA)} ({Math.round((mixOutPoint / durA) * 100)}%)
                   </Text>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#94a3b8' }}>
-                    Remaining: {formatTime(Math.max(0, durA - mixOutPoint))}
+                    {isRTL ? 'المتبقي' : 'Remaining'}: {formatTime(Math.max(0, durA - mixOutPoint))}
                   </Text>
                 </View>
 
@@ -832,7 +855,7 @@ export default function MiniMixerModal({
                   mode="out"
                   onSeek={setMixOutPoint}
                   accentColor="#ef4444"
-                  tagText="Overlap"
+                  tagText={isRTL ? 'تداخل' : 'Overlap'}
                   isPlaying={isPreviewing || soloPlayingDeck === 'A'}
                   cursorProgress={soloPlayingDeck === 'A' ? soloProgress : previewProgress}
                 />
@@ -842,10 +865,14 @@ export default function MiniMixerModal({
                   <View style={styles.sliderCol}>
                     <View style={styles.sliderLabelRow}>
                       <Text style={[styles.sliderLabelText, { color: '#f87171' }]}>
-                        🔊 Volume: {volA}%
+                        {isRTL ? `🔊 مستوى الصوت: ${volA}%` : `🔊 Volume: ${volA}%`}
                       </Text>
                       <Text style={styles.sliderSubText}>
-                        {volA === 100 ? '100% (Default)' : volA > 100 ? `+${volA - 100}% Boost` : `${volA - 100}% Cut`}
+                        {volA === 100
+                          ? (isRTL ? '100% (افتراضي)' : '100% (Default)')
+                          : volA > 100
+                          ? (isRTL ? `+${volA - 100}% تضخيم` : `+${volA - 100}% Boost`)
+                          : (isRTL ? `${volA - 100}% خفض` : `${volA - 100}% Cut`)}
                       </Text>
                     </View>
                     <TouchSlider
@@ -861,10 +888,10 @@ export default function MiniMixerModal({
                   <View style={styles.sliderCol}>
                     <View style={styles.sliderLabelRow}>
                       <Text style={[styles.sliderLabelText, { color: '#f59e0b' }]}>
-                        ⚡ Speed: {speedA.toFixed(2)}x
+                        {isRTL ? `⚡ السرعة: ${speedA.toFixed(2)}x` : `⚡ Speed: ${speedA.toFixed(2)}x`}
                       </Text>
                       <TouchableOpacity onPress={() => setSpeedA(1.0)} activeOpacity={0.7}>
-                        <Text style={styles.resetLink}>Reset (1.0x)</Text>
+                        <Text style={styles.resetLink}>{isRTL ? 'إعادة تعيين (1.0x)' : 'Reset (1.0x)'}</Text>
                       </TouchableOpacity>
                     </View>
                     <TouchSlider
@@ -880,12 +907,12 @@ export default function MiniMixerModal({
 
                 {/* Quick Jumps Deck A */}
                 <View style={styles.quickJumpRow}>
-                  <Text style={styles.quickJumpLabel}>Quick Jump:</Text>
+                  <Text style={styles.quickJumpLabel}>{isRTL ? 'انتقال سريع:' : 'Quick Jump:'}</Text>
                   {[
-                    { label: 'Radio Cut (45%)', p: 0.45 },
-                    { label: 'Chorus 2 (65%)', p: 0.65 },
-                    { label: 'Outro (85%)', p: 0.85 },
-                    { label: 'Full Song (99%)', p: 0.99 },
+                    { label: isRTL ? 'قصة راديو (45%)' : 'Radio Cut (45%)', p: 0.45 },
+                    { label: isRTL ? 'اللازمة 2 (65%)' : 'Chorus 2 (65%)', p: 0.65 },
+                    { label: isRTL ? 'الخاتمة (85%)' : 'Outro (85%)', p: 0.85 },
+                    { label: isRTL ? 'الأغنية كاملة (99%)' : 'Full Song (99%)', p: 0.99 },
                   ].map((qj, idx) => (
                     <TouchableOpacity
                       key={idx}
@@ -905,7 +932,7 @@ export default function MiniMixerModal({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
                     <View style={[styles.deckDot, { backgroundColor: '#10b981' }]} />
                     <Text style={styles.deckName} numberOfLines={1}>
-                      Deck B: {trackB?.title}
+                      {isRTL ? 'المقطع ب:' : 'Deck B:'} {trackB?.title}
                     </Text>
                     <View style={[styles.camelotPill, { backgroundColor: toColor.bg, borderColor: toColor.border }]}>
                       <Text style={[styles.camelotText, { color: toColor.text }]}>{dataB.key}</Text>
@@ -929,13 +956,13 @@ export default function MiniMixerModal({
                         <Play size={10} color="#34d399" fill="#34d399" />
                       )}
                       <Text style={[styles.soloBtnText, soloPlayingDeck === 'B' && styles.soloBtnTextActiveB]}>
-                        {soloPlayingDeck === 'B' ? 'Stop' : 'Preview Mix-In'}
+                        {soloPlayingDeck === 'B' ? (isRTL ? 'إيقاف' : 'Stop') : (isRTL ? 'معاينة الدخول' : 'Preview Mix-In')}
                       </Text>
                     </TouchableOpacity>
 
                     {/* Mix-In Steppers */}
                     <View style={[styles.stepperBox, { borderColor: 'rgba(16,185,129,0.4)' }]}>
-                      <Text style={[styles.stepperPrefix, { color: '#10b981' }]}>Mix-In:</Text>
+                      <Text style={[styles.stepperPrefix, { color: '#10b981' }]}>{isRTL ? 'نقطة الدخول:' : 'Mix-In:'}</Text>
                       <TouchableOpacity
                         onPress={() => setMixInPoint(p => Math.max(0, p - 1))}
                         style={styles.stepBtn}
@@ -956,10 +983,10 @@ export default function MiniMixerModal({
                 {/* Subline Timing Info */}
                 <View style={styles.timingSubline}>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#34d399', fontWeight: 'bold' }}>
-                    Mix-In: {formatTime(mixInPoint)} / {formatTime(durB)} ({Math.round((mixInPoint / durB) * 100)}%)
+                    {isRTL ? 'نقطة الدخول' : 'Mix-In'}: {formatTime(mixInPoint)} / {formatTime(durB)} ({Math.round((mixInPoint / durB) * 100)}%)
                   </Text>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#94a3b8' }}>
-                    Starts exactly at: {formatTime(mixInPoint)} (Skips intro)
+                    {isRTL ? `يبدأ عند: ${formatTime(mixInPoint)} (تخطي المقدمة)` : `Starts exactly at: ${formatTime(mixInPoint)} (Skips intro)`}
                   </Text>
                 </View>
 
@@ -972,7 +999,7 @@ export default function MiniMixerModal({
                   mode="in"
                   onSeek={setMixInPoint}
                   accentColor="#10b981"
-                  tagText="Entry"
+                  tagText={isRTL ? 'دخول' : 'Entry'}
                   isPlaying={isPreviewing || soloPlayingDeck === 'B'}
                   cursorProgress={soloPlayingDeck === 'B' ? soloProgress : previewProgress}
                 />
@@ -982,10 +1009,14 @@ export default function MiniMixerModal({
                   <View style={styles.sliderCol}>
                     <View style={styles.sliderLabelRow}>
                       <Text style={[styles.sliderLabelText, { color: '#34d399' }]}>
-                        🔊 Volume: {volB}%
+                        {isRTL ? `🔊 مستوى الصوت: ${volB}%` : `🔊 Volume: ${volB}%`}
                       </Text>
                       <Text style={styles.sliderSubText}>
-                        {volB === 100 ? '100% (Default)' : volB > 100 ? `+${volB - 100}% Boost` : `${volB - 100}% Cut`}
+                        {volB === 100
+                          ? (isRTL ? '100% (افتراضي)' : '100% (Default)')
+                          : volB > 100
+                          ? (isRTL ? `+${volB - 100}% تضخيم` : `+${volB - 100}% Boost`)
+                          : (isRTL ? `${volB - 100}% خفض` : `${volB - 100}% Cut`)}
                       </Text>
                     </View>
                     <TouchSlider
@@ -1001,7 +1032,7 @@ export default function MiniMixerModal({
                   <View style={styles.sliderCol}>
                     <View style={styles.sliderLabelRow}>
                       <Text style={[styles.sliderLabelText, { color: '#06b6d4' }]}>
-                        ⚡ Speed: {speedB.toFixed(2)}x
+                        {isRTL ? `⚡ السرعة: ${speedB.toFixed(2)}x` : `⚡ Speed: ${speedB.toFixed(2)}x`}
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <TouchableOpacity
@@ -1014,7 +1045,7 @@ export default function MiniMixerModal({
                           style={styles.bpmSyncPill}
                           activeOpacity={0.7}
                         >
-                          <Text style={styles.bpmSyncText}>⚡ Sync ({dataA.bpm})</Text>
+                          <Text style={styles.bpmSyncText}>{isRTL ? `⚡ مزامنة (${dataA.bpm})` : `⚡ Sync (${dataA.bpm})`}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setSpeedB(1.0)} activeOpacity={0.7}>
                           <Text style={styles.resetLink}>1.0x</Text>
@@ -1034,11 +1065,11 @@ export default function MiniMixerModal({
 
                 {/* Quick Jumps Deck B */}
                 <View style={styles.quickJumpRow}>
-                  <Text style={styles.quickJumpLabel}>Quick Jump:</Text>
+                  <Text style={styles.quickJumpLabel}>{isRTL ? 'انتقال سريع:' : 'Quick Jump:'}</Text>
                   {[
-                    { label: 'Start (0:00)', sec: 0 },
-                    { label: 'Skip Intro (+12s)', sec: 12 },
-                    { label: 'Drop Start (+24s)', sec: 24 },
+                    { label: isRTL ? 'البداية (0:00)' : 'Start (0:00)', sec: 0 },
+                    { label: isRTL ? 'تخطي المقدمة (+12ث)' : 'Skip Intro (+12s)', sec: 12 },
+                    { label: isRTL ? 'بداية الإيقاع (+24ث)' : 'Drop Start (+24s)', sec: 24 },
                   ].map((qj, idx) => (
                     <TouchableOpacity
                       key={idx}
@@ -1056,8 +1087,8 @@ export default function MiniMixerModal({
             {/* ── 2. TRANSITION STYLE • RIVO PRESETS (2-COLUMN GRID) ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>TRANSITION STYLE • RIVO PRESETS</Text>
-                <Text style={styles.sectionBadgeText}>{activeStyleObj.badge}</Text>
+                <Text style={styles.sectionTitle}>{isRTL ? 'نمط الانتقال • قوالب ريفو' : 'TRANSITION STYLE • RIVO PRESETS'}</Text>
+                <Text style={styles.sectionBadgeText}>{isRTL ? (activeStyleObj.badgeAr || activeStyleObj.badge) : activeStyleObj.badge}</Text>
               </View>
 
               <View style={styles.styleGrid2Col}>
@@ -1086,12 +1117,12 @@ export default function MiniMixerModal({
                           <Icon size={15} color={isSel ? '#000000' : st.color} />
                         </View>
                         <Text style={[styles.styleName, isSel && { color: '#ffffff', fontWeight: 'bold' }]}>
-                          {st.name}
+                          {isRTL ? (st.nameAr || st.name) : st.name}
                         </Text>
                         {isSel && <Check size={14} color={st.color} strokeWidth={3} style={{ marginLeft: 'auto' }} />}
                       </View>
                       <Text style={styles.styleDesc} numberOfLines={2}>
-                        {st.desc}
+                        {isRTL ? (st.descAr || st.desc) : st.desc}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1102,11 +1133,11 @@ export default function MiniMixerModal({
             {/* ── 3. DURATION & QUANTIZED BARS ── */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>DURATION & QUANTIZED BARS</Text>
+                <Text style={styles.sectionTitle}>{isRTL ? 'المدة والمقاييس الموسيقية' : 'DURATION & QUANTIZED BARS'}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={styles.barsValText}>{bars} Bars</Text>
+                  <Text style={styles.barsValText}>{bars} {isRTL ? 'مقياس' : (bars === 1 ? 'Bar' : 'Bars')}</Text>
                   <Text style={{ color: '#64748b', fontSize: 11 }}>•</Text>
-                  <Text style={styles.durationValText}>{duration}s</Text>
+                  <Text style={styles.durationValText}>{duration}{isRTL ? 'ث' : 's'}</Text>
                 </View>
               </View>
 
@@ -1123,10 +1154,10 @@ export default function MiniMixerModal({
                       activeOpacity={0.7}
                     >
                       <Text style={[styles.barPillText, isSel && styles.barPillTextActive]}>
-                        {numBars} {numBars === 1 ? 'Bar' : 'Bars'}
+                        {numBars} {isRTL ? 'مقياس' : (numBars === 1 ? 'Bar' : 'Bars')}
                       </Text>
                       <Text style={[styles.barPillSub, isSel && styles.barPillSubActive]}>
-                        ~{bSec}s
+                        ~{bSec}{isRTL ? 'ث' : 's'}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -1144,9 +1175,9 @@ export default function MiniMixerModal({
                   trackColor="#10b981"
                 />
                 <View style={styles.sliderSubLabels}>
-                  <Text style={styles.sliderSubLabelText}>Fast Drop (1s)</Text>
-                  <Text style={styles.sliderSubLabelText}>Standard DJ Overlap (4-8s)</Text>
-                  <Text style={styles.sliderSubLabelText}>Max Mix (48s)</Text>
+                  <Text style={styles.sliderSubLabelText}>{isRTL ? 'هبوط سريع (1ث)' : 'Fast Drop (1s)'}</Text>
+                  <Text style={styles.sliderSubLabelText}>{isRTL ? 'تداخل DJ قياسي (4-8ث)' : 'Standard DJ Overlap (4-8s)'}</Text>
+                  <Text style={styles.sliderSubLabelText}>{isRTL ? 'أطول دمج (48ث)' : 'Max Mix (48s)'}</Text>
                 </View>
               </View>
             </View>
@@ -1158,16 +1189,16 @@ export default function MiniMixerModal({
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <View style={[styles.deckDot, { backgroundColor: '#ef4444' }]} />
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontWeight: 'bold', color: '#f87171' }}>
-                    Deck A {liveGainA}%
+                    {isRTL ? 'المقطع أ' : 'Deck A'} {liveGainA}%
                   </Text>
                 </View>
 
                 {/* Bias Buttons */}
                 <View style={styles.biasBtnGroup}>
                   {[
-                    { label: 'Early (30%)', val: 0.30, active: crossoverBias <= 0.35 },
-                    { label: 'Center (50%)', val: 0.50, active: crossoverBias > 0.35 && crossoverBias < 0.65 },
-                    { label: 'Late (70%)', val: 0.70, active: crossoverBias >= 0.65 },
+                    { label: isRTL ? 'مبكر (30%)' : 'Early (30%)', val: 0.30, active: crossoverBias <= 0.35 },
+                    { label: isRTL ? 'وسط (50%)' : 'Center (50%)', val: 0.50, active: crossoverBias > 0.35 && crossoverBias < 0.65 },
+                    { label: isRTL ? 'متأخر (70%)' : 'Late (70%)', val: 0.70, active: crossoverBias >= 0.65 },
                   ].map((b, idx) => (
                     <TouchableOpacity
                       key={idx}
@@ -1185,7 +1216,7 @@ export default function MiniMixerModal({
                 {/* Track B Meter */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', fontWeight: 'bold', color: '#34d399' }}>
-                    {liveGainB}% Deck B
+                    {liveGainB}% {isRTL ? 'المقطع ب' : 'Deck B'}
                   </Text>
                   <View style={[styles.deckDot, { backgroundColor: '#10b981' }]} />
                 </View>
@@ -1253,14 +1284,14 @@ export default function MiniMixerModal({
               <View style={{ marginTop: 6 }}>
                 <View style={styles.sliderLabelRow}>
                   <Text style={{ fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: '#10b981', fontWeight: 'bold' }}>
-                    Crossover Point: {Math.round(crossoverBias * 100)}%
+                    {isRTL ? 'نقطة التقاطع:' : 'Crossover Point:'} {Math.round(crossoverBias * 100)}%
                   </Text>
                   <Text style={styles.sliderSubText}>
                     {crossoverBias <= 0.35
-                      ? 'Track A ducks early'
+                      ? (isRTL ? 'المقطع أ يخفت مبكراً' : 'Track A ducks early')
                       : crossoverBias >= 0.65
-                      ? 'Track A holds energy longer'
-                      : 'Balanced centered crossover'}
+                      ? (isRTL ? 'المقطع أ يحتفظ بطاقته أطول' : 'Track A holds energy longer')
+                      : (isRTL ? 'تقاطع وتوازن متساوي' : 'Balanced centered crossover')}
                   </Text>
                 </View>
                 <TouchSlider
@@ -1291,17 +1322,19 @@ export default function MiniMixerModal({
                 <Play size={14} color="#fff" fill="#fff" />
               )}
               <Text style={styles.auditionBtnText}>
-                {isPreviewing ? 'Stop Audition' : 'Audition Transition'}
+                {isPreviewing
+                  ? (isRTL ? 'إيقاف المعاينة' : 'Stop Audition')
+                  : (isRTL ? 'معاينة الانتقال' : 'Audition Transition')}
               </Text>
             </TouchableOpacity>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <TouchableOpacity onPress={onClose} style={styles.cancelBtn} activeOpacity={0.7}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>{isRTL ? 'إلغاء' : 'Cancel'}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={handleSave} style={styles.saveBtn} activeOpacity={0.8}>
                 <Check size={14} color="#0b1110" strokeWidth={3} />
-                <Text style={styles.saveBtnText}>Save Transition</Text>
+                <Text style={styles.saveBtnText}>{isRTL ? 'حفظ الانتقال' : 'Save Transition'}</Text>
               </TouchableOpacity>
             </View>
           </View>

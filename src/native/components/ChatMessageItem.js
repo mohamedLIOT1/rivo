@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#17a398',
-    letterSpacing: 0.8,
+    letterSpacing: 0,
   },
   jamInviteCode: {
     fontSize: 18,

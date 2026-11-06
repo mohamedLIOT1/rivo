@@ -5,6 +5,8 @@ import {
 } from 'react-native';
 import { Trash2, GripVertical } from 'lucide-react-native';
 import { normalizeCoverUri, DEFAULT_COVER } from '../../utils/coverUtils';
+import { useTranslation } from '../../context/LocalizationContext';
+import { isArabicText } from '../../theme/typography';
 import { colors } from './fullPlayerStyles';
 import { queueStyles as styles } from './fullPlayerQueueStyles';
 
@@ -84,10 +86,30 @@ export const QueueRowItem = React.memo(function QueueRowItem({
           onError={() => setThumbUri(DEFAULT_COVER)}
         />
         <View style={{ flex: 1, marginHorizontal: 12 }}>
-          <Text style={[styles.queueTitle, { color: titleColor }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.queueTitle,
+              { color: titleColor },
+              isArabicText(item?.title) && {
+                letterSpacing: 0,
+                fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+              },
+            ]}
+            numberOfLines={1}
+          >
             {item?.title || 'Unknown Title'}
           </Text>
-          <Text style={[styles.queueArtist, { color: artistColor }]} numberOfLines={1}>
+          <Text
+            style={[
+              styles.queueArtist,
+              { color: artistColor },
+              isArabicText(item?.artist) && {
+                letterSpacing: 0,
+                fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+              },
+            ]}
+            numberOfLines={1}
+          >
             {item?.artist || 'Unknown Artist'}
           </Text>
         </View>
@@ -143,6 +165,14 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
   reorderQueue,
   clearQueue,
 }) {
+  const { t, isRTL } = useTranslation();
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
+
   const [draggingIdx, setDraggingIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
   const draggingIdxRef = useRef(null);
@@ -228,7 +258,7 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
     <View style={{ flex: 1 }}>
       {queue.length > 0 && (
         <View style={styles.queueHeaderRow}>
-          <Text style={[styles.queueHeaderTitle, { color: isDark ? colors.mint : colors.ink }]}>
+          <Text style={[styles.queueHeaderTitle, { color: isDark ? colors.mint : colors.ink }, rtlTextStyle]}>
             UP NEXT ({queue.length})
           </Text>
           <TouchableOpacity
@@ -245,7 +275,7 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.clearQueueBtnText}>CLEAR ALL</Text>
+            <Text style={[styles.clearQueueBtnText, rtlTextStyle]}>{t('queue.clearAll') || 'CLEAR ALL'}</Text>
           </TouchableOpacity>
         </View>
       )}

@@ -6,8 +6,10 @@ import { ChevronDown, MoreVertical } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isArabicText } from '../theme/typography';
 import QuranMushafViewer from './QuranMushafViewer';
 import SleepTimerModal from './SleepTimerModal';
 
@@ -53,6 +55,14 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const { isDark } = useTheme();
+  const { t, isRTL } = useTranslation();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
 
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
@@ -122,8 +132,18 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             <View style={styles.headerPill}>
               <Text style={styles.headerPillText}>RIVO AUDIO</Text>
             </View>
-            <Text style={[styles.headerTitle, { color: textTitle }]} numberOfLines={1}>
-              {currentTrack?.title || 'Now Playing'}
+            <Text
+              style={[
+                styles.headerTitle,
+                { color: textTitle },
+                (isRTL || isArabicText(currentTrack?.title)) && {
+                  letterSpacing: 0,
+                  fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {currentTrack?.title || (isRTL ? 'يتم التشغيل الآن' : 'Now Playing')}
             </Text>
           </View>
 
@@ -142,8 +162,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             onPress={() => setActiveTab('player')}
             style={[styles.tabBtn, activeTab === 'player' && styles.activeTabBtn]}
           >
-            <Text style={[styles.tabText, activeTab === 'player' && styles.activeTabText]}>
-              Now Playing
+            <Text style={[styles.tabText, activeTab === 'player' && styles.activeTabText, rtlTextStyle]}>
+              {isRTL ? 'يتم التشغيل' : 'Now Playing'}
             </Text>
           </TouchableOpacity>
 
@@ -152,8 +172,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
               onPress={() => setActiveTab('lyrics')}
               style={[styles.tabBtn, activeTab === 'lyrics' && styles.activeTabBtn]}
             >
-              <Text style={[styles.tabText, activeTab === 'lyrics' && styles.activeTabText]}>
-                Lyrics
+              <Text style={[styles.tabText, activeTab === 'lyrics' && styles.activeTabText, rtlTextStyle]}>
+                {isRTL ? 'الكلمات' : 'Lyrics'}
               </Text>
             </TouchableOpacity>
           )}
@@ -162,8 +182,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             onPress={() => setActiveTab('queue')}
             style={[styles.tabBtn, activeTab === 'queue' && styles.activeTabBtn]}
           >
-            <Text style={[styles.tabText, activeTab === 'queue' && styles.activeTabText]}>
-              Queue ({queue?.length || 0})
+            <Text style={[styles.tabText, activeTab === 'queue' && styles.activeTabText, rtlTextStyle]}>
+              {isRTL ? `قائمة الانتظار (${queue?.length || 0})` : `Queue (${queue?.length || 0})`}
             </Text>
           </TouchableOpacity>
         </View>
@@ -178,10 +198,10 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
               <View style={styles.deckHeader}>
                 <View style={styles.deckHeaderLeft}>
                   <View style={[styles.pulsingDot, isPlaying && styles.pulsingDotActive]} />
-                  <Text style={styles.deckTitle}>CASSETTE DECK</Text>
+                  <Text style={[styles.deckTitle, rtlTextStyle]}>{isRTL ? 'مشغل الكاسيت' : 'CASSETTE DECK'}</Text>
                 </View>
                 <View style={styles.deckBadge}>
-                  <Text style={styles.deckBadgeText}>DOLBY NR</Text>
+                  <Text style={[styles.deckBadgeText, rtlTextStyle]}>{isRTL ? 'دولبي NR' : 'DOLBY NR'}</Text>
                 </View>
               </View>
 

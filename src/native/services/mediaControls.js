@@ -188,6 +188,7 @@ export const subscribeToMediaActions = (callbackOrHandlers) => {
 };
 
 export const checkNotificationPermission = async () => {
+  if (Platform.OS === 'ios') return true;
   if (RivoMediaControls && typeof RivoMediaControls.checkNotificationPermission === 'function') {
     try {
       const res = await RivoMediaControls.checkNotificationPermission();
@@ -206,6 +207,7 @@ export const checkNotificationPermission = async () => {
 };
 
 export const requestNotificationPermission = async () => {
+  if (Platform.OS === 'ios') return true;
   if (RivoMediaControls && typeof RivoMediaControls.requestNotificationPermission === 'function') {
     try {
       const res = await RivoMediaControls.requestNotificationPermission();

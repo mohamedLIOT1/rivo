@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform } from 'react
 import { X, Moon, Clock, Ban, CheckCircle } from 'lucide-react-native';
 import { useSleepTimer } from '../context/SleepTimerContext';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 
@@ -15,6 +16,7 @@ const OPTIONS = [
 ];
 
 export default function SleepTimerModal({ visible, onClose }) {
+  const { isRTL } = useTranslation();
   const sleepTimer = useSleepTimer();
   const audioPlayer = useAudioPlayer();
 
@@ -31,6 +33,14 @@ export default function SleepTimerModal({ visible, onClose }) {
     const secs = seconds % 60;
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
+
+  const timerOptions = [
+    { label: isRTL ? '١٥ دقيقة' : '15 Minutes', minutes: 15 },
+    { label: isRTL ? '٣٠ دقيقة' : '30 Minutes', minutes: 30 },
+    { label: isRTL ? '٤٥ دقيقة' : '45 Minutes', minutes: 45 },
+    { label: isRTL ? '٦٠ دقيقة' : '60 Minutes', minutes: 60 },
+    { label: isRTL ? 'نهاية المقطع الحالي' : 'End of Current Track', minutes: 'end_of_track' },
+  ];
 
   if (!visible) return null;
 
@@ -52,8 +62,10 @@ export default function SleepTimerModal({ visible, onClose }) {
                   <Moon size={18} color={colors.ink} />
                 </View>
                 <View>
-                  <Text style={styles.title}>SLEEP TIMER</Text>
-                  <CassetteTag label="AUTO-SUSPEND DECK" bg={colors.ink} textColor={colors.sky} />
+                  <Text style={[styles.title, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }]}>
+                    {isRTL ? 'مؤقت النوم' : 'SLEEP TIMER'}
+                  </Text>
+                  <CassetteTag label={isRTL ? 'إيقاف تلقائي' : 'AUTO-SUSPEND DECK'} bg={colors.ink} textColor={colors.sky} />
                 </View>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -65,11 +77,13 @@ export default function SleepTimerModal({ visible, onClose }) {
             {isTimerActive && (
               <View style={styles.activeCard}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.activeLabel}>TIMER CURRENTLY ACTIVE</Text>
-                  <Text style={styles.activeTime}>
+                  <Text style={[styles.activeLabel, isRTL && { letterSpacing: 0 }]}>
+                    {isRTL ? 'المؤقت مفعّل حالياً' : 'TIMER CURRENTLY ACTIVE'}
+                  </Text>
+                  <Text style={[styles.activeTime, isRTL && { letterSpacing: 0 }]}>
                     {sleepTimerMode === 'end_of_track'
-                      ? 'Stopping when current track ends'
-                      : `Auto-stop in ${formatRemaining(sleepTimerRemaining || 0)}`}
+                      ? (isRTL ? 'إيقاف التشغيل عند نهاية المقطع الحالي' : 'Stopping when current track ends')
+                      : (isRTL ? `إيقاف التشغيل خلال ${formatRemaining(sleepTimerRemaining || 0)}` : `Auto-stop in ${formatRemaining(sleepTimerRemaining || 0)}`)}
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -80,14 +94,18 @@ export default function SleepTimerModal({ visible, onClose }) {
                   }}
                 >
                   <Ban size={14} color={colors.cardBg} />
-                  <Text style={styles.cancelBtnText}>CANCEL</Text>
+                  <Text style={[styles.cancelBtnText, isRTL && { letterSpacing: 0 }]}>
+                    {isRTL ? 'إلغاء' : 'CANCEL'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            <Text style={styles.subText}>Suspend playback after:</Text>
+            <Text style={[styles.subText, isRTL && { letterSpacing: 0 }]}>
+              {isRTL ? 'إيقاف التشغيل بعد:' : 'Suspend playback after:'}
+            </Text>
             <View style={styles.optionsList}>
-              {OPTIONS.map((opt) => (
+              {timerOptions.map((opt) => (
                 <TouchableOpacity
                   key={String(opt.minutes)}
                   style={styles.optionBtn}
@@ -98,7 +116,9 @@ export default function SleepTimerModal({ visible, onClose }) {
                   activeOpacity={0.8}
                 >
                   <Clock size={16} color={colors.ink} />
-                  <Text style={styles.optionLabel}>{opt.label}</Text>
+                  <Text style={[styles.optionLabel, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }]}>
+                    {opt.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>

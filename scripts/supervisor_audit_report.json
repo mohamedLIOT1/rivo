@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-11-06T12:17:21.561Z",
+  "totalFilesScanned": 314,
+  "syntaxErrors": [],
+  "brokenImports": [],
+  "contextMemoizationIssues": [],
+  "newLineLimitViolations": [],
+  "audioProgressIsolationPassed": true,
+  "audioProgressChecks": [
+    {
+      "file": "src/native/context/AudioProgressContext.js",
+      "exists": true,
+      "hasProgressHandling": true
+    }
+  ]
+}

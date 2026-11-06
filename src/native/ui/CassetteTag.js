@@ -2,9 +2,15 @@ import React, { memo } from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { colors } from '../theme/colors';
 import { isArabicText } from '../theme/typography';
+import { useTranslation } from '../context/LocalizationContext';
 
 function CassetteTag({ label, bg = colors.deepForest, textColor = colors.tealLight, style }) {
-  const isAr = isArabicText(label);
+  let isRTL = false;
+  try {
+    const translation = useTranslation();
+    isRTL = translation?.isRTL || false;
+  } catch {}
+  const isAr = isArabicText(label) || (isRTL && typeof label === 'string' && /[\u0600-\u06FF]/.test(label));
 
   return (
     <View style={[styles.tag, { backgroundColor: bg }, style]}>
@@ -40,7 +46,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   textArabic: {
-    fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif',
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
     letterSpacing: 0,
     textTransform: 'none',
     lineHeight: 15,

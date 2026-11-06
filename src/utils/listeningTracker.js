@@ -281,8 +281,17 @@ export function getRealTopTrack(tracks = []) {
 /**
  * Formats seconds into human-readable stats (e.g., '18 MIN', '42 SEC', '2H 15M')
  */
-export function formatListeningMinutes(totalSeconds) {
+export function formatListeningMinutes(totalSeconds, isRTL = false) {
   const sec = Math.max(0, Number(totalSeconds) || 0);
+  if (isRTL) {
+    if (sec === 0) return '0 دقيقة';
+    if (sec < 60) return `${sec} ثانية`;
+    const mins = Math.floor(sec / 60);
+    if (mins < 60) return `${mins} دقيقة`;
+    const hours = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return remMins > 0 ? `${hours} س و ${remMins} د` : `${hours} ساعة`;
+  }
   if (sec === 0) return '0 MIN';
   if (sec < 60) return `${sec} SEC`;
   const mins = Math.floor(sec / 60);

@@ -31,7 +31,8 @@ function OfflineScreen() {
   } = useAudioPlayer();
   const { showToast } = useToast();
   const { isDark } = useTheme();
-  const { t } = useTranslation();
+  const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
 
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -243,8 +244,8 @@ function OfflineScreen() {
       return (
         <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
           <Search size={36} color={colors.mint} />
-          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, { marginTop: 8 }]}>{t('offline.noMatchingSongs')}</Text>
-          <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
+          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, { marginTop: 8 }, rtlTextStyle]}>{t('offline.noMatchingSongs')}</Text>
+          <Text style={[styles.emptySub, !isDark && styles.emptySubLight, rtlTextStyle]}>
             {t('offline.noMatchingSub', { query: searchQuery })}
           </Text>
           <TouchableOpacity
@@ -252,7 +253,7 @@ function OfflineScreen() {
             style={[styles.heroActionBtnSec, { marginTop: 12, paddingHorizontal: 16 }]}
             activeOpacity={0.8}
           >
-            <Text style={styles.heroActionTextSec}>{t('offline.clearSearch')}</Text>
+            <Text style={[styles.heroActionTextSec, rtlTextStyle]}>{t('offline.clearSearch')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -260,13 +261,15 @@ function OfflineScreen() {
     if (displayedTracks.length === 0) {
       return (
         <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
-          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
-            {folderTab === 'quran' ? 'No Quran Recitations' : 'No Music Tracks'}
+          <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, rtlTextStyle]}>
+            {folderTab === 'quran'
+              ? (isRTL ? 'لا توجد تلاوات قرآنية محملة' : 'No Quran Recitations')
+              : (isRTL ? 'لا توجد مقاطع موسيقية محملة' : 'No Music Tracks')}
           </Text>
           <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
             {folderTab === 'quran'
-              ? 'No Quran audio files found in offline storage.'
-              : 'No music audio files found in offline storage.'}
+              ? (isRTL ? 'لم يتم العثور على ملفات قرآن في الذاكرة المحلية.' : 'No Quran audio files found in offline storage.')
+              : (isRTL ? 'لم يتم العثور على ملفات موسيقية في الذاكرة المحلية.' : 'No music audio files found in offline storage.')}
           </Text>
         </View>
       );
@@ -280,6 +283,7 @@ function OfflineScreen() {
     folderTab,
     isDark,
     t,
+    isRTL,
   ]);
 
   return (

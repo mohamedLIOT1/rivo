@@ -18,6 +18,7 @@ import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import ChatMessageItem from './ChatMessageItem';
@@ -45,6 +46,7 @@ export default function ChatModal({
   const { currentUser, token } = useUser();
   const { showToast } = useToast();
   const { isDark = true } = useTheme();
+  const { t, isRTL } = useTranslation();
 
   const [activeUser, setActiveUser] = useState(initialTargetUser);
   const [conversations, setConversations] = useState(() => getCachedConversations());
@@ -528,7 +530,7 @@ export default function ChatModal({
                         )}
                       </View>
                       <Text style={[styles.activeUserStatus, isOtherTyping && { color: '#17a398', fontWeight: '800' }]}>
-                        {isOtherTyping ? 'typing...' : (activeUser?.isBot || activeUser?.name === 'Rivo Bot' ? 'SYSTEM BOT' : 'DIRECT MESSAGE')}
+                        {isOtherTyping ? (isRTL ? 'يكتب الآن...' : 'typing...') : (activeUser?.isBot || activeUser?.name === 'Rivo Bot' ? (isRTL ? 'بوت النظام' : 'SYSTEM BOT') : (isRTL ? 'رسالة مباشرة' : 'DIRECT MESSAGE'))}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -550,8 +552,12 @@ export default function ChatModal({
                     <MessageSquare size={16} color="#17a398" strokeWidth={2.5} />
                   </View>
                   <View>
-                    <Text style={[styles.title, !isDark && styles.titleLight]}>DIRECT MESSAGES</Text>
-                    <Text style={[styles.subTitle, !isDark && styles.subTitleLight]}>Chat with followed listeners</Text>
+                    <Text style={[styles.title, !isDark && styles.titleLight]}>
+                      {isRTL ? 'الرسائل المباشرة' : 'DIRECT MESSAGES'}
+                    </Text>
+                    <Text style={[styles.subTitle, !isDark && styles.subTitleLight]}>
+                      {isRTL ? 'تواصل مع المستمعين الذين تتابعهم' : 'Chat with followed listeners'}
+                    </Text>
                   </View>
                 </View>
               )}
@@ -572,8 +578,8 @@ export default function ChatModal({
                 <View style={[styles.searchBar, !isDark && styles.searchBarLight]}>
                   <Search size={15} color={!isDark ? '#0b1110' : '#64748b'} />
                   <TextInput
-                    style={[styles.searchInput, !isDark && styles.searchInputLight]}
-                    placeholder="Search followers / friends..."
+                    style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && { textAlign: 'right' }]}
+                    placeholder={isRTL ? 'ابحث في المتابعين / الأصدقاء...' : 'Search followers / friends...'}
                     placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
                     value={searchQuery}
                     onChangeText={setSearchQuery}
@@ -587,7 +593,7 @@ export default function ChatModal({
                     onPress={() => setActiveTab('chats')}
                   >
                     <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'chats' && styles.tabBtnTextActive]}>
-                      CHATS ({conversations.length})
+                      {isRTL ? `المحادثات (${conversations.length})` : `CHATS (${conversations.length})`}
                     </Text>
                   </TouchableOpacity>
 
@@ -596,7 +602,7 @@ export default function ChatModal({
                     onPress={() => setActiveTab('friends')}
                   >
                     <Text style={[styles.tabBtnText, !isDark && styles.tabBtnTextLight, activeTab === 'friends' && styles.tabBtnTextActive]}>
-                      FOLLOWING ({friends.length})
+                      {isRTL ? `المتابعون (${friends.length})` : `FOLLOWING (${friends.length})`}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -659,9 +665,11 @@ export default function ChatModal({
                     ListEmptyComponent={
                       <View style={styles.emptyBox}>
                         <Users size={32} color={!isDark ? '#a8a29e' : '#334155'} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>No active chats yet</Text>
+                        <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+                          {isRTL ? 'لا توجد محادثات نشطة بعد' : 'No active chats yet'}
+                        </Text>
                         <Text style={styles.emptyText}>
-                          Select someone from Following to begin a direct conversation!
+                          {isRTL ? 'اختر أحد المتابعين لبدء محادثة مباشرة معه!' : 'Select someone from Following to begin a direct conversation!'}
                         </Text>
                       </View>
                     }
@@ -715,9 +723,11 @@ export default function ChatModal({
                     ListEmptyComponent={
                       <View style={styles.emptyBox}>
                         <Users size={32} color={!isDark ? '#a8a29e' : '#334155'} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>Not following anyone yet</Text>
+                        <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+                          {isRTL ? 'لا تتابع أحداً بعد' : 'Not following anyone yet'}
+                        </Text>
                         <Text style={styles.emptyText}>
-                          Follow friends from their profiles or live listening radar!
+                          {isRTL ? 'تابع الأصدقاء من ملفاتهم الشخصية أو من رادار الاستماع المباشر!' : 'Follow friends from their profiles or live listening radar!'}
                         </Text>
                       </View>
                     }
@@ -762,7 +772,7 @@ export default function ChatModal({
                             <View style={[styles.typingDot, { opacity: 0.7 }]} />
                             <View style={[styles.typingDot, { opacity: 0.4 }]} />
                             <Text style={[styles.typingIndicatorText, !isDark && { color: '#0b1110' }]}>
-                              {activeUser.name || 'Friend'} is typing...
+                              {isRTL ? `${activeUser.name || 'الصديق'} يكتب الآن...` : `${activeUser.name || 'Friend'} is typing...`}
                             </Text>
                           </View>
                         </View>
@@ -771,7 +781,7 @@ export default function ChatModal({
                     ListEmptyComponent={
                       <View style={styles.emptyBox}>
                         <Text style={styles.emptyText}>
-                          No messages yet. Say hello to {activeUser.name}!
+                          {isRTL ? `لا توجد رسائل بعد. ألقِ التحية على ${activeUser.name}!` : `No messages yet. Say hello to ${activeUser.name}!`}
                         </Text>
                       </View>
                     }
@@ -791,8 +801,8 @@ export default function ChatModal({
                     </TouchableOpacity>
                   )}
                   <TextInput
-                    style={[styles.textInput, !isDark && styles.textInputLight]}
-                    placeholder={`Message ${activeUser.name}...`}
+                    style={[styles.textInput, !isDark && styles.textInputLight, isRTL && { textAlign: 'right' }]}
+                    placeholder={isRTL ? `اكتب رسالة إلى ${activeUser.name}...` : `Message ${activeUser.name}...`}
                     placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
                     value={inputText}
                     onChangeText={handleInputChange}

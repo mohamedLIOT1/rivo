@@ -1,4 +1,4 @@
-import { usePreferences } from '../context/PreferencesContext';
+import { usePreferences, useTranslation } from '../context/PreferencesContext';
 import { BookOpen } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { 

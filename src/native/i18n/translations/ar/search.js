@@ -1,5 +1,5 @@
 export default {
-  placeholder: 'ابحث عن أغانٍ، فنانين، ألبومات أو مستمعين...',
+  placeholder: 'ابحث عن أغاني، فنانين، ألبومات...',
   exploreSearch: 'استكشاف وبحث',
   onlineSongs: 'متصل بالإنترنت',
   offlineSongs: 'أغاني بدون إنترنت',

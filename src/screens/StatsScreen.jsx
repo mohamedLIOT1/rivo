@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Trophy, Headphones, Flame, UserCheck, Activity, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from '../components/VerifiedBadge';
+import { useTranslation } from '../context/PreferencesContext';
 import { API_BASE_URL } from '../config';
 import {
   getListeningStats,
@@ -10,6 +11,7 @@ import {
 
 export default function StatsScreen({ tracks = [], currentUser, onBack, globalTheme = 'dark' }) {
   const isDark = globalTheme === 'dark';
+  const { isRTL } = useTranslation();
   const [localStats, setLocalStats] = useState(() => getListeningStats());
   const [serverLeaderboard, setServerLeaderboard] = useState([]);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
@@ -64,7 +66,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
     Number(localStats.weeklySeconds) || 0,
     Number(localStats.totalSeconds) || 0
   );
-  const userFormattedTime = formatListeningMinutes(userRealSeconds);
+  const userFormattedTime = formatListeningMinutes(userRealSeconds, isRTL);
   const realTopTrack = useMemo(() => getRealTopTrack(tracks), [tracks, localStats]);
 
   // Merge server leaderboard with live local user stats
@@ -79,7 +81,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
         ((u.name || '').trim().toLowerCase() === curName)
       );
 
-      const topSongTitle = realTopTrack ? `${realTopTrack.title} - ${realTopTrack.artist}` : 'Various Tracks';
+      const topSongTitle = realTopTrack ? `${realTopTrack.title} - ${realTopTrack.artist}` : (isRTL ? 'مقاطع متنوعة' : 'Various Tracks');
 
       if (existingIdx !== -1) {
         // Update existing entry with live maximum seconds
@@ -118,7 +120,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
       ...item,
       rank: idx + 1
     }));
-  }, [serverLeaderboard, currentUser, userRealSeconds, realTopTrack]);
+  }, [serverLeaderboard, currentUser, userRealSeconds, realTopTrack, isRTL]);
 
   // Top listener of the week is rank #1
   const topListener = realLeaderboard.length > 0 ? realLeaderboard[0] : null;
@@ -138,35 +140,37 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
               className={`p-2 rounded-xl brutal-border flex items-center justify-center transition cursor-pointer shrink-0 ${
                 isDark ? 'bg-[#182320] text-zinc-300 hover:text-white border-zinc-700' : 'bg-[#ede5d3] text-black border-black hover:bg-white'
               }`}
-              title="Back"
+              title={isRTL ? 'رجوع' : 'Back'}
             >
-              <ArrowLeft size={18} strokeWidth={2.5} />
+              <ArrowLeft size={18} strokeWidth={2.5} className={isRTL ? 'rotate-180' : ''} />
             </button>
           )}
           <div>
             <div className="flex items-center gap-2">
               <Activity className="text-[#17a398]" size={22} />
               <h1 className={`text-2xl md:text-4xl font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-                LISTENING ACTIVITY & STATS
+                {isRTL ? 'إحصائيات ونشاط الاستماع' : 'LISTENING ACTIVITY & STATS'}
               </h1>
             </div>
-            <p className={`text-xs font-mono mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              Real-time streaming and listening stats verified from actual playback
+            <p className={`text-xs mt-1 ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              {isRTL
+                ? 'إحصائيات الاستماع المباشرة الموثقة من فترات التشغيل الحقيقية على ريفو'
+                : 'Real-time streaming and listening stats verified from actual playback'}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className={`brutal-border px-3 py-1.5 text-xs font-mono font-black flex items-center gap-1.5 ${
+          <div className={`brutal-border px-3 py-1.5 text-xs font-black flex items-center gap-1.5 ${isRTL ? 'font-sans' : 'font-mono'} ${
             isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
           }`}>
             <Flame size={15} className="text-[#dc2626]" />
-            <span>VERIFIED STATS</span>
+            <span>{isRTL ? 'إحصائيات موثقة' : 'VERIFIED STATS'}</span>
           </div>
 
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#082621] text-[#26c4b7] text-[11px] font-mono font-black brutal-border">
             <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse" />
-            <span>LIVE</span>
+            <span>{isRTL ? 'مباشر' : 'LIVE'}</span>
           </div>
         </div>
       </div>
@@ -189,9 +193,9 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                 className="w-18 h-18 brutal-border object-cover bg-[#ede5d3] shrink-0"
               />
               <div className="relative z-10 truncate">
-                <span className="text-[10px] uppercase font-mono font-black text-[#17a398] flex items-center gap-1">
+                <span className={`text-[10px] uppercase font-black text-[#17a398] flex items-center gap-1 ${isRTL ? 'font-sans' : 'font-mono'}`}>
                   <Trophy size={13} />
-                  <span>TOP LISTENER OF THE WEEK</span>
+                  <span>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>
@@ -199,8 +203,8 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                   </h3>
                   <VerifiedBadge userOrName={topListener} size={18} />
                 </div>
-                <p className={`text-xs font-mono mt-1 font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
-                  {formatListeningMinutes(topListener.seconds || topListener.minutes * 60)} STREAMED
+                <p className={`text-xs mt-1 font-bold ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
+                  {formatListeningMinutes(topListener.seconds || topListener.minutes * 60, isRTL)} {isRTL ? 'استماع' : 'STREAMED'}
                 </p>
               </div>
             </>
@@ -212,9 +216,9 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                 className="w-18 h-18 brutal-border object-cover bg-[#ede5d3] shrink-0"
               />
               <div className="relative z-10 truncate">
-                <span className="text-[10px] uppercase font-mono font-black text-[#17a398] flex items-center gap-1">
+                <span className={`text-[10px] uppercase font-black text-[#17a398] flex items-center gap-1 ${isRTL ? 'font-sans' : 'font-mono'}`}>
                   <Trophy size={13} />
-                  <span>TOP LISTENER OF THE WEEK</span>
+                  <span>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>
@@ -222,14 +226,14 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                   </h3>
                   <VerifiedBadge userOrName={currentUser} size={18} />
                 </div>
-                <p className={`text-xs font-mono mt-1 font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
-                  {userRealSeconds > 0 ? `${userFormattedTime} STREAMED` : 'READY TO STREAM'}
+                <p className={`text-xs mt-1 font-bold ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
+                  {userRealSeconds > 0 ? `${userFormattedTime} ${isRTL ? 'استماع' : 'STREAMED'}` : (isRTL ? 'جاهز للاستماع' : 'READY TO STREAM')}
                 </p>
               </div>
             </>
           ) : (
-            <div className={`py-4 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-              NO LISTENING ACTIVITY RECORDED YET. PLAY SONGS TO GENERATE STATS!
+            <div className={`py-4 text-xs ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              {isRTL ? 'لا يوجد نشاط استماع مسجل بعد. شغّل الأغاني لتسجيل إحصائياتك!' : 'NO LISTENING ACTIVITY RECORDED YET. PLAY SONGS TO GENERATE STATS!'}
             </div>
           )}
         </div>
@@ -248,22 +252,22 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                 className="w-18 h-18 brutal-border object-cover bg-white shrink-0"
               />
               <div className="relative z-10 truncate">
-                <span className="text-[10px] uppercase font-mono font-black text-[#f59e0b] flex items-center gap-1">
+                <span className={`text-[10px] uppercase font-black text-[#f59e0b] flex items-center gap-1 ${isRTL ? 'font-sans' : 'font-mono'}`}>
                   <Flame size={13} />
-                  <span>MOST STREAMED TRACK</span>
+                  <span>{isRTL ? 'المقطع الأكثر استماعاً' : 'MOST STREAMED TRACK'}</span>
                 </span>
                 <h3 className="text-xl font-display font-black text-[#fdfbf7] truncate mt-1">
                   {realTopTrack.title}
                 </h3>
-                <p className="text-xs font-mono text-[#ded2bb] mt-1 font-bold">
-                  {realTopTrack.artist} • {realTopTrack.plays || (realTopTrack.seconds >= 15 ? 1 : 0)} PLAYS
-                  {realTopTrack.seconds > 0 && ` (${formatListeningMinutes(realTopTrack.seconds)})`}
+                <p className={`text-xs text-[#ded2bb] mt-1 font-bold ${isRTL ? 'font-sans' : 'font-mono'}`}>
+                  {realTopTrack.artist} • {realTopTrack.plays || (realTopTrack.seconds >= 15 ? 1 : 0)} {isRTL ? 'مرات تشغيل' : 'PLAYS'}
+                  {realTopTrack.seconds > 0 && ` (${formatListeningMinutes(realTopTrack.seconds, isRTL)})`}
                 </p>
               </div>
             </>
           ) : (
-            <div className="py-4 text-[#ded2bb] text-xs font-mono">
-              NO TRACKS STREAMED YET. START LISTENING TO DISCOVER YOUR TOP TRACK!
+            <div className={`py-4 text-[#ded2bb] text-xs ${isRTL ? 'font-sans' : 'font-mono'}`}>
+              {isRTL ? 'لم يتم تشغيل مقاطع بعد. ابدأ الاستماع لاكتشاف مقطعك الأبرز!' : 'NO TRACKS STREAMED YET. START LISTENING TO DISCOVER YOUR TOP TRACK!'}
             </div>
           )}
         </div>
@@ -276,12 +280,12 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
         <div className={`flex items-center justify-between pb-3 mb-4 border-b-2 ${
           isDark ? 'border-zinc-700 text-zinc-300' : 'border-[#0b1110] text-[#082621]'
         }`}>
-          <h3 className="text-lg font-mono font-black uppercase flex items-center gap-2">
+          <h3 className={`text-lg font-black uppercase flex items-center gap-2 ${isRTL ? 'font-sans' : 'font-mono'}`}>
             <UserCheck size={18} className="text-[#17a398]" />
-            <span>LISTENING LEADERBOARD</span>
+            <span>{isRTL ? 'لوحة متصدري الاستماع' : 'LISTENING LEADERBOARD'}</span>
           </h3>
-          <span className={`text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-            WEEKLY REPORT
+          <span className={`text-xs ${isRTL ? 'font-sans font-bold' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
+            {isRTL ? 'تقرير الأسبوع' : 'WEEKLY REPORT'}
           </span>
         </div>
 
@@ -297,7 +301,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                 }`}
               >
                 <div className="flex items-center gap-4 truncate">
-                  <span className={`w-7 text-center font-mono font-black text-sm ${
+                  <span className={`w-7 text-center font-black text-sm font-mono ${
                     user.rank === 1 ? 'text-[#f59e0b]' : isDark ? 'text-zinc-300' : 'text-[#082621]'
                   }`}>
                     #{user.rank}
@@ -316,35 +320,35 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                       </h4>
                       <VerifiedBadge userOrName={user} size={14} />
                       {user.isCurrentUser ? (
-                        <span className="text-[9px] font-mono font-black uppercase px-2 py-0.5 bg-[#17a398] text-[#082621]">
-                          YOU
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 bg-[#17a398] text-[#082621] ${isRTL ? 'font-sans' : 'font-mono'}`}>
+                          {isRTL ? 'أنت' : 'YOU'}
                         </span>
                       ) : (
-                        <span className="text-[9px] font-mono font-black uppercase px-2 py-0.5 bg-[#082621] text-[#26c4b7]">
-                          LISTENER
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 bg-[#082621] text-[#26c4b7] ${isRTL ? 'font-sans' : 'font-mono'}`}>
+                          {isRTL ? 'مستمع' : 'LISTENER'}
                         </span>
                       )}
                     </div>
-                    <p className={`text-xs truncate font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                      TOP SONG: {user.topSong || 'None'}
+                    <p className={`text-xs truncate ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                      {isRTL ? 'أبرز مقطع: ' : 'TOP SONG: '}{user.topSong || (isRTL ? 'لا يوجد' : 'None')}
                     </p>
                   </div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <span className={`text-sm font-mono font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
-                    {formatListeningMinutes(user.seconds || user.minutes * 60)}
+                <div className={`${isRTL ? 'text-left' : 'text-right'} shrink-0`}>
+                  <span className={`text-sm font-black ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                    {formatListeningMinutes(user.seconds || user.minutes * 60, isRTL)}
                   </span>
-                  <p className={`text-[10px] font-mono font-bold uppercase ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-                    THIS WEEK
+                  <p className={`text-[10px] font-bold uppercase ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
+                    {isRTL ? 'هذا الأسبوع' : 'THIS WEEK'}
                   </p>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className={`text-center py-8 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-            NO STREAMING RECORDS DOCUMENTED THIS WEEK.
+          <div className={`text-center py-8 text-xs ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+            {isRTL ? 'لم يتم توثيق أي سجلات استماع هذا الأسبوع.' : 'NO STREAMING RECORDS DOCUMENTED THIS WEEK.'}
           </div>
         )}
       </section>

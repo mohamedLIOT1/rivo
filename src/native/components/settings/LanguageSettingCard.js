@@ -13,6 +13,7 @@ export const LanguageSettingCard = React.memo(function LanguageSettingCard({
   isDark,
 }) {
   const { language, setLanguage, t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const { showToast } = useToast?.() || {};
 
   const handleSelectLanguage = useCallback((newLang) => {
@@ -30,7 +31,7 @@ export const LanguageSettingCard = React.memo(function LanguageSettingCard({
     <View style={[styles.sectionCard, { backgroundColor: cardBg, borderColor }]}>
       <View style={[styles.sectionHeader, { borderBottomColor: borderColor }]}>
         <Globe size={18} color={colors.mint} />
-        <Text style={[styles.sectionTitle, { color: textTitle }]}>
+        <Text style={[styles.sectionTitle, { color: textTitle }, rtlTextStyle]}>
           {t('settings.languageTitle')}
         </Text>
       </View>
@@ -93,11 +94,12 @@ export const LanguageSettingCard = React.memo(function LanguageSettingCard({
                   style={[
                     styles.langLabel,
                     language === 'ar' ? styles.langLabelActive : { color: textTitle },
+                    { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' },
                   ]}
                 >
                   العربية
                 </Text>
-                <Text style={[styles.langSub, { color: textMuted }]}>
+                <Text style={[styles.langSub, { color: textMuted }, { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }]}>
                   RTL • المحاذاة لليمين
                 </Text>
               </View>

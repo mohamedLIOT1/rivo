@@ -8,6 +8,7 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import {
   Activity,
@@ -21,23 +22,26 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
+import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { API_BASE_URL } from '../config';
 
 const { width } = Dimensions.get('window');
 
-function formatSeconds(secs) {
-  if (!secs || secs <= 0) return '0m';
+function formatSeconds(secs, isRTL = false) {
+  if (!secs || secs <= 0) return isRTL ? '٠ د' : '0m';
   const hours = Math.floor(secs / 3600);
   const minutes = Math.floor((secs % 3600) / 60);
   if (hours > 0) {
-    return `${hours}h ${minutes}m`;
+    return isRTL ? `${hours} س ${minutes} د` : `${hours}h ${minutes}m`;
   }
-  return `${minutes}m`;
+  return isRTL ? `${minutes} د` : `${minutes}m`;
 }
 
 function StatsScreen({ onBack }) {
+  const { t, isRTL } = useTranslation();
+  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const { currentUser, token, likedTrackIds = [] } = useUser();
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');
@@ -90,8 +94,8 @@ function StatsScreen({ onBack }) {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>LISTENING STATS</Text>
-          <Text style={styles.headerSub}>REAL-TIME PLATFORM ACTIVITY</Text>
+          <Text style={[styles.headerTitle, rtlTextStyle]}>{isRTL ? 'إحصائيات الاستماع' : 'LISTENING STATS'}</Text>
+          <Text style={[styles.headerSub, rtlTextStyle]}>{isRTL ? 'نشاط المنصة في الوقت الفعلي' : 'REAL-TIME PLATFORM ACTIVITY'}</Text>
         </View>
         <TouchableOpacity
           style={styles.refreshBtn}
@@ -103,7 +107,7 @@ function StatsScreen({ onBack }) {
           ) : (
             <>
               <RefreshCw size={13} color={colors.ink} />
-              <Text style={styles.refreshText}>UPDATE</Text>
+              <Text style={[styles.refreshText, rtlTextStyle]}>{isRTL ? 'تحديث' : 'UPDATE'}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -117,7 +121,7 @@ function StatsScreen({ onBack }) {
             <View style={styles.heroTagRow}>
               <View style={styles.crownTag}>
                 <Crown size={12} color="#082621" strokeWidth={3} />
-                <Text style={styles.crownTagText}>TOP LISTENER OF THE WEEK</Text>
+                <Text style={[styles.crownTagText, rtlTextStyle]}>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</Text>
               </View>
               {currentWeek ? (
                 <Text style={styles.weekText}>{currentWeek}</Text>
@@ -143,11 +147,11 @@ function StatsScreen({ onBack }) {
                   </View>
                 </View>
                 <Text style={styles.heroMinutes}>
-                  {topListener.minutes || Math.floor((topListener.seconds || 0) / 60)} MINUTES LISTENED
+                  {topListener.minutes || Math.floor((topListener.seconds || 0) / 60)} {isRTL ? 'دقيقة استماع' : 'MINUTES LISTENED'}
                 </Text>
                 {topListener.topSong && topListener.topSong !== 'Various Tracks' && (
                   <Text style={styles.heroSong} numberOfLines={1}>
-                    Top song: {topListener.topSong}
+                    {isRTL ? 'المقطع الأكثر استماعاً: ' : 'Top song: '}{topListener.topSong}
                   </Text>
                 )}
               </View>
@@ -163,15 +167,15 @@ function StatsScreen({ onBack }) {
           <View style={styles.cardShadow} />
           <View style={styles.card}>
             <View style={styles.cardTop}>
-              <Text style={styles.statTitle}>WEEKLY TIME</Text>
+              <Text style={[styles.statTitle, rtlTextStyle]}>{isRTL ? 'وقت الأسبوع' : 'WEEKLY TIME'}</Text>
               <View style={[styles.iconBox, { backgroundColor: colors.mint }]}>
                 <Clock size={14} color={colors.ink} />
               </View>
             </View>
             <View style={styles.valueRow}>
-              <Text style={styles.statValue}>{formatSeconds(userWeeklySec)}</Text>
+              <Text style={styles.statValue}>{formatSeconds(userWeeklySec, isRTL)}</Text>
             </View>
-            <Text style={styles.statDesc}>Active listening this week</Text>
+            <Text style={[styles.statDesc, rtlTextStyle]}>{isRTL ? 'وقت الاستماع النشط هذا الأسبوع' : 'Active listening this week'}</Text>
           </View>
         </View>
 
@@ -180,15 +184,15 @@ function StatsScreen({ onBack }) {
           <View style={styles.cardShadow} />
           <View style={styles.card}>
             <View style={styles.cardTop}>
-              <Text style={styles.statTitle}>TOTAL TIME</Text>
+              <Text style={[styles.statTitle, rtlTextStyle]}>{isRTL ? 'إجمالي الوقت' : 'TOTAL TIME'}</Text>
               <View style={[styles.iconBox, { backgroundColor: colors.teal }]}>
                 <Headphones size={14} color={colors.ink} />
               </View>
             </View>
             <View style={styles.valueRow}>
-              <Text style={styles.statValue}>{formatSeconds(userTotalSec)}</Text>
+              <Text style={styles.statValue}>{formatSeconds(userTotalSec, isRTL)}</Text>
             </View>
-            <Text style={styles.statDesc}>All-time listening history</Text>
+            <Text style={[styles.statDesc, rtlTextStyle]}>{isRTL ? 'سجل الاستماع الكلي' : 'All-time listening history'}</Text>
           </View>
         </View>
 
@@ -197,7 +201,7 @@ function StatsScreen({ onBack }) {
           <View style={styles.cardShadow} />
           <View style={styles.card}>
             <View style={styles.cardTop}>
-              <Text style={styles.statTitle}>COMMUNITY RANK</Text>
+              <Text style={[styles.statTitle, rtlTextStyle]}>{isRTL ? 'ترتيبك في المجتمع' : 'COMMUNITY RANK'}</Text>
               <View style={[styles.iconBox, { backgroundColor: '#f59e0b' }]}>
                 <Trophy size={14} color={colors.ink} />
               </View>
@@ -205,7 +209,7 @@ function StatsScreen({ onBack }) {
             <View style={styles.valueRow}>
               <Text style={[styles.statValue, { color: '#f59e0b' }]}>{userRank}</Text>
             </View>
-            <Text style={styles.statDesc}>Position in weekly charts</Text>
+            <Text style={[styles.statDesc, rtlTextStyle]}>{isRTL ? 'ترتيبك في القائمة الأسبوعية' : 'Position in weekly charts'}</Text>
           </View>
         </View>
 
@@ -214,16 +218,16 @@ function StatsScreen({ onBack }) {
           <View style={styles.cardShadow} />
           <View style={styles.card}>
             <View style={styles.cardTop}>
-              <Text style={styles.statTitle}>SAVED TRACKS</Text>
+              <Text style={[styles.statTitle, rtlTextStyle]}>{isRTL ? 'المقاطع المفضلة' : 'SAVED TRACKS'}</Text>
               <View style={[styles.iconBox, { backgroundColor: colors.rust }]}>
                 <Flame size={14} color={colors.ink} />
               </View>
             </View>
             <View style={styles.valueRow}>
               <Text style={styles.statValue}>{likedTrackIds.length}</Text>
-              <Text style={styles.statUnit}>SONGS</Text>
+              <Text style={[styles.statUnit, rtlTextStyle]}>{isRTL ? 'مقطع' : 'SONGS'}</Text>
             </View>
-            <Text style={styles.statDesc}>Locally bookmarked favorites</Text>
+            <Text style={[styles.statDesc, rtlTextStyle]}>{isRTL ? 'المقاطع المحفوظة في مفضلتك' : 'Locally bookmarked favorites'}</Text>
           </View>
         </View>
       </View>
@@ -233,15 +237,17 @@ function StatsScreen({ onBack }) {
         <View style={styles.sectionHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Award size={16} color={colors.mint} />
-            <Text style={styles.sectionTitle}>WEEKLY LEADERBOARD</Text>
+            <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'لوحة المتصدرين الأسبوعية' : 'WEEKLY LEADERBOARD'}</Text>
           </View>
-          <Text style={styles.sectionCount}>{leaderboard.length} LISTENERS</Text>
+          <Text style={[styles.sectionCount, rtlTextStyle]}>{leaderboard.length} {isRTL ? 'مستمع' : 'LISTENERS'}</Text>
         </View>
 
         {leaderboard.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>
-              {isLoading ? 'Loading leaderboard statistics...' : 'No activity recorded yet this week.'}
+              {isLoading
+                ? (isRTL ? 'جاري تحميل إحصائيات المتصدرين...' : 'Loading leaderboard statistics...')
+                : (isRTL ? 'لا يوجد نشاط مسجل هذا الأسبوع بعد.' : 'No activity recorded yet this week.')}
             </Text>
           </View>
         ) : (
@@ -299,18 +305,18 @@ function StatsScreen({ onBack }) {
                       )}
                       {isCurrentUser && (
                         <View style={styles.youBadge}>
-                          <Text style={styles.youBadgeText}>YOU</Text>
+                          <Text style={styles.youBadgeText}>{isRTL ? 'أنت' : 'YOU'}</Text>
                         </View>
                       )}
                     </View>
                     <Text style={styles.listenerSong} numberOfLines={1}>
-                      {item.topSong || 'Listening to Rivo'}
+                      {item.topSong || (isRTL ? 'يستمع إلى ريفو' : 'Listening to Rivo')}
                     </Text>
                   </View>
 
                   <View style={styles.timePill}>
                     <Text style={styles.timePillText}>
-                      {item.minutes || Math.floor((item.seconds || 0) / 60)} MIN
+                      {item.minutes || Math.floor((item.seconds || 0) / 60)} {isRTL ? 'دقيقة' : 'MIN'}
                     </Text>
                   </View>
                 </View>

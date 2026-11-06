@@ -6,196 +6,32 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
   TextInput,
   ActivityIndicator,
   Platform,
 } from 'react-native';
 import {
   Users,
-  Play,
   X,
   Search,
-  Radio,
   RefreshCw,
-  Disc,
 } from 'lucide-react-native';
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
-import { normalizeCoverUri } from '../utils/coverUtils';
 import { useLocalization } from '../context/LocalizationContext';
+import FriendActivityCard from './FriendActivityCard';
 import UserDetailModal from './UserDetailModal';
-
-function formatCompactPillNative(lastActiveAt, isRTL = false) {
-  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'OFFLINE';
-  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'OFFLINE';
-  if (diffSec < 60) return isRTL ? 'الآن' : 'NOW';
-  if (diffSec < 3600) {
-    const mins = Math.max(1, Math.floor(diffSec / 60));
-    return isRTL ? `${mins} د` : `${mins}M`;
-  }
-  if (diffSec < 86400) {
-    const hours = Math.floor(diffSec / 3600);
-    return isRTL ? `${hours} س` : `${hours}H`;
-  }
-  const days = Math.floor(diffSec / 86400);
-  if (days === 1) return isRTL ? 'أمس' : '1D';
-  return isRTL ? `${days} ي` : `${days}D`;
-}
-
-function formatLastSeenSubtitle(lastActiveAt, isRTL = false) {
-  if (!lastActiveAt) return isRTL ? 'غير متصل' : 'Offline';
-  const diffSec = Math.floor((Date.now() - new Date(lastActiveAt).getTime()) / 1000);
-  if (isNaN(diffSec) || diffSec < 0) return isRTL ? 'غير متصل' : 'Offline';
-  if (diffSec < 60) return isRTL ? 'غير متصل • نشط منذ قليل' : 'Offline • Active just now';
-  if (diffSec < 3600) {
-    const mins = Math.max(1, Math.floor(diffSec / 60));
-    return isRTL ? `غير متصل • منذ ${mins} دقيقة` : `Offline • Last seen ${mins}m ago`;
-  }
-  if (diffSec < 86400) {
-    const hours = Math.floor(diffSec / 3600);
-    return isRTL
-      ? (hours === 1 ? 'غير متصل • منذ ساعة' : hours === 2 ? 'غير متصل • منذ ساعتين' : `غير متصل • منذ ${hours} ساعات`)
-      : `Offline • Last seen ${hours}h ago`;
-  }
-  const days = Math.floor(diffSec / 86400);
-  if (isRTL) {
-    if (days === 1) return 'غير متصل • شوهد أمس';
-    if (days === 2) return 'غير متصل • منذ يومين';
-    if (days <= 10) return `غير متصل • منذ ${days} أيام`;
-    return `غير متصل • منذ ${days} يوماً`;
-  }
-  return days === 1 ? 'Offline • Last seen yesterday' : `Offline • Last seen ${days}d ago`;
-}
-
-// Pure memoized card component for peak list performance
-const FriendActivityCard = React.memo(function FriendActivityCard({
-  item,
-  isDark,
-  onOpenProfile,
-  onListenAlong,
-}) {
-  const { isRTL = false } = useLocalization() || {};
-  const rawListening = item.currentListening;
-  const isDummyOffline = Boolean(
-    rawListening?.title?.toLowerCase() === 'offline' ||
-    rawListening?.name?.toLowerCase() === 'offline'
-  );
-  const listening = isDummyOffline ? null : rawListening;
-  const isLive = Boolean(item.isLive && listening);
-
-  return (
-    <View style={[styles.friendCard, !isDark && styles.friendCardLight]}>
-      {/* Avatar and name clickable to open profile */}
-      <TouchableOpacity
-        style={styles.cardMainTouch}
-        onPress={() => onOpenProfile(item)}
-        activeOpacity={0.7}
-      >
-        {/* Avatar */}
-        <View style={styles.avatarWrap}>
-          {item.avatar ? (
-            <Image source={{ uri: normalizeCoverUri(item.avatar) }} style={styles.avatarImg} fadeDuration={0} />
-          ) : (
-            <View style={styles.avatarFallback}>
-              <Text style={styles.avatarLetter}>
-                {item.name ? item.name[0].toUpperCase() : 'U'}
-              </Text>
-            </View>
-          )}
-          {isLive ? (
-            <View style={[styles.onlineDot, { backgroundColor: '#10b981', borderColor: !isDark ? '#f4ede1' : '#0b1110', borderWidth: 2 }]} />
-          ) : item.isOnline ? (
-            <View style={[styles.onlineDot, { backgroundColor: '#34d399' }]} />
-          ) : (
-            <View style={[styles.onlineDot, { backgroundColor: '#64748b' }]} />
-          )}
-        </View>
-
-        {/* Info Column - Expanded to full width */}
-        <View style={styles.infoCol}>
-          {/* Top Row: Name on left, time/status pill cleanly on right */}
-          <View style={styles.nameRow}>
-            <Text style={[styles.friendName, !isDark && styles.friendNameLight]} numberOfLines={1}>
-              {item.name || 'Anonymous Listener'}
-            </Text>
-            {isLive ? (
-              <View style={styles.liveBadge}>
-                <Radio size={10} color="#0b1110" strokeWidth={3} />
-                <Text style={styles.liveBadgeText}>{isRTL ? 'مباشر' : 'LIVE'}</Text>
-              </View>
-            ) : item.isOnline ? (
-              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#1e3a34' : '#d1fae5', borderWidth: 1, borderColor: isDark ? '#065f46' : '#a7f3d0' }]}>
-                <Text style={[styles.liveBadgeText, { color: isDark ? '#34d399' : '#047857' }]}>{isRTL ? 'متصل' : 'ONLINE'}</Text>
-              </View>
-            ) : (
-              <View style={[styles.liveBadge, { backgroundColor: isDark ? '#27272a' : '#e4e4e7', borderWidth: 1, borderColor: isDark ? '#3f3f46' : '#d4d4d8' }]}>
-                <Text style={[styles.liveBadgeText, { color: isDark ? '#d4d4d8' : '#3f3f46' }]}>
-                  {formatCompactPillNative(item.lastActiveAt, isRTL)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Bottom Row: Full width track title & artist */}
-          {isLive && listening ? (
-            <View style={styles.trackInfoRow}>
-              <Disc size={12} color="#26c4b7" strokeWidth={2.4} />
-              <Text style={[styles.trackTitle, { color: '#26c4b7', fontWeight: '700' }]} numberOfLines={1}>
-                {listening.title || 'Playing song'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
-              </Text>
-            </View>
-          ) : listening && item.isOnline ? (
-            <View style={styles.trackInfoRow}>
-              <Disc size={11} color="#f59e0b" strokeWidth={2} />
-              <Text style={[styles.trackTitle, { color: !isDark ? '#b45309' : '#fcd34d' }]} numberOfLines={1}>
-                {listening.title || 'Track'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
-              </Text>
-            </View>
-          ) : listening && !item.isOnline ? (
-            <View style={styles.trackInfoRow}>
-              <Disc size={11} color="#64748b" strokeWidth={1.8} />
-              <Text style={[styles.trackTitle, { color: !isDark ? '#27272a' : '#e4e4e7', fontWeight: '600' }]} numberOfLines={1}>
-                {listening.title || 'Track'}
-                {listening.artist ? ` • ${listening.artist}` : ''}
-              </Text>
-            </View>
-          ) : (
-            <Text style={[styles.idleText, !isDark && styles.idleTextLight]} numberOfLines={1}>
-              {item.isOnline
-                ? (isRTL ? 'متصل • يتصفح الموسيقى' : 'Online • Browsing music')
-                : formatLastSeenSubtitle(item.lastActiveAt, isRTL)}
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-
-      {/* 1-Tap Play Action on the right */}
-      {isLive && listening && (
-        <TouchableOpacity
-          style={styles.listenAlongBtn}
-          onPress={() => onListenAlong(item)}
-          activeOpacity={0.85}
-        >
-          <Play size={11} color="#0b1110" fill="#0b1110" />
-          <Text style={styles.listenAlongText}>{isRTL ? 'استماع' : 'TUNE IN'}</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
-});
+import { styles } from './friendActivityModalStyles';
 
 export default function FriendActivityModal({ visible, onClose, onViewProfile }) {
   const { token, currentUser } = useUser();
   const { playTrack } = useAudioPlayer();
   const { socket } = useSocket();
   const { isDark = true } = useTheme();
+  const { isRTL = false } = useLocalization() || {};
 
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -224,7 +60,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
     return () => clearInterval(interval);
   }, [visible, fetchActivities]);
 
-  // Real-time socket updates for zero latency
+  // Real-time socket updates for zero latency without wiping offline tracks
   useEffect(() => {
     if (!socket || !visible) return;
 
@@ -233,9 +69,23 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
       setActivities((prev) =>
         prev.map((friend) => {
           if (String(friend.id || friend._id) === String(data.userId)) {
+            let nextListening = friend.currentListening;
+            if (data.currentListening !== undefined) {
+              if (data.currentListening && (data.currentListening.title || data.currentListening.name)) {
+                nextListening = data.currentListening;
+              } else if (friend.currentListening) {
+                nextListening = {
+                  ...friend.currentListening,
+                  isPlaying: Boolean(data.currentListening?.isPlaying),
+                };
+              }
+            } else if (data.isOnline === false && nextListening) {
+              nextListening = { ...nextListening, isPlaying: false };
+            }
+
             return {
               ...friend,
-              currentListening: data.currentListening !== undefined ? data.currentListening : friend.currentListening,
+              currentListening: nextListening,
               lastActiveAt: data.lastActiveAt || friend.lastActiveAt,
               isLive: data.isLive !== undefined ? Boolean(data.isLive) : (data.isOnline && friend.isLive),
               isOnline: data.isOnline !== undefined ? Boolean(data.isOnline) : friend.isOnline,
@@ -256,6 +106,9 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
               ...friend,
               isOnline,
               isLive: !isOnline ? false : (data.isLive !== undefined ? Boolean(data.isLive) : friend.isLive),
+              currentListening: friend.currentListening
+                ? { ...friend.currentListening, isPlaying: !isOnline ? false : friend.currentListening.isPlaying }
+                : null,
             };
           }
           return friend;
@@ -342,9 +195,13 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
                 <Users size={18} color="#0b1110" strokeWidth={2.8} />
               </View>
               <View>
-                <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight]}>FRIEND ACTIVITY</Text>
-                <Text style={styles.headerSub}>
-                  {liveCount > 0 ? `${liveCount} LISTENING LIVE` : 'DISCORD & COMMUNITY RADAR'}
+                <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight, isRTL && styles.arabicHeaderTitle]}>
+                  {isRTL ? 'نشاط الأصدقاء' : 'FRIEND ACTIVITY'}
+                </Text>
+                <Text style={[styles.headerSub, isRTL && styles.arabicHeaderSub]}>
+                  {liveCount > 0
+                    ? `${liveCount} ${isRTL ? 'يستمعون الآن' : 'LISTENING LIVE'}`
+                    : (isRTL ? 'رادار الأصدقاء' : 'COMMUNITY RADAR')}
                 </Text>
               </View>
             </View>
@@ -370,8 +227,8 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
           <View style={[styles.searchBox, !isDark && styles.searchBoxLight]}>
             <Search size={15} color={!isDark ? '#0b1110' : '#64748b'} />
             <TextInput
-              style={[styles.searchInput, !isDark && styles.searchInputLight]}
-              placeholder="Search friends or tracks..."
+              style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && styles.arabicSearchInput]}
+              placeholder={isRTL ? 'ابحث عن أصدقاء أو مقاطع...' : 'Search friends or tracks...'}
               placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -387,14 +244,20 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
           {isLoading && activities.length === 0 ? (
             <View style={styles.emptyWrap}>
               <ActivityIndicator size="large" color="#17a398" />
-              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>Scanning friend radar...</Text>
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+                {isRTL ? 'جاري فحص رادار الأصدقاء...' : 'Scanning friend radar...'}
+              </Text>
             </View>
           ) : filtered.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Users size={40} color="#17a398" />
-              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>No activity found</Text>
+              <Users size={36} color="#17a398" />
+              <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight]}>
+                {isRTL ? 'لا يوجد نشاط حالياً' : 'No activity found'}
+              </Text>
               <Text style={[styles.emptyDesc, !isDark && styles.emptyDescLight]}>
-                When your friends or community members play songs on Rivo or Discord, their tracks will appear here live.
+                {isRTL
+                  ? 'عندما يشغل أصدقاؤك مقاطع على ريفو، ستظهر هنا مباشرة.'
+                  : 'When your friends play songs on Rivo, their tracks will appear here live.'}
               </Text>
             </View>
           ) : (
@@ -404,8 +267,8 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
               renderItem={renderFriendItem}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-              maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
+              initialNumToRender={Platform.OS === 'android' ? 6 : 10}
+              maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 8}
               windowSize={Platform.OS === 'android' ? 3 : 5}
               updateCellsBatchingPeriod={50}
               removeClippedSubviews={Platform.OS === 'android'}
@@ -425,278 +288,3 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'flex-end',
-  },
-  container: {
-    backgroundColor: '#0e1715',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1.5,
-    borderColor: '#263330',
-    borderBottomWidth: 0,
-    maxHeight: '85%',
-    minHeight: '55%',
-    paddingBottom: Platform.OS === 'ios' ? 24 : 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1c2825',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: '#17a398',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  headerSub: {
-    color: '#17a398',
-    fontSize: 10,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  refreshBtn: {
-    padding: 6,
-  },
-  closeBtn: {
-    backgroundColor: '#162220',
-    padding: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#263330',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#141d1b',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#263330',
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 10,
-    paddingHorizontal: 12,
-    height: 42,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    color: '#ffffff',
-    fontSize: 13,
-  },
-  listContent: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 24,
-  },
-  friendCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#141d1b',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#263330',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 8,
-  },
-  cardMainTouch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    minWidth: 0,
-  },
-  avatarWrap: {
-    position: 'relative',
-    marginRight: 11,
-    flexShrink: 0,
-  },
-  avatarImg: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-  },
-  avatarFallback: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#17a398',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLetter: {
-    color: '#0b1110',
-    fontWeight: '900',
-    fontSize: 16,
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: -1,
-    right: -1,
-    width: 11,
-    height: 11,
-    borderRadius: 5.5,
-    backgroundColor: '#10b981',
-    borderWidth: 2,
-    borderColor: '#0e1715',
-  },
-  infoCol: {
-    flex: 1,
-    minWidth: 0,
-    justifyContent: 'center',
-    paddingRight: 4,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 3,
-  },
-  friendName: {
-    color: '#ffffff',
-    fontSize: 13.5,
-    fontWeight: '800',
-    flex: 1,
-    minWidth: 0,
-    marginEnd: 8,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#17a398',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    gap: 4,
-    flexShrink: 0,
-  },
-  liveBadgeText: {
-    color: '#0b1110',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  trackInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    flex: 1,
-    minWidth: 0,
-    gap: 5,
-  },
-  trackTitle: {
-    color: '#94a3b8',
-    fontSize: 11.5,
-    flex: 1,
-    minWidth: 0,
-  },
-  idleText: {
-    color: '#64748b',
-    fontSize: 11.5,
-    width: '100%',
-    flex: 1,
-    minWidth: 0,
-  },
-  listenAlongBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#17a398',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    gap: 4,
-    marginLeft: 8,
-    flexShrink: 0,
-  },
-  listenAlongText: {
-    color: '#0b1110',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  emptyWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 30,
-  },
-  emptyTitle: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  emptyDesc: {
-    color: '#94a3b8',
-    fontSize: 12,
-    textAlign: 'center',
-    lineHeight: 17,
-  },
-  // ── Light Theme Adaptations ──
-  containerLight: {
-    backgroundColor: '#f4ede1',
-    borderColor: '#0b1110',
-  },
-  headerLight: {
-    borderBottomColor: '#d6c8b0',
-  },
-  headerTitleLight: {
-    color: '#0b1110',
-  },
-  closeBtnLight: {
-    backgroundColor: '#ede5d3',
-    borderColor: '#0b1110',
-  },
-  searchBoxLight: {
-    backgroundColor: '#fdfbf7',
-    borderColor: '#0b1110',
-  },
-  searchInputLight: {
-    color: '#0b1110',
-  },
-  friendCardLight: {
-    backgroundColor: '#fdfbf7',
-    borderColor: '#0b1110',
-  },
-  friendNameLight: {
-    color: '#0b1110',
-  },
-  idleTextLight: {
-    color: '#57534e',
-  },
-  emptyTitleLight: {
-    color: '#0b1110',
-  },
-  emptyDescLight: {
-    color: '#57534e',
-  },
-});

@@ -46,6 +46,13 @@ export default function AdminScreen() {
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
 
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
+
   const isAdmin = currentUser?.role === 'admin' || currentUser?.email?.includes('admin');
 
   // Active tab: 'tracks' | 'accounts' | 'albums' | 'artists' | 'playlists' | 'analytics'
@@ -460,9 +467,9 @@ export default function AdminScreen() {
         <View style={isRTL && { alignItems: 'flex-end' }}>
           <View style={[{ flexDirection: 'row', alignItems: 'center', gap: 6 }, isRTL && { flexDirection: 'row-reverse' }]}>
             <ShieldCheck size={18} color={isAdmin ? colors.mint : colors.rust} />
-            <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }]}>{t('admin.portalTitle')}</Text>
+            <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>{t('admin.portalTitle')}</Text>
           </View>
-          <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }]}>{t('admin.adminDescription')}</Text>
+          <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }, rtlTextStyle]}>{t('admin.adminDescription')}</Text>
         </View>
 
         <TouchableOpacity
@@ -471,7 +478,7 @@ export default function AdminScreen() {
           activeOpacity={0.8}
         >
           <RefreshCw size={13} color="#082621" />
-          <Text style={styles.refreshText}>{t('admin.refresh') || 'REFRESH'}</Text>
+          <Text style={[styles.refreshText, rtlTextStyle]}>{t('admin.refresh') || 'REFRESH'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -499,7 +506,7 @@ export default function AdminScreen() {
                 activeOpacity={0.8}
               >
                 <Icon size={13} color={active ? '#082621' : '#9ca3af'} />
-                <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive]}>
+                <Text style={[styles.tabBtnText, active && styles.tabBtnTextActive, rtlTextStyle]}>
                   {tab.label}
                 </Text>
                 {tab.count > 0 && (
@@ -546,7 +553,7 @@ export default function AdminScreen() {
                     style={[styles.filterPill, trackFilter === f && styles.filterPillActive]}
                     onPress={() => setTrackFilter(f)}
                   >
-                    <Text style={[styles.filterPillText, trackFilter === f && styles.filterPillTextActive, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.filterPillText, trackFilter === f && styles.filterPillTextActive, rtlTextStyle]}>
                       {label}
                     </Text>
                   </TouchableOpacity>
@@ -564,7 +571,7 @@ export default function AdminScreen() {
                 ) : (
                   <>
                     <Sparkles size={11} color="#082621" strokeWidth={2.5} />
-                    <Text style={[styles.dedupeBtnText, isRTL && { letterSpacing: 0 }]}>
+                    <Text style={[styles.dedupeBtnText, rtlTextStyle]}>
                       {t('admin.deduplicateSongs') || 'DEDUPLICATE'}
                     </Text>
                   </>
