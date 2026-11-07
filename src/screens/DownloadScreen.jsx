@@ -55,7 +55,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
     }
   }, []);
 
-  const winVer = platformVersions?.windows?.version || APP_VERSION;
+  const winVer = platformVersions?.windows?.displayVersion || platformVersions?.windows?.version || APP_VERSION;
   const androidVer = platformVersions?.android?.version || APP_VERSION;
   const iosVer = platformVersions?.ios?.version || APP_VERSION;
 

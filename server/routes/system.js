@@ -45,7 +45,8 @@ const APP_VERSIONS_DATA = {
       notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
     },
     windows: {
-      version: '2.4.1',
+      version: '2.2.5',
+      displayVersion: '2.4.1',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.4.1.exe',
@@ -100,7 +101,8 @@ const BETA_VERSIONS_DATA = {
       notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
     },
     windows: {
-      version: '2.4.1',
+      version: '2.2.5',
+      displayVersion: '2.4.1',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
       directFile: 'Rivo-v2.4.1.exe',
@@ -187,7 +189,8 @@ router.get('/api/app/version', optionalAuth, (req, res) => {
     if (pkg && pkg.version) {
       if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
       if (manifest.platforms && manifest.platforms.windows) {
-        manifest.platforms.windows.version = pkg.version;
+        manifest.platforms.windows.displayVersion = pkg.version;
+        manifest.platforms.windows.version = '2.2.5';
         manifest.platforms.windows.directFile = `Rivo-v${pkg.version}.exe`;
       }
       if (manifest.platforms && manifest.platforms.android) {
