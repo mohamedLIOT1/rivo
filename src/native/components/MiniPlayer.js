@@ -91,7 +91,7 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
                   <Text style={{ color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text>
                 </View>
               )}
-              {Boolean(isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')))) && (
+              {Boolean(!isQuran && isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')) || (queue?._playlistName && String(queue._playlistName).toUpperCase().includes('MIX')))) && (
                 <View style={{ backgroundColor: '#f59e0b', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                   <Text style={{ color: '#0b1110', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>🎛️ MIX</Text>
                 </View>
@@ -107,6 +107,11 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
             ) : (
               <Text style={[styles.artist, !isDark && styles.artistLight]} numberOfLines={1}>
                 {isLive ? 'Holy Quran Radio • 24/7' : (currentTrack.artist || 'Unknown Artist')}
+              </Text>
+            )}
+            {!isQuran && Boolean(isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')) || (queue?._playlistName && String(queue._playlistName).toUpperCase().includes('MIX')))) && (
+              <Text style={styles.mixSubtitle} numberOfLines={1}>
+                🎛️ {queue?._playlistName || queue?.name || currentTrack?.mixName || 'Mix'}
               </Text>
             )}
           </View>
@@ -274,6 +279,13 @@ const styles = StyleSheet.create({
   },
   artistLight: {
     color: '#64748b',
+  },
+  mixSubtitle: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+    color: '#34d399',
+    marginTop: 2,
   },
   connectingText: {
     fontSize: 9.5,

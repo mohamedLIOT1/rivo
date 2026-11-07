@@ -44,7 +44,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useLocalization } from '../context/LocalizationContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
@@ -79,7 +79,7 @@ function ProfileScreen({
   const { downloadedTracks = [], playPlaylist } = useAudioPlayer();
   const { isDark } = useTheme();
   const { showToast } = useToast();
-  const { t, isRTL } = useTranslation();
+  const { t, isRTL } = useLocalization();
 
   const rtlTextStyle = useMemo(() => (
     isRTL ? {
@@ -157,7 +157,7 @@ function ProfileScreen({
   const [socialModal, setSocialModal] = useState({
     isOpen: false,
     type: 'followers',
-    title: 'Followers',
+    title: t('profile.followers'),
     users: [],
     loading: false,
   });
@@ -167,7 +167,7 @@ function ProfileScreen({
     setSocialModal({
       isOpen: true,
       type,
-      title: isFollowers ? 'Followers' : 'Following',
+      title: isFollowers ? t('profile.followers') : t('profile.following'),
       users: [],
       loading: true,
     });
@@ -375,7 +375,7 @@ function ProfileScreen({
       >
         <View style={styles.socialModalCard}>
           <View style={styles.socialModalHeader}>
-            <Text style={styles.socialModalTitle}>{socialModal.title}</Text>
+            <Text style={[styles.socialModalTitle, rtlTextStyle]}>{socialModal.title}</Text>
             <TouchableOpacity onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <X size={18} color="#ffffff" />
             </TouchableOpacity>
@@ -387,7 +387,9 @@ function ProfileScreen({
             </View>
           ) : socialModal.users.length === 0 ? (
             <View style={{ padding: 28, alignItems: 'center' }}>
-              <Text style={{ color: '#94a3b8', fontSize: 12 }}>No {socialModal.title.toLowerCase()} found</Text>
+              <Text style={[{ color: '#94a3b8', fontSize: 12 }, rtlTextStyle]}>
+                {socialModal.type === 'followers' ? t('profile.noFollowers') : t('profile.noFollowing')}
+              </Text>
             </View>
           ) : (
             <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
@@ -423,7 +425,7 @@ function ProfileScreen({
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }, !isDark && styles.containerLight]}>
         <ActivityIndicator size="large" color="#17a398" />
-        <Text style={{ color: '#94a3b8', marginTop: 12, fontFamily: 'monospace', fontSize: 12 }}>Loading Profile...</Text>
+        <Text style={[{ color: '#94a3b8', marginTop: 12, fontFamily: isRTL ? (Platform.OS === 'ios' ? 'System' : 'sans-serif') : 'monospace', fontSize: 12 }, rtlTextStyle]}>{t('profile.loadingProfile')}</Text>
       </View>
     );
   }
@@ -449,8 +451,8 @@ function ProfileScreen({
           }}
           activeOpacity={0.8}
         >
-          <ArrowLeft size={16} color="#17a398" strokeWidth={2.5} />
-          <Text style={styles.backNavText}>BACK TO MY PROFILE</Text>
+          <ArrowLeft size={16} color="#17a398" strokeWidth={2.5} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+          <Text style={[styles.backNavText, rtlTextStyle]}>{t('profile.backToMyProfile')}</Text>
         </TouchableOpacity>
 
         {/* Hero Card for Target User */}
@@ -458,12 +460,14 @@ function ProfileScreen({
           <View style={styles.cardHeaderBar}>
             <View style={styles.statusIndicatorRow}>
               <View style={[styles.pulseDot, { backgroundColor: '#17a398' }]} />
-              <Text style={[styles.statusText, !isDark && styles.statusTextLight]}>
-                USER PROFILE // @{viewingProfile.name || 'USER'}
+              <Text style={[styles.statusText, !isDark && styles.statusTextLight, rtlTextStyle]}>
+                {t('profile.userProfile', { name: viewingProfile.name || 'USER' })}
               </Text>
             </View>
             <View style={styles.memberBadge}>
-              <Text style={styles.memberBadgeText}>{(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'MEMBER'}</Text>
+              <Text style={[styles.memberBadgeText, rtlTextStyle]}>
+                {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? t('profile.systemBot') : t('profile.member')}
+              </Text>
             </View>
           </View>
 
@@ -499,7 +503,7 @@ function ProfileScreen({
 
             <View style={styles.profileInfo}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
+                <Text style={[styles.userName, !isDark && styles.userNameLight, rtlTextStyle]} numberOfLines={1}>
                   {viewingProfile.name || 'User'}
                 </Text>
                 {viewingProfile.isVerified && (
@@ -507,24 +511,24 @@ function ProfileScreen({
                 )}
               </View>
 
-              <Text style={[styles.userEmail, !isDark && styles.userEmailLight]} numberOfLines={1}>
-                {viewingProfile.bio ? viewingProfile.bio : `@${viewingProfile.name || 'user'} • Member`}
+              <Text style={[styles.userEmail, !isDark && styles.userEmailLight, rtlTextStyle]} numberOfLines={1}>
+                {viewingProfile.bio ? viewingProfile.bio : `@${viewingProfile.name || 'user'} • ${t('profile.member')}`}
               </Text>
 
               <View style={styles.profileBadgesRow}>
                 <View style={styles.rolePill}>
-                  <Text style={styles.rolePillText}>
-                    {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? 'SYSTEM BOT' : 'LISTENER'}
+                  <Text style={[styles.rolePillText, rtlTextStyle]}>
+                    {(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') ? t('profile.systemBot') : t('profile.listener')}
                   </Text>
                 </View>
                 <View style={[styles.idPill, !isDark && styles.idPillLight]}>
-                  <Text style={[styles.idPillText, !isDark && styles.idPillTextLight]}>
-                    ID: #{String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase()}
+                  <Text style={[styles.idPillText, !isDark && styles.idPillTextLight, rtlTextStyle]}>
+                    {t('profile.idLabel', { id: String(viewingProfile.id || viewingProfile._id || '').slice(-6).toUpperCase() })}
                   </Text>
                 </View>
                 <View style={[styles.countPill, !isDark && styles.countPillLight]}>
-                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight]}>
-                    {vCrates.length} {vCrates.length === 1 ? 'CRATE' : 'CRATES'}
+                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight, rtlTextStyle]}>
+                    {t('profile.cratesCount', { count: vCrates.length })}
                   </Text>
                 </View>
               </View>
@@ -535,7 +539,7 @@ function ProfileScreen({
           <View style={styles.statsGrid}>
             <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
               <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{vCrates.length}</Text>
-              <Text style={styles.statLabel}>PLAYLISTS</Text>
+              <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.playlists')}</Text>
             </View>
 
             <TouchableOpacity
@@ -544,7 +548,7 @@ function ProfileScreen({
               activeOpacity={0.8}
             >
               <Text style={[styles.statNumber, { color: '#17a398' }]}>{vFollowers}</Text>
-              <Text style={styles.statLabel}>FOLLOWERS</Text>
+              <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.followers')}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -553,7 +557,7 @@ function ProfileScreen({
               activeOpacity={0.8}
             >
               <Text style={[styles.statNumber, { color: '#17a398' }]}>{vFollowing}</Text>
-              <Text style={styles.statLabel}>FOLLOWING</Text>
+              <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.following')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -572,12 +576,12 @@ function ProfileScreen({
                   ) : viewingProfile.isFollowing ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Check size={14} color="#0b1110" strokeWidth={3} />
-                      <Text style={styles.actionFollowBtnText}>FOLLOWING</Text>
+                      <Text style={[styles.actionFollowBtnText, rtlTextStyle]}>{t('profile.followingActive')}</Text>
                     </View>
                   ) : (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <UserPlus size={14} color="#0b1110" strokeWidth={3} />
-                      <Text style={styles.actionFollowBtnText}>FOLLOW</Text>
+                      <Text style={[styles.actionFollowBtnText, rtlTextStyle]}>{t('profile.follow')}</Text>
                     </View>
                   )}
                 </TouchableOpacity>
@@ -594,7 +598,7 @@ function ProfileScreen({
                 activeOpacity={0.8}
               >
                 <MessageSquare size={14} color="#17a398" strokeWidth={2.4} />
-                <Text style={styles.actionMsgBtnText}>MESSAGE</Text>
+                <Text style={[styles.actionMsgBtnText, rtlTextStyle]}>{t('profile.chat')}</Text>
               </TouchableOpacity>
 
               {onOpenJam && !(viewingProfile.isBot || viewingProfile.name === 'Rivo Bot' || viewingProfile.email === 'bot@rivo.app') && (
@@ -608,7 +612,7 @@ function ProfileScreen({
                   activeOpacity={0.8}
                 >
                   <Radio size={14} color="#0b1110" strokeWidth={2.4} />
-                  <Text style={styles.actionJamBtnText}>JAM</Text>
+                  <Text style={[styles.actionJamBtnText, rtlTextStyle]}>{t('profile.jam')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -616,9 +620,9 @@ function ProfileScreen({
 
           {/* Cyber-brutalist Bio Card matching Web & Images 1 & 2 */}
           <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
-            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
-            <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
-              {viewingProfile.bio || 'No bio written yet.'}
+            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight, rtlTextStyle]}>{t('profile.aboutBio')}</Text>
+            <Text style={[styles.bioContent, !isDark && styles.bioContentLight, rtlTextStyle]}>
+              {viewingProfile.bio || t('profile.noBioShort')}
             </Text>
           </View>
         </View>
@@ -627,15 +631,15 @@ function ProfileScreen({
         <View style={styles.sectionHeader}>
           <Disc size={16} color="#17a398" strokeWidth={2.5} />
           <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>
-            PUBLIC PLAYLISTS ({vCrates.length})
+            {t('profile.publicPlaylistsCount', { count: vCrates.length })}
           </Text>
         </View>
 
         {vCrates.length === 0 ? (
           <View style={styles.emptyCard}>
             <Disc size={32} color="#94a3b8" />
-            <Text style={styles.emptyTitle}>No Public Playlists</Text>
-            <Text style={styles.emptySub}>No public playlists published yet.</Text>
+            <Text style={[styles.emptyTitle, rtlTextStyle]}>{t('profile.noPlaylistsCreated')}</Text>
+            <Text style={[styles.emptySub, rtlTextStyle]}>{t('profile.noPlaylistsCreatedSub')}</Text>
           </View>
         ) : (
           <View style={{ gap: 10, marginTop: 10 }}>
@@ -657,8 +661,8 @@ function ProfileScreen({
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.crateItemTitle} numberOfLines={1}>{crate.name}</Text>
-                  <Text style={styles.crateItemSub}>{crate.trackCount || (crate.trackIds || []).length} TRACKS</Text>
+                  <Text style={[styles.crateItemTitle, rtlTextStyle]} numberOfLines={1}>{crate.name}</Text>
+                  <Text style={[styles.crateItemSub, rtlTextStyle]}>{t('profile.songsCount', { count: crate.trackCount || (crate.trackIds || []).length })}</Text>
                 </View>
                 <View style={styles.cratePlayPill}>
                   <Play size={12} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
@@ -705,12 +709,12 @@ function ProfileScreen({
         <View style={styles.cardHeaderBar}>
           <View style={styles.statusIndicatorRow}>
             <View style={[styles.pulseDot, { backgroundColor: currentUser ? '#17a398' : '#f59e0b' }]} />
-            <Text style={[styles.statusText, !isDark && styles.statusTextLight]}>
-              {currentUser ? `@${currentUser.name || 'listener'}` : 'GUEST LISTENER'}
+            <Text style={[styles.statusText, !isDark && styles.statusTextLight, rtlTextStyle]}>
+              {currentUser ? `@${currentUser.name || 'listener'}` : t('profile.guestListener')}
             </Text>
           </View>
           <View style={styles.memberBadge}>
-            <Text style={styles.memberBadgeText}>{currentUser ? 'MEMBER' : 'GUEST'}</Text>
+            <Text style={[styles.memberBadgeText, rtlTextStyle]}>{currentUser ? t('profile.member') : t('profile.guest')}</Text>
           </View>
         </View>
 
@@ -745,7 +749,7 @@ function ProfileScreen({
                 <TextInput
                   value={nameInput}
                   onChangeText={setNameInput}
-                  style={[styles.nameInput, !isDark && styles.nameInputLight]}
+                  style={[styles.nameInput, !isDark && styles.nameInputLight, rtlTextStyle]}
                   autoFocus
                   selectTextOnFocus
                   placeholder="Enter name"
@@ -774,8 +778,8 @@ function ProfileScreen({
               </View>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={[styles.userName, !isDark && styles.userNameLight]} numberOfLines={1}>
-                  {currentUser?.name || 'Guest Listener'}
+                <Text style={[styles.userName, !isDark && styles.userNameLight, rtlTextStyle]} numberOfLines={1}>
+                  {currentUser?.name || t('profile.guestListener')}
                 </Text>
                 {currentUser && (
                   <View style={styles.verifiedBadge}>
@@ -797,23 +801,23 @@ function ProfileScreen({
               </View>
             )}
 
-            <Text style={[styles.userEmail, !isDark && styles.userEmailLight]} numberOfLines={1}>
-              {currentUser?.email || 'Sign in to sync your playlists & Discord presence'}
+            <Text style={[styles.userEmail, !isDark && styles.userEmailLight, rtlTextStyle]} numberOfLines={1}>
+              {currentUser?.email || t('profile.signInToSync')}
             </Text>
 
             <View style={styles.profileBadgesRow}>
               <View style={styles.rolePill}>
-                <Text style={styles.rolePillText}>
-                  {currentUser?.role === 'admin' ? 'ADMIN' : 'LISTENER'}
+                <Text style={[styles.rolePillText, rtlTextStyle]}>
+                  {currentUser?.role === 'admin' ? t('profile.admin') : t('profile.listener')}
                 </Text>
               </View>
               <View style={[styles.idPill, !isDark && styles.idPillLight]}>
-                <Text style={[styles.idPillText, !isDark && styles.idPillTextLight]}>ID: #{shortId}</Text>
+                <Text style={[styles.idPillText, !isDark && styles.idPillTextLight, rtlTextStyle]}>{t('profile.idLabel', { id: shortId })}</Text>
               </View>
               {safeCratesCount > 0 && (
                 <View style={[styles.countPill, !isDark && styles.countPillLight]}>
-                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight]}>
-                    {safeCratesCount} {safeCratesCount === 1 ? 'CRATE' : 'CRATES'}
+                  <Text style={[styles.countPillText, !isDark && styles.countPillTextLight, rtlTextStyle]}>
+                    {t('profile.cratesCount', { count: safeCratesCount })}
                   </Text>
                 </View>
               )}
@@ -825,7 +829,7 @@ function ProfileScreen({
         <View style={styles.statsGrid}>
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight]}>{safeCratesCount}</Text>
-            <Text style={styles.statLabel}>PLAYLISTS</Text>
+            <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.playlists')}</Text>
           </View>
 
           <TouchableOpacity
@@ -834,7 +838,7 @@ function ProfileScreen({
             activeOpacity={0.8}
           >
             <Text style={[styles.statNumber, { color: '#17a398' }]}>{followersCount}</Text>
-            <Text style={styles.statLabel}>FOLLOWERS</Text>
+            <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.followers')}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -843,12 +847,12 @@ function ProfileScreen({
             activeOpacity={0.8}
           >
             <Text style={[styles.statNumber, { color: '#17a398' }]}>{followingCount}</Text>
-            <Text style={styles.statLabel}>FOLLOWING</Text>
+            <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.following')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.statBox, !isDark && styles.statBoxLight]}>
             <Text style={[styles.statNumber, !isDark && styles.statNumberLight, { color: '#ef4444' }]}>{safeLikedCount}</Text>
-            <Text style={styles.statLabel}>LIKED SONGS</Text>
+            <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.likedSongs')}</Text>
           </View>
         </View>
 
@@ -856,7 +860,7 @@ function ProfileScreen({
         {currentUser && (
           <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
             <View style={styles.bioHeaderRow}>
-              <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
+              <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight, rtlTextStyle]}>{t('profile.aboutBio')}</Text>
               {!isEditingBio && (
                 <TouchableOpacity
                   style={styles.bioEditBtn}
@@ -867,7 +871,7 @@ function ProfileScreen({
                   activeOpacity={0.8}
                 >
                   <Edit2 size={11} color="#17a398" strokeWidth={2.2} />
-                  <Text style={styles.bioEditBtnText}>Edit Bio</Text>
+                  <Text style={[styles.bioEditBtnText, rtlTextStyle]}>{t('profile.editBio')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -877,11 +881,11 @@ function ProfileScreen({
                 <TextInput
                   value={bioInput}
                   onChangeText={setBioInput}
-                  placeholder="Write a bio about yourself..."
+                  placeholder={t('profile.bioPlaceholder')}
                   placeholderTextColor="#94a3b8"
                   multiline
                   numberOfLines={3}
-                  style={[styles.bioInput, !isDark && styles.bioInputLight]}
+                  style={[styles.bioInput, !isDark && styles.bioInputLight, rtlTextStyle]}
                   autoFocus
                 />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -894,7 +898,7 @@ function ProfileScreen({
                     {isSavingProfile ? (
                       <ActivityIndicator size="small" color="#0b1110" />
                     ) : (
-                      <Text style={styles.bioSaveBtnText}>SAVE BIO</Text>
+                      <Text style={[styles.bioSaveBtnText, rtlTextStyle]}>{t('profile.saveBioBtn')}</Text>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -905,13 +909,13 @@ function ProfileScreen({
                     }}
                     activeOpacity={0.8}
                   >
-                    <Text style={[styles.bioCancelBtnText, !isDark && styles.bioCancelBtnTextLight]}>CANCEL</Text>
+                    <Text style={[styles.bioCancelBtnText, !isDark && styles.bioCancelBtnTextLight, rtlTextStyle]}>{t('profile.cancelBtn')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             ) : (
-              <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
-                {currentUser?.bio || 'No bio written yet. Tap "Edit Bio" to add one.'}
+              <Text style={[styles.bioContent, !isDark && styles.bioContentLight, rtlTextStyle]}>
+                {currentUser?.bio || t('profile.noBio')}
               </Text>
             )}
           </View>
@@ -929,12 +933,12 @@ function ProfileScreen({
             <Sparkles size={20} color="#0b1110" strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.guestBannerTitle}>Unlock Full Rivo Experience</Text>
-            <Text style={styles.guestBannerSub}>Sign in to save playlists, follow friends & sync Discord.</Text>
+            <Text style={[styles.guestBannerTitle, rtlTextStyle]}>{t('profile.unlockBannerTitle')}</Text>
+            <Text style={[styles.guestBannerSub, rtlTextStyle]}>{t('profile.guestDesc')}</Text>
           </View>
           <View style={styles.guestBannerBtn}>
             <LogIn size={13} color="#0b1110" strokeWidth={2.8} />
-            <Text style={styles.guestBannerBtnText}>SIGN IN</Text>
+            <Text style={[styles.guestBannerBtnText, rtlTextStyle]}>{t('profile.signInBtn')}</Text>
           </View>
         </TouchableOpacity>
       )}
@@ -950,11 +954,11 @@ function ProfileScreen({
             <Radio size={16} color="#ffffff" strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.discordTitle, !isDark && styles.discordTitleLight]}>DISCORD RICH PRESENCE</Text>
-            <Text style={[styles.discordSub, !isDark && styles.discordSubLight]}>
+            <Text style={[styles.discordTitle, !isDark && styles.discordTitleLight, rtlTextStyle]}>{t('profile.discordTitle')}</Text>
+            <Text style={[styles.discordSub, !isDark && styles.discordSubLight, rtlTextStyle]}>
               {discordStatus?.linked
-                ? (discordStatus.enabled ? `@${discordStatus.username} • Live sync active` : `@${discordStatus.username} • Sync disabled`)
-                : 'Connect Discord account to broadcast tracks'}
+                ? (discordStatus.enabled ? `@${discordStatus.username} • ${t('profile.discordLiveSync')}` : `@${discordStatus.username} • ${t('profile.discordSyncDisabled')}`)
+                : t('profile.discordConnectDesc')}
             </Text>
           </View>
           <View style={[
@@ -967,20 +971,21 @@ function ProfileScreen({
             ]} />
             <Text style={[
               styles.discordPulseText,
-              !(discordStatus?.linked && discordStatus?.enabled) && { color: '#9ca3af' }
+              !(discordStatus?.linked && discordStatus?.enabled) && { color: '#9ca3af' },
+              rtlTextStyle
             ]}>
               {discordStatus?.linked
-                ? (discordStatus.enabled ? 'SYNC ON' : 'SYNC OFF')
-                : 'NOT LINKED'}
+                ? (discordStatus.enabled ? t('profile.discordSyncOn') : t('profile.discordSyncOff'))
+                : t('profile.discordNotLinked')}
             </Text>
           </View>
         </View>
-        <Text style={styles.discordDesc}>
+        <Text style={[styles.discordDesc, rtlTextStyle]}>
           {discordStatus?.linked
             ? (discordStatus.enabled
-                ? 'Songs playing on this device automatically sync to your Discord profile activity.'
-                : 'Discord sync is currently paused. Tap here to open settings and enable.')
-            : 'Tap here to link your Discord account and broadcast live listening activity.'}
+                ? t('profile.discordActiveDesc')
+                : t('profile.discordPausedDesc'))
+            : t('profile.discordLinkDesc')}
         </Text>
       </TouchableOpacity>
 
@@ -991,12 +996,12 @@ function ProfileScreen({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Disc size={16} color="#17a398" strokeWidth={2.5} />
               <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>
-                YOUR PLAYLISTS ({playlists.length})
+                {t('profile.yourPlaylists', { count: playlists.length })}
               </Text>
             </View>
             <View style={[styles.privacyBadge, !isDark && styles.privacyBadgeLight]}>
-              <Text style={[styles.privacyBadgeText, !isDark && styles.privacyBadgeTextLight]}>
-                TAP EYE FOR PUBLIC / PRIVATE
+              <Text style={[styles.privacyBadgeText, !isDark && styles.privacyBadgeTextLight, rtlTextStyle]}>
+                {t('profile.privacyHint')}
               </Text>
             </View>
           </View>
@@ -1024,12 +1029,12 @@ function ProfileScreen({
                       <Disc size={20} color="#17a398" />
                     )}
                   </View>
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight]} numberOfLines={1}>
+                  <View style={{ flex: 1, marginHorizontal: 10 }}>
+                    <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight, rtlTextStyle]} numberOfLines={1}>
                       {pl.name}
                     </Text>
-                    <Text style={[styles.playlistRowCount, !isDark && styles.playlistRowCountLight]}>
-                      {(pl.tracks || pl.trackIds || []).length} SONGS • {isPublic ? 'PUBLIC' : 'PRIVATE'}
+                    <Text style={[styles.playlistRowCount, !isDark && styles.playlistRowCountLight, rtlTextStyle]}>
+                      {t('profile.songsCount', { count: (pl.tracks || pl.trackIds || []).length })} • {isPublic ? t('profile.publicTag') : t('profile.privateTag')}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1080,10 +1085,10 @@ function ProfileScreen({
             <SettingsIcon size={18} color={isDark ? '#94a3b8' : '#475569'} strokeWidth={2.5} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight]}>Settings</Text>
-            <Text style={[styles.actionCardSub, !isDark && styles.actionCardSubLight]}>Audio buffer, theme & account</Text>
+            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight, rtlTextStyle]}>{t('profile.settingsCardTitle')}</Text>
+            <Text style={[styles.actionCardSub, !isDark && styles.actionCardSubLight, rtlTextStyle]}>{t('profile.settingsCardSub')}</Text>
           </View>
-          <ChevronRight size={16} color={isDark ? '#64748b' : '#94a3b8'} />
+          <ChevronRight size={16} color={isDark ? '#64748b' : '#94a3b8'} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
         </TouchableOpacity>
 
         {currentUser ? (
@@ -1092,8 +1097,8 @@ function ProfileScreen({
             onPress={logout}
             activeOpacity={0.85}
           >
-            <LogOut size={16} color="#ef4444" strokeWidth={2.5} />
-            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight, rtlTextStyle]}>{t('auth.logout') || 'LOG OUT'}</Text>
+            <LogOut size={16} color="#ef4444" strokeWidth={2.5} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight, rtlTextStyle]}>{t('profile.logout')}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -1101,8 +1106,8 @@ function ProfileScreen({
             onPress={onOpenAuth}
             activeOpacity={0.85}
           >
-            <LogIn size={16} color="#0b1110" strokeWidth={2.8} />
-            <Text style={[styles.signInBtnText, rtlTextStyle]}>{t('auth.signIn') || 'SIGN IN / REGISTER'}</Text>
+            <LogIn size={16} color="#0b1110" strokeWidth={2.8} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+            <Text style={[styles.signInBtnText, rtlTextStyle]}>{t('profile.signInRegisterBtn')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -1124,7 +1129,7 @@ function ProfileScreen({
         >
           <View style={styles.socialModalCard} onStartShouldSetResponder={() => true}>
             <View style={styles.socialModalHeader}>
-              <Text style={styles.socialModalTitle}>Change Profile Photo</Text>
+              <Text style={[styles.socialModalTitle, rtlTextStyle]}>{t('profile.changeAvatar')}</Text>
               <TouchableOpacity onPress={() => setIsAvatarModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={18} color="#ffffff" />
               </TouchableOpacity>
@@ -1142,21 +1147,21 @@ function ProfileScreen({
                 ) : (
                   <Camera size={16} color="#0b1110" strokeWidth={2.5} />
                 )}
-                <Text style={styles.avatarOptionBtnText}>
-                  {isUploadingAvatar ? 'Uploading Image...' : 'Choose from Device Library'}
+                <Text style={[styles.avatarOptionBtnText, rtlTextStyle]}>
+                  {isUploadingAvatar ? t('profile.uploadingAvatar') : t('profile.chooseFromDevice')}
                 </Text>
               </TouchableOpacity>
 
               <View style={{ alignItems: 'center', marginVertical: 4 }}>
-                <Text style={{ color: '#64748b', fontSize: 11, fontFamily: 'monospace' }}>— OR ENTER DIRECT URL —</Text>
+                <Text style={[{ color: '#64748b', fontSize: 11, fontFamily: isRTL ? (Platform.OS === 'ios' ? 'System' : 'sans-serif') : 'monospace' }, rtlTextStyle]}>{t('profile.orDirectUrl')}</Text>
               </View>
 
               <TextInput
                 value={avatarUrlInput}
                 onChangeText={setAvatarUrlInput}
-                placeholder="https://example.com/avatar.jpg"
+                placeholder={t('profile.photoUrlPlaceholder')}
                 placeholderTextColor="#64748b"
-                style={[styles.nameInput, { width: '100%', height: 42, color: '#f8fafc' }]}
+                style={[styles.nameInput, { width: '100%', height: 42, color: '#f8fafc' }, rtlTextStyle]}
                 autoCapitalize="none"
               />
 
@@ -1167,7 +1172,7 @@ function ProfileScreen({
                 activeOpacity={0.8}
               >
                 <Check size={16} color="#0b1110" strokeWidth={2.8} />
-                <Text style={styles.avatarOptionBtnText}>Set Photo URL</Text>
+                <Text style={[styles.avatarOptionBtnText, rtlTextStyle]}>{t('profile.setPhotoUrl')}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -185,10 +185,10 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       // 1c. Trigger priority isolation on server
       fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`).catch(() => {});
 
-      // 1d. Poll every 1.4s until ready
+      // 1d. Poll every 1.4s until ready (max 6 attempts / ~8.4s before smooth fallback to standard audio)
       let pollAttempts = 0;
       let displayProgress = Math.max(12, statusData?.status === 'failed' ? 12 : (statusData?.progress || 12));
-      while (pollAttempts < 55) {
+      while (pollAttempts < 6) {
         if (signal && signal.aborted) {
           if (typeof onVocalStatus === 'function') onVocalStatus(null);
           return null;

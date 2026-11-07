@@ -192,6 +192,13 @@ function FullPlayerModal({
   const isCurQuran = isQuranContent(currentTrack);
   const isCurRadio = isRadioTrack(currentTrack);
 
+  const isMixPlayerActive = !isCurQuran && Boolean(
+    isMixMode || currentTrack?.isMix || currentTrack?._isMix || currentQueue?._isMix || currentQueue?.isMix ||
+    (currentQueue?.name && String(currentQueue?.name).toUpperCase().includes('MIX')) ||
+    (currentQueue?._playlistName && String(currentQueue?._playlistName).toUpperCase().includes('MIX'))
+  );
+  const mixPlaylistName = currentQueue?._playlistName || currentQueue?.name || selectedPlaylist?.name || currentTrack?.mixName || (isMixPlayerActive ? 'Mix' : '');
+
   // When playing live radio, automatically reset away from lyrics/Ayat tab
   useEffect(() => {
     if (isCurRadio) {
@@ -916,6 +923,15 @@ function FullPlayerModal({
 
   // Play a track from the queue
   const handleQueueTrackClick = (track, queueIdx = null) => {
+    if (!track) return;
+    const curId = String(currentTrack?.id || currentTrack?._id || '');
+    const clickId = String(track.id || track._id || '');
+    if (curId && curId === clickId) {
+      if (!isPlaying && togglePlay) {
+        togglePlay();
+      }
+      return;
+    }
     if (onPlayTrack) {
       onPlayTrack(track, displayQueue, false, queueIdx);
     } else if (playTrack) {
@@ -1065,7 +1081,15 @@ function FullPlayerModal({
           setDraggedQueueIdx(null);
           setDragOverQueueIdx(null);
         }}
-        onClick={() => !isActive && handleQueueTrackClick(track, queueIdx)}
+        onClick={() => {
+          if (isActive) {
+            if (!isPlaying && togglePlay) {
+              togglePlay();
+            }
+          } else {
+            handleQueueTrackClick(track, queueIdx);
+          }
+        }}
         className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all brutal-btn group select-none ${
           isDragging ? 'opacity-35 scale-[0.98]' : ''
         } ${
@@ -1122,6 +1146,11 @@ function FullPlayerModal({
               className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
               linkClassName="hover:underline cursor-pointer"
             />
+          )}
+          {isMixPlayerActive && (
+            <span className="text-[10px] text-emerald-400 font-bold block truncate mt-0.5">
+              🎛️ {mixPlaylistName || 'Mix'}
+            </span>
           )}
         </div>
 
@@ -1602,6 +1631,11 @@ function FullPlayerModal({
                   }`}
                   linkClassName="hover:underline cursor-pointer"
                 />
+              )}
+              {isMixPlayerActive && (
+                <span className="text-[11px] text-emerald-400 font-bold block truncate mt-0.5">
+                  🎛️ {mixPlaylistName || 'Mix'}
+                </span>
               )}
             </div>
 

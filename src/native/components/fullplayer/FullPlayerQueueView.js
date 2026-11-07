@@ -164,6 +164,8 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
   removeFromQueue,
   reorderQueue,
   clearQueue,
+  isPlaying = false,
+  togglePlay,
 }) {
   const { t, isRTL } = useTranslation();
   const rtlTextStyle = useMemo(() => (
@@ -247,12 +249,22 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
         deckBg={deckBg}
         deckBorder={deckBorder}
         isDark={isDark}
-        onPlay={() => playTrack(item, queue)}
+        onPlay={() => {
+          if (isItemPlaying) {
+            if (!isPlaying && togglePlay) {
+              togglePlay();
+            } else if (playTrack) {
+              playTrack(item, queue, false, 0, false, false, true);
+            }
+          } else if (playTrack) {
+            playTrack(item, queue, false, 0, false, false, true);
+          }
+        }}
         onRemove={() => removeFromQueue && removeFromQueue(index)}
         canDrag={queue.length > 1}
       />
     );
-  }, [trackId, draggingIdx, hoverIdx, panResponders, panY, deckBg, deckBorder, isDark, playTrack, queue, removeFromQueue]);
+  }, [trackId, draggingIdx, hoverIdx, panResponders, panY, deckBg, deckBorder, isDark, playTrack, queue, removeFromQueue, isPlaying, togglePlay]);
 
   return (
     <View style={{ flex: 1 }}>

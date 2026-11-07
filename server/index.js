@@ -233,6 +233,27 @@ app.use('/downloads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, '../public/downloads')));
 
+// Transparent fallback for Windows Desktop EXE downloads — NEVER return 404 or text for .exe
+app.use('/downloads', (req, res, next) => {
+  if (req.path.toLowerCase().endsWith('.exe')) {
+    const candidates = [
+      path.join(__dirname, '../public/downloads', path.basename(req.path)),
+      path.join(__dirname, '../public/downloads/Rivo.exe'),
+      path.join(__dirname, '../dist/downloads/Rivo.exe'),
+      path.join('/home/ubuntu/rivo/public/downloads/Rivo.exe'),
+      path.join(__dirname, '../public/downloads/Rivo_Setup.exe')
+    ];
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        res.setHeader('Content-Disposition', 'attachment; filename="Rivo.exe"');
+        res.setHeader('Content-Type', 'application/octet-stream');
+        return res.sendFile(path.resolve(p));
+      }
+    }
+  }
+  next();
+});
+
 // Search API
 app.get(['/api/search', '/api/search/external'], async (req, res) => {
   const q = (req.query.q || '').trim();

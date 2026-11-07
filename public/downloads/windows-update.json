@@ -1,6 +1,7 @@
 {
-  "version": "2.2.7",
-  "pub_date": "2026-10-29T21:00:00Z",
-  "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.2.7.exe",
-  "notes": "Update v2.2.7: MiniPlayer layout fix, discrete navigation pill, and clean search header."
+  "version": "2.4.1",
+  "pub_date": "2026-11-07T20:00:00Z",
+  "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe",
+  "size": 118138495,
+  "notes": "Update v2.4.1: Windows desktop stability improvements, streaming fixes, and auto-update enhancements."
 }

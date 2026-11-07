@@ -17,6 +17,7 @@ export default function ViewingUserProfile({
   onNavigateScreen,
   onSelectPlaylist,
   allUserPlaylists = [],
+  onSavePlaylist,
   handleQuickSave,
   savingPlId,
   t,
@@ -299,11 +300,15 @@ export default function ViewingUserProfile({
                         })()}
                       </p>
                     </div>
-                    {onSavePlaylist && (
+                    {(onSavePlaylist || handleQuickSave) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleQuickSave(pl);
+                          if (handleQuickSave) {
+                            handleQuickSave(pl);
+                          } else if (onSavePlaylist) {
+                            onSavePlaylist(pl);
+                          }
                         }}
                         disabled={isSavingThis}
                         className={`p-1.5 rounded-lg brutal-border flex items-center justify-center transition cursor-pointer shrink-0 ${

@@ -11,6 +11,8 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
   isLiked,
   toggleLikeTrack,
   vocalIsolationStatus,
+  isMixMode = false,
+  mixName,
 }) {
   const { isRTL } = useTranslation();
   const rawGenre = currentTrack?.genre || 'MUSIC';
@@ -90,6 +92,17 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
           >
             {currentTrack?.artist || 'Unknown Artist'}
           </Text>
+          {isMixMode && (
+            <Text
+              style={[
+                styles.songArtist,
+                { color: '#34d399', fontSize: 11, fontWeight: '700', marginTop: 3, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+              ]}
+              numberOfLines={1}
+            >
+              🎛️ {mixName || currentTrack?.mixName || 'Mix'}
+            </Text>
+          )}
         </View>
 
         {/* Heart Button */}

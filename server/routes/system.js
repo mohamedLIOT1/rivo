@@ -40,46 +40,46 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.3.9',
+      version: '2.4.1',
       name: 'Rivo Web',
-      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
     },
     windows: {
-      version: '2.3.9',
+      version: '2.4.1',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.3.9.exe',
+      directFile: 'Rivo-v2.4.1.exe',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.4.1 • إصلاح التحميل المباشر وتحديث واجهة مشغل سطح المكتب واستقرار البث.'
     },
     android: {
-      version: '2.3.9',
-      build: 130,
+      version: '2.4.1',
+      build: 132,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.3.9.apk',
+      directFile: 'Rivo-v2.4.1.apk',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
-      notesEn: 'Update v2.3.9 • Smart Queue, rock-solid audio playback and instant stream recovery.',
+      notes: 'تحديث v2.4.1 • تشغيل تلقائي لقائمة الانتظار وحل التعليق الصوتي ودعم كامل للغة العربية.',
+      notesEn: 'Update v2.4.1 • Instant queue auto-play, zero-stall stream watchdog, and authentic Arabic localization.',
       ota: {
         enabled: true,
-        version: '2.3.9',
+        version: '2.4.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v2.3.9 • أحدث التحسينات والإصلاحات',
-        notesEn: 'Instant OTA update v2.3.9 • Performance improvements and bug fixes.',
-        bundleSize: 2958792,
-        sizeMb: '2.82 MB'
+        notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
+        notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
+        bundleSize: 4889888,
+        sizeMb: '4.66 MB'
       }
     },
     ios: {
-      version: '2.3.9',
-      build: 130,
+      version: '2.4.1',
+      build: 132,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.3.9.ipa',
+      directFile: 'Rivo-v2.4.1.ipa',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
+      notes: 'تحديث v2.4.1 • تحسين أداء تشغيل الصوت وتحديث واجهة رادار الأصدقاء ودعم Hermes v96.'
     }
   }
 };
@@ -95,46 +95,46 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.3.9',
+      version: '2.4.1',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
     },
     windows: {
-      version: '2.3.9',
+      version: '2.4.1',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.3.9.exe',
+      directFile: 'Rivo-v2.4.1.exe',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • أحدث التحسينات والإصلاحات ودعم الاستقرار الكامل.'
+      notes: 'تحديث v2.4.1 • إصلاح التحميل المباشر وتحديث واجهة مشغل سطح المكتب واستقرار البث.'
     },
     android: {
-      version: '2.3.9',
-      build: 130,
+      version: '2.4.1',
+      build: 132,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.3.9.apk',
+      directFile: 'Rivo-v2.4.1.apk',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • دعم Smart Queue وتشغيل صوتي فائق السرعة وخالٍ من الانقطاع.',
-      notesEn: 'Instant OTA update v2.3.9 • Smart Queue, rock-solid audio playback and instant stream recovery.',
+      notes: 'تحديث v2.4.1 • تشغيل تلقائي لقائمة الانتظار وحل التعليق الصوتي ودعم كامل للغة العربية.',
+      notesEn: 'Update v2.4.1 • Instant queue auto-play, zero-stall stream watchdog, and authentic Arabic localization.',
       ota: {
         enabled: true,
-        version: '2.3.9',
+        version: '2.4.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.9.6',
-        notes: 'تحديث هوائي فوري v2.3.9 • أحدث التحسينات والإصلاحات',
-        notesEn: 'Instant OTA update v2.3.9 • Performance improvements and bug fixes.',
-        bundleSize: 2958792,
-        sizeMb: '2.82 MB'
+        notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
+        notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
+        bundleSize: 4889888,
+        sizeMb: '4.66 MB'
       }
     },
     ios: {
-      version: '2.3.9',
-      build: 130,
+      version: '2.4.1',
+      build: 132,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.3.9.ipa',
+      directFile: 'Rivo-v2.4.1.ipa',
       mandatory: false,
-      notes: 'تحديث v2.3.9 • إصلاح تشغيل التطبيق على iOS مع دعم Hermes v96 والتنقل فائق السلاسة.'
+      notes: 'تحديث v2.4.1 • تحسين أداء تشغيل الصوت وتحديث واجهة رادار الأصدقاء ودعم Hermes v96.'
     }
   }
 };
@@ -280,6 +280,47 @@ router.get(['/downloads/ota/:filename', '/api/downloads/ota/:filename'], (req, r
   return res.status(404).json({ error: 'OTA bundle not found' });
 });
 
+// Dedicated handler for Windows Desktop EXE downloads & transparent version fallback
+router.get(['/downloads/Rivo*.exe', '/downloads/Rivo-v*.exe', '/api/downloads/Rivo*.exe', '/api/downloads/Rivo-v*.exe'], (req, res) => {
+  const reqFilename = path.basename(req.path);
+  const candidatePaths = [
+    path.join(__dirname, '../../public/downloads', reqFilename),
+    path.join(__dirname, '../../dist/downloads', reqFilename),
+    path.join('/home/ubuntu/rivo/public/downloads', reqFilename),
+    path.join('/home/ubuntu/dist/downloads', reqFilename)
+  ];
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      res.setHeader('Content-Disposition', `attachment; filename="${reqFilename}"`);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      return res.sendFile(path.resolve(p));
+    }
+  }
+
+  // Fallback transparently to Rivo.exe — NEVER return 404 or text for an .exe request!
+  const fallbackPaths = [
+    path.join(__dirname, '../../public/downloads/Rivo.exe'),
+    path.join(__dirname, '../../dist/downloads/Rivo.exe'),
+    path.join('/home/ubuntu/rivo/public/downloads/Rivo.exe'),
+    path.join('/home/ubuntu/dist/downloads/Rivo.exe'),
+    path.join(__dirname, '../../public/downloads/Rivo_Setup.exe')
+  ];
+
+  for (const fb of fallbackPaths) {
+    if (fs.existsSync(fb)) {
+      res.setHeader('Content-Disposition', 'attachment; filename="Rivo.exe"');
+      res.setHeader('Content-Type', 'application/octet-stream');
+      return res.sendFile(path.resolve(fb));
+    }
+  }
+
+  // Header protection against 404 text download
+  res.setHeader('Content-Disposition', 'attachment; filename="Rivo.exe"');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  return res.redirect('/downloads/Rivo.exe');
+});
+
 // Dynamic download routes
 router.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res) => {
   const filename = path.basename(req.params.filename);
@@ -287,6 +328,21 @@ router.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res
 
   if (fs.existsSync(localFile)) {
     return res.download(localFile, filename);
+  }
+
+  // Fallback for any requested .exe — NEVER return 404 or text for .exe!
+  if (filename.toLowerCase().endsWith('.exe')) {
+    const mainExe = path.join(__dirname, '../../public/downloads/Rivo.exe');
+    const altExe = path.join(__dirname, '../../public/downloads/Rivo_Setup.exe');
+    const target = fs.existsSync(mainExe) ? mainExe : (fs.existsSync(altExe) ? altExe : null);
+    if (target) {
+      res.setHeader('Content-Disposition', 'attachment; filename="Rivo.exe"');
+      res.setHeader('Content-Type', 'application/octet-stream');
+      return res.sendFile(path.resolve(target));
+    }
+    res.setHeader('Content-Disposition', 'attachment; filename="Rivo.exe"');
+    res.setHeader('Content-Type', 'application/octet-stream');
+    return res.redirect('https://rivo-m.duckdns.org/downloads/Rivo.exe');
   }
 
   if (filename.toLowerCase().endsWith('.apk')) {
@@ -299,12 +355,7 @@ router.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res
     if (fs.existsSync(mainIpa)) return res.download(mainIpa, filename);
   }
 
-  if (filename.toLowerCase().endsWith('.exe')) {
-    const mainExe = path.join(__dirname, '../../public/downloads/Rivo_Setup.exe');
-    if (fs.existsSync(mainExe)) return res.download(mainExe, filename);
-  }
-
-  const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa|exe)/i);
+  const vMatch = filename.match(/Rivo-v([0-9.]+)\.(apk|ipa)/i);
   if (vMatch) {
     const requestedVersion = vMatch[1];
     return res.redirect(`https://github.com/mohamedLIOT1/rivo/releases/download/v${requestedVersion}/${filename}`);
@@ -312,7 +363,6 @@ router.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res
 
   if (filename.endsWith('.apk')) return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.apk`);
   if (filename.endsWith('.ipa')) return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo.ipa`);
-  if (filename.endsWith('.exe')) return res.redirect(`https://rivo-m.duckdns.org/downloads/Rivo_Setup.exe`);
 
   return res.status(404).json({ error: 'File not found' });
 });

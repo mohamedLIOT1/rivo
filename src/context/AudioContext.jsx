@@ -186,10 +186,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
       // Kick off priority background isolation on server
       fetch(`${API_BASE_URL}/api/tracks/vocal-stream?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}&duration=${qDur}&json=1&priority=1`, { signal }).catch(() => {});
 
-      // 3. Poll status every 1.5s until ready or cancelled
+      // 3. Poll status every 1.5s until ready or max 9s timeout (fallback to normal stream)
       let pollAttempts = 0;
       let displayProgress = Math.max(8, statusData?.progress || 8);
-      while (!signal?.aborted && pollAttempts < 1200) {
+      const pollStartTime = Date.now();
+      const MAX_VOCAL_POLL_MS = 9000;
+      while (!signal?.aborted && (Date.now() - pollStartTime < MAX_VOCAL_POLL_MS) && pollAttempts < 6) {
         await new Promise(r => setTimeout(r, 1500));
         if (signal?.aborted) break;
 
@@ -363,12 +365,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with 45s timeout for uncached stream extractions)
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with fast 7s timeout and instant fallback)
   let backendStreamResult = null;
   const backendController = new AbortController();
   const backendTimeoutId = setTimeout(() => {
     try { backendController.abort(); } catch {}
-  }, 45000);
+  }, 7000);
 
   const onParentAbort = () => {
     clearTimeout(backendTimeoutId);
@@ -430,12 +432,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     }
   }
 
-  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with 40s timeout)
+  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with fast 7s timeout)
   if (!signal?.aborted) {
     const resolveController = new AbortController();
     const resolveTimeoutId = setTimeout(() => {
       try { resolveController.abort(); } catch {}
-    }, 40000);
+    }, 7000);
     const onResolveParentAbort = () => {
       clearTimeout(resolveTimeoutId);
       try { resolveController.abort(); } catch {}
@@ -539,8 +541,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [activeTransitions, setActiveTransitions] = useState(() => {
     try {
-      localStorage.removeItem('rivo_active_transitions');
-      localStorage.removeItem('liofy_active_transitions');
+      const saved = localStorage.getItem('rivo_active_transitions') || localStorage.getItem('liofy_active_transitions');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
     } catch {}
     return {};
   });
@@ -633,6 +638,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { isMixModeRef.current    = isMixMode;   }, [isMixMode]);
   useEffect(() => { 
     activeTransRef.current = activeTransitions; 
+    try {
+      if (activeTransitions && Object.keys(activeTransitions).length > 0) {
+        localStorage.setItem('rivo_active_transitions', JSON.stringify(activeTransitions));
+      }
+    } catch {}
     if (currentQueueRef.current && activeTransitions) {
       currentQueueRef.current._transitions = {
         ...(currentQueueRef.current._transitions || {}),
@@ -928,10 +938,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const startCrossfade = () => {
           if (!isTransitionRunningRef.current) return;
 
-          // Double check cue-in position
-          if (Math.abs(toDeck.currentTime - inPoint) > 1.5) {
-            try { toDeck.currentTime = inPoint; } catch {}
-          }
+          // Accurately apply mixInPoint cue-in position
+          try { toDeck.currentTime = inPoint; } catch {}
 
           const startTime = performance.now();
           let totalPausedMs = 0;
@@ -1015,15 +1023,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
           transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
         };
 
+        try { toDeck.currentTime = inPoint; } catch {}
         const playPromise = toDeck.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
+            try { toDeck.currentTime = inPoint; } catch {}
             startCrossfade();
           }).catch((e) => {
             console.warn('[RivoMix] Standby play notice:', e);
+            try { toDeck.currentTime = inPoint; } catch {}
             startCrossfade();
           });
         } else {
+          try { toDeck.currentTime = inPoint; } catch {}
           startCrossfade();
         }
       }).catch((err) => {
@@ -1359,15 +1371,43 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isLoadingTrackRef.current = true;
 
         if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
-        // Do NOT abort or wipe deck.src on a short 1.5s timer!
-        // Allow progressive buffering. Only if stalled for over 8 seconds without progress, attempt gentle resume
-        stallRecoveryTimerRef.current = setTimeout(() => {
+        // Stream watchdog: If audio is waiting/buffering for > 5 seconds, auto-refresh stream URL and retry once seamlessly
+        stallRecoveryTimerRef.current = setTimeout(async () => {
           if (!isPlayingRef.current || isChangingTrackRef.current) return;
+          if (deck !== audioRef.current) return;
+          const cur = currentTrackRef.current;
+          if (!cur) return;
+          const curId = String(cur.id || cur._id || '');
+
+          if (!cur._watchdogRetryDone) {
+            cur._watchdogRetryDone = true;
+            console.warn('[AudioContext] Stream buffering >5s, refreshing stream URL for:', cur.title);
+            if (curId) clientStreamCache.delete(curId);
+            const resumePos = deck.currentTime || 0;
+            try {
+              const res = await doResolvePlayableAudioStream(cur, null, false, false);
+              if (res?.url && deck === audioRef.current && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === curId) {
+                const refreshedUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
+                deck.src = refreshedUrl;
+                try { deck.currentTime = resumePos; } catch {}
+                resumeAudioContext();
+                deck.play().catch(() => {});
+                return;
+              }
+            } catch (err) {
+              console.warn('[AudioContext] Watchdog stream refresh failed:', err?.message);
+            }
+          }
+
           if (deck) {
             resumeAudioContext();
-            deck.play().catch(() => {});
+            deck.play().catch(() => {
+              if (playNextTrackRef.current && isContinuousPlaybackRef.current) {
+                playNextTrackRef.current(true);
+              }
+            });
           }
-        }, 8000);
+        }, 5000);
       };
 
       const handleError = () => {
@@ -2314,21 +2354,46 @@ export function AudioProvider({ children, tracks, setTracks }) {
       !isTargetQuran && (
         (newQueue && (newQueue._isMix || newQueue.isMix || (newQueue.name && String(newQueue.name).toUpperCase().includes('MIX')) || (newQueue._transitions && Object.keys(newQueue._transitions).length > 0))) ||
         (trackToPlay && (trackToPlay.isMix || trackToPlay._isMix)) ||
-        (isMixModeRef.current && !isExplicitSingle)
+        (isMixModeRef.current && !isExplicitSingle) ||
+        (resolvedQueue && (resolvedQueue._isMix || resolvedQueue.isMix || (resolvedQueue._transitions && Object.keys(resolvedQueue._transitions).length > 0)))
       )
     );
+
+    // Preserve custom object properties that JavaScript Array methods (slice, filter) strip
+    if (resolvedQueue) {
+      resolvedQueue._transitions = newQueue?._transitions || resolvedQueue._transitions || activeTransRef.current;
+      resolvedQueue._isMix = isMixDetected;
+      resolvedQueue._playlistName = newQueue?._playlistName || newQueue?.name || resolvedQueue._playlistName;
+      if (resolvedQueue._playlistName && !trackToPlay.mixName) {
+        trackToPlay.mixName = resolvedQueue._playlistName;
+      }
+    }
+
     if (isMixDetected) {
       setIsMixMode(true);
       isMixModeRef.current = true;
-      if (newQueue?._transitions) {
+      if (newQueue?._transitions && Object.keys(newQueue._transitions).length > 0) {
         setActiveTransitions(newQueue._transitions);
         activeTransRef.current = newQueue._transitions;
+      } else if (resolvedQueue?._transitions && Object.keys(resolvedQueue._transitions).length > 0) {
+        setActiveTransitions(resolvedQueue._transitions);
+        activeTransRef.current = resolvedQueue._transitions;
       }
     } else {
-      setIsMixMode(false);
-      isMixModeRef.current = false;
-      setActiveTransitions({});
-      activeTransRef.current = {};
+      // Do NOT reset activeTransitions to {} if activeTransRef.current has custom transitions for this playlist or pair!
+      const hasCustomTransitions = Boolean(
+        activeTransRef.current && Object.keys(activeTransRef.current).length > 0
+      );
+      if (!hasCustomTransitions) {
+        setIsMixMode(false);
+        isMixModeRef.current = false;
+        setActiveTransitions({});
+        activeTransRef.current = {};
+      } else {
+        // Retain transitions in state/ref so they are not wiped when playing track alone
+        setIsMixMode(false);
+        isMixModeRef.current = false;
+      }
     }
 
     if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
@@ -3687,6 +3752,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueueIndex(idxA);
     } else {
       const previewQueue = [tA, tB];
+      previewQueue._isMix = true;
+      previewQueue._transitions = nextTrans;
       currentQueueRef.current = previewQueue;
       setCurrentQueue(previewQueue);
       currentQueueIndexRef.current = 0;

@@ -780,6 +780,8 @@ export default function PlaylistScreen({
       }
       fullQueue._isMix = true;
       fullQueue._transitions = transitions;
+      fullQueue._playlistName = playlist?.name;
+      fullQueue.name = playlist?.name;
     } else {
       setIsMixMode?.(false);
       setActiveTransitions?.({});
@@ -809,6 +811,13 @@ export default function PlaylistScreen({
       const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
       const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
       const fullQueue = [...baseQueue, ...extraRecs];
+      fullQueue._isMix = true;
+      fullQueue._transitions = transitions;
+      fullQueue._playlistName = playlist?.name;
+      fullQueue.name = playlist?.name;
+      if (Object.keys(transitions).length > 0) {
+        setActiveTransitions?.(transitions);
+      }
       onSelectTrack(trackToPlay, fullQueue);
     }
     setPendingMixTrack(null);
@@ -1192,6 +1201,8 @@ export default function PlaylistScreen({
               if (isPlaylistMixActive) {
                 shuffled._isMix = true;
                 shuffled._transitions = transitions;
+                shuffled._playlistName = playlist?.name;
+                shuffled.name = playlist?.name;
               } else {
                 shuffled._isMix = false;
                 shuffled._transitions = {};
@@ -1496,6 +1507,11 @@ export default function PlaylistScreen({
                             linkClassName="hover:underline cursor-pointer"
                           />
                         </div>
+                        {(isPlaylistMixActive || playlist?.isMix) && playlist?.name && (
+                          <span className="text-[10px] text-emerald-400 font-bold block mt-0.5 truncate">
+                            🎛️ {playlist.name}
+                          </span>
+                        )}
                       </div>
                     </div>
 

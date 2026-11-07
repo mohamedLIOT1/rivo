@@ -78,7 +78,11 @@ function MiniPlayer({
   const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
   const progressPercent = isScrubbing ? scrubPercent : realPercent;
 
-  const isMixMode = !isQuran && Boolean(audio?.isMixMode && (audio?.currentTrack?.isMix || audio?.currentTrack?._isMix || audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || (audio?.currentQueue?.name && String(audio?.currentQueue?.name).toUpperCase().includes('MIX'))));
+  const isMixMode = !isQuran && Boolean(
+    (audio?.isMixMode && (audio?.currentTrack?.isMix || audio?.currentTrack?._isMix || audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || (audio?.currentQueue?.name && String(audio?.currentQueue?.name).toUpperCase().includes('MIX')) || (audio?.currentQueue?._playlistName && String(audio?.currentQueue?._playlistName).toUpperCase().includes('MIX')))) ||
+    (audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || audio?.currentTrack?.isMix || audio?.currentTrack?._isMix)
+  );
+  const mixPlaylistName = audio?.currentQueue?._playlistName || audio?.currentQueue?.name || audio?.currentTrack?.mixName || (isMixMode ? 'Mix' : '');
   const currentQueue = audio?.currentQueue || [];
   const currentQueueIndex = audio?.currentQueueIndex ?? -1;
   const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0
@@ -311,6 +315,11 @@ function MiniPlayer({
                 }`}
                 linkClassName="hover:underline cursor-pointer"
               />
+              {isMixMode && (
+                <span className="text-[10px] text-emerald-400 font-bold block truncate mt-0.5">
+                  🎛️ {mixPlaylistName || 'Mix'}
+                </span>
+              )}
             </div>
           </div>
 
@@ -395,6 +404,11 @@ function MiniPlayer({
                 }`}
                 linkClassName="hover:underline cursor-pointer"
               />
+              {isMixMode && (
+                <span className="text-[10px] text-emerald-400 font-bold block truncate mt-0.5">
+                  🎛️ {mixPlaylistName || 'Mix'}
+                </span>
+              )}
             </div>
 
             {/* Favorite Heart Button */}

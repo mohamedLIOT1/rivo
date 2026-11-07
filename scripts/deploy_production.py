@@ -160,12 +160,20 @@ def sync_assets_and_metadata():
         ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
         ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
+        ("public/downloads/Rivo-v2.4.1.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.1.apk"),
+        ("public/downloads/Rivo-v2.4.0.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.0.apk"),
+        ("public/downloads/Rivo-v2.3.9.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.9.apk"),
         ("public/downloads/Rivo-v2.3.8.apk", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.apk"),
+        ("public/downloads/Rivo-v2.4.1.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.1.ipa"),
+        ("public/downloads/Rivo-v2.4.0.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.0.ipa"),
         ("public/downloads/Rivo-v2.3.9.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.9.ipa"),
         ("public/downloads/Rivo-v2.3.8.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.8.ipa"),
         ("public/downloads/Rivo-v2.3.7.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.7.ipa"),
         ("public/downloads/Rivo-v2.3.5.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.3.5.ipa"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
+        ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
+        ("public/downloads/Rivo-v2.4.0.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.0.exe"),
+        ("public/downloads/Rivo-v2.4.1.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.1.exe"),
         ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
         ("public/assets/rivo-bot.png", f"{REMOTE_DIR}/public/assets/rivo-bot.png"),
         ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
@@ -174,6 +182,7 @@ def sync_assets_and_metadata():
         p = os.path.join(BASE_DIR, local_rel)
         if os.path.exists(p):
             upload_file(p, remote_path)
+    run_ssh(f"sudo cp -rf {REMOTE_DIR}/public/downloads/* /var/www/html/downloads/ 2>/dev/null || true")
     print("✅ Metadata and bundles synchronized.")
 
 def restart_and_verify():

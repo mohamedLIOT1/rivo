@@ -149,4 +149,16 @@ export const styles = StyleSheet.create({
   emptyDescLight: {
     color: '#57534e',
   },
+  rowReverse: {
+    flexDirection: 'row-reverse',
+  },
+  alignStart: {
+    alignItems: 'flex-start',
+  },
+  alignEnd: {
+    alignItems: 'flex-end',
+  },
+  textRight: {
+    textAlign: 'right',
+  },
 });

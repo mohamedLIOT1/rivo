@@ -69,8 +69,10 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileType: '.EXE',
       fileSize: platformVersions?.windows?.fileSize || '112.7 MB',
       icon: Monitor,
-      downloadUrl: platformVersions?.windows?.downloadUrl || '/downloads/Rivo.exe',
-      directName: `Rivo-v${winVer}.exe`,
+      downloadUrl: '/downloads/Rivo.exe',
+      directFile: platformVersions?.windows?.directFile || `Rivo-v${winVer}.exe`,
+      fallbackUrl: `/downloads/${platformVersions?.windows?.directFile || `Rivo-v${winVer}.exe`}`,
+      directName: 'Rivo.exe',
       highlights: isAr ? [
         'مزامنة فورية لحالة الاستماع مع ديسكورد بدون إضافات',
         'أزرار تحكم مدمجة في شريط المهام وشاشة القفل',
@@ -259,6 +261,16 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
                   <Download className="w-4 h-4" />
                   {isAr ? `تحميل (${app.fileType})` : `DOWNLOAD ${app.fileType}`}
                 </a>
+
+                {app.id === 'windows' && (
+                  <a
+                    href={app.fallbackUrl || `/downloads/Rivo-v${winVer}.exe`}
+                    download={app.directFile || `Rivo-v${winVer}.exe`}
+                    className="w-full mt-2.5 flex items-center justify-center gap-1.5 text-[11px] font-mono text-slate-400 hover:text-[#17a398] transition-colors underline decoration-dotted"
+                  >
+                    {isAr ? `نسخة التثبيت المباشرة (${app.directFile || `Rivo-v${winVer}.exe`})` : `Direct version mirror (${app.directFile || `Rivo-v${winVer}.exe`})`}
+                  </a>
+                )}
 
                 {app.id === 'ios' && (
                   <button

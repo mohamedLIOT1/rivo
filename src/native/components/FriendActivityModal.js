@@ -189,12 +189,12 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
       <View style={styles.backdrop}>
         <View style={[styles.container, !isDark && styles.containerLight]}>
           {/* Header */}
-          <View style={[styles.header, !isDark && styles.headerLight]}>
-            <View style={styles.headerLeft}>
+          <View style={[styles.header, !isDark && styles.headerLight, isRTL && styles.rowReverse]}>
+            <View style={[styles.headerLeft, isRTL && styles.rowReverse]}>
               <View style={styles.iconCircle}>
                 <Users size={18} color="#0b1110" strokeWidth={2.8} />
               </View>
-              <View>
+              <View style={isRTL ? styles.alignEnd : styles.alignStart}>
                 <Text style={[styles.headerTitle, !isDark && styles.headerTitleLight, isRTL && styles.arabicHeaderTitle]}>
                   {isRTL ? 'نشاط الأصدقاء' : 'FRIEND ACTIVITY'}
                 </Text>
@@ -205,7 +205,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
                 </Text>
               </View>
             </View>
-            <View style={styles.headerActions}>
+            <View style={[styles.headerActions, isRTL && styles.rowReverse]}>
               <TouchableOpacity
                 style={styles.refreshBtn}
                 onPress={fetchActivities}
@@ -224,10 +224,10 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
           </View>
 
           {/* Search Box */}
-          <View style={[styles.searchBox, !isDark && styles.searchBoxLight]}>
+          <View style={[styles.searchBox, !isDark && styles.searchBoxLight, isRTL && styles.rowReverse]}>
             <Search size={15} color={!isDark ? '#0b1110' : '#64748b'} />
             <TextInput
-              style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && styles.arabicSearchInput]}
+              style={[styles.searchInput, !isDark && styles.searchInputLight, isRTL && styles.arabicSearchInput, isRTL && styles.textRight]}
               placeholder={isRTL ? 'ابحث عن أصدقاء أو مقاطع...' : 'Search friends or tracks...'}
               placeholderTextColor={!isDark ? '#78716c' : '#64748b'}
               value={searchQuery}

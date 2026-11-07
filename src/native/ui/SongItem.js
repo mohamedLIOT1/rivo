@@ -23,6 +23,9 @@ function areEqualSongItem(prev, next) {
   if (Boolean(prev.showBpmKey) !== Boolean(next.showBpmKey)) return false;
   if (prev.track?.title !== next.track?.title) return false;
   if (prev.track?.artist !== next.track?.artist) return false;
+  if (prev.mixName !== next.mixName) return false;
+  if (prev.playlistName !== next.playlistName) return false;
+  if (Boolean(prev.isMixMode) !== Boolean(next.isMixMode)) return false;
   return true;
 }
 
@@ -39,6 +42,9 @@ export const SongItemPure = React.memo(function SongItemPure({
   isDownloaded = false,
   showBpmKey = false,
   isDark = true,
+  isMixMode = false,
+  mixName,
+  playlistName,
 }) {
   const [imageError, setImageError] = React.useState(false);
 
@@ -132,6 +138,11 @@ export const SongItemPure = React.memo(function SongItemPure({
             </View>
           )}
         </View>
+        {!isQuran && (mixName || ((isMixMode || track?.isMix || track?._isMix) && (track?.mixName || playlistName || mixName))) && (
+          <Text style={styles.mixNameBadge} numberOfLines={1}>
+            🎛️ {mixName || track?.mixName || playlistName || 'Mix'}
+          </Text>
+        )}
       </View>
 
       {/* Action Icons */}
@@ -181,7 +192,7 @@ export const SongItemPure = React.memo(function SongItemPure({
 
 function ContextSongItem(props) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [] } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, playTrack, downloadedTracks = [], isMixMode = false, currentQueue } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const trackId = String(props.track?._id || props.track?.id || '');
   const isCurrent = props.isCurrent !== undefined ? props.isCurrent : (String(currentTrack?._id || currentTrack?.id || '') === trackId && trackId !== '');
@@ -200,6 +211,8 @@ function ContextSongItem(props) {
       isPlaying={props.isPlaying !== undefined ? props.isPlaying : (isCurrent && isPlaying)}
       isLoading={props.isLoading !== undefined ? props.isLoading : (isCurrent && isLoading)}
       isLiked={isLiked}
+      isMixMode={props.isMixMode !== undefined ? props.isMixMode : isMixMode}
+      mixName={props.mixName || (props.isMixMode || isMixMode ? (currentQueue?._playlistName || currentQueue?.name || props.playlistName || props.track?.mixName) : null)}
       onPlay={handlePlay}
       onToggleLike={props.onToggleLike || toggleLikeTrack}
     />
@@ -331,6 +344,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#94a3b8',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  mixNameBadge: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontWeight: '700',
+    color: '#34d399',
+    marginTop: 2,
   },
   actions: {
     flexDirection: 'row',

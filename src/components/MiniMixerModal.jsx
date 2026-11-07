@@ -589,8 +589,9 @@ export default function MiniMixerModal({
       const spdA = clampSpeed(speedA);
       const spdB = clampSpeed(speedB);
 
+      const transDur = Math.max(1, duration);
       const leadInSec = 2.0;
-      const seekA = Math.max(0, mixOutPoint - duration - leadInSec);
+      const seekA = Math.max(0, mixOutPoint - transDur - leadInSec);
       const seekB = Math.max(0, mixInPoint);
 
       // Start Deck A audibly and Deck B silently under user activation
@@ -604,33 +605,34 @@ export default function MiniMixerModal({
       setLiveGainA(Math.round(100 * multA));
       setLiveGainB(0);
 
-      const startTime = performance.now();
-      const leadInMs = 1500;
-      const transMs = Math.max(1, duration) * 1000;
+      const totalFadeMs = transDur * 1000;
       const tailMs = 2500;
-      const totalMs = leadInMs + transMs + tailMs;
       let deckBActive = false;
+      let crossfadeStartTime = null;
 
       const tick = () => {
         if (!auditionDeckARef.current && !auditionDeckBRef.current) return;
-        const elapsed = performance.now() - startTime;
+        const curA = audioA.currentTime;
+        const remaining = mixOutPoint - curA;
 
-        if (elapsed < leadInMs) {
-          // Deck A lead-in: Deck B stays silent at seekB
+        if (remaining > transDur) {
+          // Deck A lead-in: Deck B stays silent cue'd at seekB
           setPreviewProgress(0);
           audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
           audioB.volume = 0.0;
           try {
-            if (Math.abs(audioB.currentTime - seekB) > 0.5) {
+            if (Math.abs(audioB.currentTime - seekB) > 0.3) {
               audioB.currentTime = seekB;
             }
           } catch {}
           setLiveGainA(Math.round(100 * multA));
           setLiveGainB(0);
-        } else if (elapsed <= leadInMs + transMs) {
-          // Active crossfade: Deck B seamlessly fades in!
+          auditionAnimRef.current = requestAnimationFrame(tick);
+        } else if (remaining > 0.05) {
+          // Active crossfade strictly matching AudioContext timing: remaining = mixOutPoint - deck.currentTime <= transDur
           if (!deckBActive) {
             deckBActive = true;
+            crossfadeStartTime = performance.now();
             audioB.muted = false;
             try { audioB.currentTime = seekB; } catch {}
             if (audioB.paused) {
@@ -638,7 +640,7 @@ export default function MiniMixerModal({
             }
           }
 
-          const rawP = Math.max(0, Math.min(1, (elapsed - leadInMs) / transMs));
+          const rawP = Math.max(0, Math.min(1, (transDur - remaining) / transDur));
           const { gainA, gainB } = calculateCrossfadeGains(rawP, style, crossoverBias);
 
           audioA.volume = Math.max(0, Math.min(1, gainA * multA));
@@ -646,8 +648,9 @@ export default function MiniMixerModal({
           setPreviewProgress(rawP);
           setLiveGainA(Math.round(gainA * multA * 100));
           setLiveGainB(Math.round(gainB * multB * 100));
+          auditionAnimRef.current = requestAnimationFrame(tick);
         } else {
-          // Deck B tail phase
+          // Deck B tail phase: Deck A reaches/passes mixOutPoint
           if (!deckBActive) {
             deckBActive = true;
             try { audioB.currentTime = seekB; } catch {}
@@ -663,12 +666,14 @@ export default function MiniMixerModal({
           audioB.volume = Math.max(0, Math.min(1, 1.0 * multB));
           setLiveGainA(0);
           setLiveGainB(Math.round(100 * multB));
-        }
 
-        if (elapsed < totalMs && (!audioB.ended || elapsed < leadInMs + transMs)) {
-          auditionAnimRef.current = requestAnimationFrame(tick);
-        } else {
-          stopAudition();
+          if (!crossfadeStartTime) crossfadeStartTime = performance.now() - totalFadeMs;
+          const tailElapsed = performance.now() - (crossfadeStartTime + totalFadeMs);
+          if (tailElapsed < tailMs && !audioB.ended) {
+            auditionAnimRef.current = requestAnimationFrame(tick);
+          } else {
+            stopAudition();
+          }
         }
       };
 

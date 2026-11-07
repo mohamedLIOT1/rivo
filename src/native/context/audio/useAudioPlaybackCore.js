@@ -132,12 +132,14 @@ export const useAudioPlaybackCore = ({
       autoDownloadFinishedRef,
       updateMediaNotification,
       likedTrackIds, isShuffleRef,
+      setIsPlaying,
+      isPlayingRef,
     });
   }, [
     isMixModeRef, activeTransRef, queueRef, nextSoundRef, isMixTransitioningRef,
     completeSeamlessHandoff, preloadNextTrackForDjMix, repeatModeRef,
     autoPersistFinishedTrack, handleDownloadTrack, autoDownloadFinishedRef,
-    likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef,
+    likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef, setIsPlaying,
   ]);
 
   const playTrack = useCallback(async (track, trackList = [], isRetry = false, targetTime = 0, isRemoteParam = false, isSmartMood = false, autoPlay = true) => {
@@ -162,6 +164,22 @@ export const useAudioPlaybackCore = ({
     setIsLoading(true);
     if (autoPlay) shouldBePlayingRef.current = true;
     ensurePlaybackPermissions();
+
+    const curId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+    const nextId = String(track?._id || track?.id || '');
+    if (curId && curId === nextId && soundRef.current && loadedTrackIdRef.current === curId && !isRetry) {
+      isLoadingRef.current = false;
+      setIsLoading(false);
+      shouldBePlayingRef.current = true;
+      if (autoPlay) {
+        await soundRef.current.playAsync().catch(() => {});
+        isPlayingRef.current = true;
+        setIsPlaying(true);
+        const isLikedTrack = likedTrackIds.some(id => String(id) === curId);
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
+      }
+      return;
+    }
 
     currentTrackRef.current = track;
     setCurrentTrackState(track);
@@ -221,6 +239,7 @@ export const useAudioPlaybackCore = ({
         isVocalOnly: isVocalOnlyRef.current,
         updateVocalStatus,
         signal: abortController.signal,
+        autoPlay,
       });
 
       if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) {

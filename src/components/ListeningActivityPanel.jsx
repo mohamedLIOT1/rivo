@@ -220,7 +220,7 @@ export default function ListeningActivityPanel({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none md:static md:inset-auto md:bg-transparent md:backdrop-blur-none md:p-0 md:z-10 md:w-80 lg:w-[340px] md:h-full md:shrink-0 md:flex md:items-stretch md:justify-start"
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none md:static md:inset-auto md:bg-transparent md:backdrop-blur-none md:p-0 md:z-10 md:w-80 lg:w-[340px] xl:w-[360px] md:h-full md:shrink-0 md:flex md:items-stretch md:justify-start"
     >
       {/* Panel Box */}
       <div

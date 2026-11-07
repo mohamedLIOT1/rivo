@@ -134,6 +134,7 @@ export default function ProfileScreen({
           onNavigateScreen={onNavigateScreen}
           onSelectPlaylist={onSelectPlaylist}
           allUserPlaylists={allUserPlaylists}
+          onSavePlaylist={onSavePlaylist}
           handleQuickSave={handleQuickSave}
           savingPlId={savingPlId}
           t={t}

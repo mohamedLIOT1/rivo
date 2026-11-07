@@ -160,6 +160,7 @@ export const createAudioSound = async ({
   isVocalOnly = false,
   updateVocalStatus = null,
   signal = null,
+  autoPlay = true,
 }) => {
   let activeUri = uri;
 
@@ -167,7 +168,7 @@ export const createAudioSound = async ({
     const result = await Audio.Sound.createAsync(
       { uri: activeUri },
       {
-        shouldPlay: false,
+        shouldPlay: autoPlay !== false,
         positionMillis: Math.round(safeTargetSec * 1000),
         volume,
         progressUpdateIntervalMillis: 250,
@@ -218,7 +219,7 @@ export const createAudioSound = async ({
       const fallbackResult = await Audio.Sound.createAsync(
         { uri: streamUri },
         {
-          shouldPlay: false,
+          shouldPlay: autoPlay !== false,
           positionMillis: Math.round(safeTargetSec * 1000),
           volume,
           progressUpdateIntervalMillis: 250,
@@ -238,7 +239,7 @@ export const createAudioSound = async ({
         const fallbackResult = await Audio.Sound.createAsync(
           { uri: standardUri },
           {
-            shouldPlay: false,
+            shouldPlay: autoPlay !== false,
             positionMillis: Math.round(safeTargetSec * 1000),
             volume,
             progressUpdateIntervalMillis: 250,

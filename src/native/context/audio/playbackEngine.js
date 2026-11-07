@@ -33,6 +33,8 @@ export const handlePlaybackStatusUpdate = ({
   updateMediaNotification,
   likedTrackIds = [],
   isShuffleRef,
+  setIsPlaying,
+  isPlayingRef,
 }) => {
   if (!status.isLoaded) {
     if (status.error) {
@@ -46,7 +48,7 @@ export const handlePlaybackStatusUpdate = ({
         if (tid) clearStreamCache(tid);
         if (cur && !cur._retryDone) {
           cur._retryDone = true;
-          playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0);
+          playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0, false, false, true);
         } else if (playNextTrack) {
           playNextTrack();
         }
@@ -58,8 +60,29 @@ export const handlePlaybackStatusUpdate = ({
   const newCurrentTime = Math.floor((status.positionMillis || 0) / 1000);
   const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
 
-  // Stall watchdog: If buffering for more than 4.5s continuously
-  if (status.isBuffering && status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current) {
+  // Synchronize playing state with native AVPlayer
+  if (status.isPlaying) {
+    if (stallRecoveryTimerRef.current) {
+      clearTimeout(stallRecoveryTimerRef.current);
+      stallRecoveryTimerRef.current = null;
+    }
+    if (shouldBePlayingRef.current && !isPlayingRef?.current && typeof setIsPlaying === 'function') {
+      setIsPlaying(true);
+    }
+  } else if (!status.isBuffering && !isLoadingRef?.current && !shouldBePlayingRef?.current) {
+    if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
+      setIsPlaying(false);
+    }
+  }
+
+  // Stall & Auto-play watchdog: If AVPlayer is paused or buffering when shouldBePlaying is true
+  if (status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current && !isSeekingRef.current) {
+    if (!status.isBuffering && soundRef.current) {
+      soundRef.current.playAsync().then(() => {
+        if (typeof setIsPlaying === 'function') setIsPlaying(true);
+      }).catch(() => {});
+    }
+
     if (!stallRecoveryTimerRef.current) {
       stallRecoveryTimerRef.current = setTimeout(() => {
         stallRecoveryTimerRef.current = null;
@@ -69,7 +92,7 @@ export const handlePlaybackStatusUpdate = ({
           if (tid) clearStreamCache(tid);
           if (cur && !cur._retryDone) {
             cur._retryDone = true;
-            playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0);
+            playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0, false, false, true);
           } else if (playNextTrack) {
             playNextTrack();
           }

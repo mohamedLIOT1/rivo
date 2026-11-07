@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -31,6 +31,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useLocalization } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import MiniPlayer from './MiniPlayer';
@@ -52,6 +53,14 @@ export default function UserDetailModal({
   const { playTrack, currentTrack } = useAudioPlayer();
   const { isDark } = useTheme();
   const { showToast } = useToast();
+  const { t, isRTL } = useLocalization();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
 
   const [profile, setProfile] = useState(user || null);
   useEffect(() => {
@@ -117,7 +126,7 @@ export default function UserDetailModal({
 
   const handleToggleFollow = async () => {
     if (!token) {
-      showToast('Please sign in to follow listeners', 'info');
+      showToast(t('profile.signInToFollow'), 'info');
       return;
     }
     if (isSelf) return;
@@ -138,7 +147,7 @@ export default function UserDetailModal({
         const data = await res.json();
         const active = data?.following ?? !prev;
         setIsFollowing(active);
-        showToast(active ? `Following ${displayName}` : `Unfollowed ${displayName}`, 'info');
+        showToast(active ? t('profile.followingUser', { name: displayName }) : t('profile.unfollowedUser', { name: displayName }), 'info');
       } else {
         setIsFollowing(prev);
       }
@@ -197,12 +206,14 @@ export default function UserDetailModal({
         {/* Top Header Bar */}
         <View style={styles.topBar}>
           <TouchableOpacity onPress={handleClose} style={[styles.backBtn, !isDark && styles.backBtnLight]} activeOpacity={0.8}>
-            <ArrowLeft size={18} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} />
-            <Text style={[styles.backText, !isDark && styles.backTextLight]}>RETURN</Text>
+            <ArrowLeft size={18} color={!isDark ? '#0b1110' : '#fdfbf7'} strokeWidth={2.5} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+            <Text style={[styles.backText, !isDark && styles.backTextLight, rtlTextStyle]}>{t('profile.back')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.badgePill, !isDark && styles.badgePillLight]}>
-            <Text style={[styles.badgePillText, !isDark && styles.badgePillTextLight]}>{isBotProfile ? 'SYSTEM BOT' : 'COMMUNITY LISTENER PROFILE'}</Text>
+            <Text style={[styles.badgePillText, !isDark && styles.badgePillTextLight, rtlTextStyle]}>
+              {isBotProfile ? t('profile.systemBot') : t('profile.communityListenerProfile')}
+            </Text>
           </View>
         </View>
 
@@ -224,38 +235,38 @@ export default function UserDetailModal({
             </View>
 
             <View style={styles.nameRow}>
-              <Text style={[styles.userName, !isDark && styles.userNameLight]}>{displayName}</Text>
+              <Text style={[styles.userName, !isDark && styles.userNameLight, rtlTextStyle]}>{displayName}</Text>
               {(currentProfile.isVerified || currentProfile.role === 'admin' || isBotProfile) && (
                 <View style={styles.verifiedBadge}>
                   <ShieldCheck size={14} color="#17a398" strokeWidth={2.5} />
                 </View>
               )}
               {isBotProfile && (
-                <View style={{ backgroundColor: '#17a398', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginLeft: 4 }}>
-                  <Text style={{ fontFamily: 'monospace', fontWeight: '900', fontSize: 9, color: '#082621' }}>BOT</Text>
+                <View style={{ backgroundColor: '#17a398', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginHorizontal: 4 }}>
+                  <Text style={[{ fontFamily: 'monospace', fontWeight: '900', fontSize: 9, color: '#082621' }, rtlTextStyle]}>{isRTL ? 'بوت' : 'BOT'}</Text>
                 </View>
               )}
             </View>
 
             {currentProfile.bio ? (
-              <Text style={[styles.userBio, !isDark && { color: '#57534e' }]}>{currentProfile.bio}</Text>
+              <Text style={[styles.userBio, !isDark && { color: '#57534e' }, rtlTextStyle]}>{currentProfile.bio}</Text>
             ) : null}
 
             {/* Stats Row */}
             <View style={[styles.statsRow, !isDark && styles.statsRowLight]}>
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>{followersCount}</Text>
-                <Text style={styles.statLabel}>FOLLOWERS</Text>
+                <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.followers')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>{followingCount}</Text>
-                <Text style={styles.statLabel}>FOLLOWING</Text>
+                <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.following')}</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>{playlists.length}</Text>
-                <Text style={styles.statLabel}>PLAYLISTS</Text>
+                <Text style={[styles.statLabel, rtlTextStyle]}>{t('profile.playlists')}</Text>
               </View>
             </View>
 
@@ -272,12 +283,12 @@ export default function UserDetailModal({
                     {isFollowing ? (
                       <>
                         <UserCheck size={15} color="#0b1110" strokeWidth={2.5} />
-                        <Text style={styles.followBtnTextActive}>FOLLOWING</Text>
+                        <Text style={[styles.followBtnTextActive, rtlTextStyle]}>{t('profile.followingActive')}</Text>
                       </>
                     ) : (
                       <>
                         <UserPlus size={15} color="#0b1110" strokeWidth={2.5} />
-                        <Text style={styles.followBtnText}>FOLLOW LISTENER</Text>
+                        <Text style={[styles.followBtnText, rtlTextStyle]}>{t('profile.follow')}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -293,7 +304,7 @@ export default function UserDetailModal({
                     activeOpacity={0.85}
                   >
                     <MessageSquare size={15} color="#26c4b7" strokeWidth={2.5} />
-                    <Text style={styles.chatBtnText}>MESSAGE</Text>
+                    <Text style={[styles.chatBtnText, rtlTextStyle]}>{t('profile.chat')}</Text>
                   </TouchableOpacity>
                 )}
 
@@ -307,7 +318,7 @@ export default function UserDetailModal({
                     activeOpacity={0.85}
                   >
                     <Radio size={14} color="#0b1110" strokeWidth={2.5} />
-                    <Text style={styles.jamBtnText}>JAM</Text>
+                    <Text style={[styles.jamBtnText, rtlTextStyle]}>{t('profile.jam')}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -316,9 +327,9 @@ export default function UserDetailModal({
 
           {/* Cyber-brutalist Bio Card matching Web & Images 1 & 2 */}
           <View style={[styles.bioCard, !isDark && styles.bioCardLight]}>
-            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight]}>// BIO & ABOUT:</Text>
-            <Text style={[styles.bioContent, !isDark && styles.bioContentLight]}>
-              {currentProfile.bio || 'No bio written yet.'}
+            <Text style={[styles.bioHeader, !isDark && styles.bioHeaderLight, rtlTextStyle]}>{t('profile.aboutBio')}</Text>
+            <Text style={[styles.bioContent, !isDark && styles.bioContentLight, rtlTextStyle]}>
+              {currentProfile.bio || t('profile.noBioShort')}
             </Text>
           </View>
 
@@ -328,19 +339,19 @@ export default function UserDetailModal({
               <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Radio size={14} color="#f59e0b" strokeWidth={2.5} />
-                  <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>CURRENTLY STREAMING</Text>
+                  <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>{t('profile.currentlyStreaming')}</Text>
                 </View>
                 <View style={styles.liveIndicator}>
                   <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>LIVE</Text>
+                  <Text style={[styles.liveText, rtlTextStyle]}>{t('profile.liveBadge')}</Text>
                 </View>
               </View>
 
               <TouchableOpacity
                 style={[styles.activityCard, !isDark && styles.activityCardLight]}
                 onPress={() => {
-                  const t = activity.track || activity;
-                  if (t) playTrack(t);
+                  const tTrack = activity.track || activity;
+                  if (tTrack) playTrack(tTrack);
                 }}
                 activeOpacity={0.85}
               >
@@ -348,17 +359,17 @@ export default function UserDetailModal({
                   source={{ uri: normalizeCoverUri(activity.track?.coverUrl || activity.cover || activity.track?.cover) }}
                   style={styles.activityCover}
                 />
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={[styles.activityTitle, !isDark && styles.activityTitleLight]} numberOfLines={1}>
+                <View style={{ flex: 1, marginHorizontal: 8 }}>
+                  <Text style={[styles.activityTitle, !isDark && styles.activityTitleLight, rtlTextStyle]} numberOfLines={1}>
                     {activity.track?.title || activity.title || 'Live Stream'}
                   </Text>
-                  <Text style={[styles.activityArtist, !isDark && { color: '#57534e' }]} numberOfLines={1}>
+                  <Text style={[styles.activityArtist, !isDark && { color: '#57534e' }, rtlTextStyle]} numberOfLines={1}>
                     {activity.track?.artist || activity.artist || displayName}
                   </Text>
                 </View>
                 <View style={styles.listenAlongBtn}>
                   <Play size={12} color="#0b1110" fill="#0b1110" />
-                  <Text style={styles.listenAlongText}>LISTEN</Text>
+                  <Text style={[styles.listenAlongText, rtlTextStyle]}>{t('profile.listenBtn')}</Text>
                 </View>
               </TouchableOpacity>
             </View>
@@ -369,9 +380,9 @@ export default function UserDetailModal({
             <View style={[styles.sectionHeaderRow, !isDark && styles.sectionHeaderRowLight]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Disc size={14} color="#17a398" strokeWidth={2.5} />
-                <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight]}>PUBLIC PLAYLISTS</Text>
+                <Text style={[styles.sectionTitle, !isDark && styles.sectionTitleLight, rtlTextStyle]}>{t('profile.publicPlaylists')}</Text>
               </View>
-              <Text style={styles.sectionCounter}>{playlists.length} CREATED</Text>
+              <Text style={[styles.sectionCounter, rtlTextStyle]}>{t('profile.cratesCount', { count: playlists.length })}</Text>
             </View>
 
             {isLoading && playlists.length === 0 ? (
@@ -380,7 +391,7 @@ export default function UserDetailModal({
               </View>
             ) : playlists.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Text style={styles.emptyText}>No public playlists shared yet.</Text>
+                <Text style={[styles.emptyText, rtlTextStyle]}>{t('profile.noPlaylistsCreated')}</Text>
               </View>
             ) : (
               <View style={styles.playlistsList}>
@@ -413,12 +424,12 @@ export default function UserDetailModal({
                         source={{ uri: normalizeCoverUri(plCover) }}
                         style={styles.playlistThumb}
                       />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.playlistName, !isDark && styles.playlistNameLight]} numberOfLines={1}>
+                      <View style={{ flex: 1, marginHorizontal: 10 }}>
+                        <Text style={[styles.playlistName, !isDark && styles.playlistNameLight, rtlTextStyle]} numberOfLines={1}>
                           {pl.name || 'Untitled Playlist'}
                         </Text>
-                        <Text style={[styles.playlistTrackCount, !isDark && { color: '#57534e' }]}>
-                          {plTracks.length} recordings
+                        <Text style={[styles.playlistTrackCount, !isDark && { color: '#57534e' }, rtlTextStyle]}>
+                          {t('profile.recordingsCount', { count: plTracks.length })}
                         </Text>
                       </View>
                       <View style={styles.playIconBtn}>

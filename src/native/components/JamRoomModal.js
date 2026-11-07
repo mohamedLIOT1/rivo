@@ -44,6 +44,7 @@ import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
+import { useLocalization } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import UserDetailModal from './UserDetailModal';
 
@@ -58,6 +59,9 @@ function DraggableJamQueue({
   handleReorder,
   removeFromJamQueue,
   styles,
+  t,
+  isRTL,
+  rtlTextStyle,
 }) {
   const [draggingIdx, setDraggingIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
@@ -143,12 +147,12 @@ function DraggableJamQueue({
             ]}
           >
             <TouchableOpacity
-              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 6 }}
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginHorizontal: 6 }}
               onPress={() => {
                 const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
                 if (canControl) {
                   playTrack(qTrack);
-                  showToast(`Playing "${qTrack.title}"`, 'info');
+                  showToast(t ? t('jam.playingInJam', { title: qTrack.title }) : `Playing "${qTrack.title}"`, 'info');
                 }
               }}
               activeOpacity={0.7}
@@ -164,10 +168,10 @@ function DraggableJamQueue({
                 style={styles.queueCover}
               />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.queueTrackTitle} numberOfLines={1}>
+                <Text style={[styles.queueTrackTitle, rtlTextStyle]} numberOfLines={1}>
                   {qTrack.title}
                 </Text>
-                <Text style={styles.queueTrackArtist} numberOfLines={1}>
+                <Text style={[styles.queueTrackArtist, rtlTextStyle]} numberOfLines={1}>
                   {qTrack.artist}
                 </Text>
               </View>
@@ -232,6 +236,14 @@ export default function JamRoomModal({ visible, onClose }) {
   } = useAudioPlayer();
   const progress = useAudioProgress();
   const { showToast } = useToast();
+  const { t, isRTL } = useLocalization();
+
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? {
+      letterSpacing: 0,
+      fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    } : null
+  ), [isRTL]);
 
   const [inputCode, setInputCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -261,7 +273,7 @@ export default function JamRoomModal({ visible, onClose }) {
         Clipboard.setString(code);
       } catch {}
       setCopied(true);
-      showToast('Jam code copied to clipboard!', 'success');
+      showToast(t('jam.codeCopiedToast'), 'success');
       setTimeout(() => setCopied(false), 2000);
     }
   };
@@ -283,10 +295,10 @@ export default function JamRoomModal({ visible, onClose }) {
       } else {
         playTrack(jamSession.currentTrack, null, false, liveTime);
       }
-      showToast('Audio resynced with Jam room', 'info');
+      showToast(t('jam.audioResynced'), 'info');
     } else if (currentTrack) {
       playTrack(currentTrack);
-      showToast('Broadcasting track to Jam room', 'info');
+      showToast(t('jam.broadcastingTrack'), 'info');
     }
   };
 
@@ -294,7 +306,7 @@ export default function JamRoomModal({ visible, onClose }) {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const code = `JAM-${randomNum}`;
     if (typeof createJam === 'function') { createJam(code, currentTrack, isPlaying, progress?.currentTime || 0); } else { joinJam(code, currentTrack, isPlaying, progress?.currentTime || 0); }
-    showToast(`Created Jam Room ${code}`, 'success');
+    showToast(t('jam.createdRoom', { code }), 'success');
   };
 
   const handleJoin = () => {
@@ -302,7 +314,7 @@ export default function JamRoomModal({ visible, onClose }) {
     const cleanCode = inputCode.trim().toUpperCase();
     joinJam(cleanCode);
     setInputCode('');
-    showToast(`Joining ${cleanCode}...`, 'info');
+    showToast(t('jam.joiningRoom', { code: cleanCode }), 'info');
   };
 
   const handleAddTrack = (track) => {
@@ -310,7 +322,7 @@ export default function JamRoomModal({ visible, onClose }) {
     addToJamQueue(track);
     const tId = track._id || track.id;
     setJustAddedId(tId);
-    showToast(`Added "${track.title}" to Jam queue`, 'success');
+    showToast(t('jam.addedToQueue', { title: track.title }), 'success');
     setTimeout(() => setJustAddedId(null), 1500);
   };
 
@@ -374,10 +386,10 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const renderBanner = () => (
     <View style={styles.codeCard}>
-      <Text style={styles.codeSubtitle}>ACTIVE JAM ROOM CODE</Text>
+      <Text style={[styles.codeSubtitle, rtlTextStyle]}>{t('jam.activeCode')}</Text>
       <Text style={styles.codeText}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
-      <Text style={styles.codeDesc}>
-        Share this code with friends to synchronize listening.
+      <Text style={[styles.codeDesc, rtlTextStyle]}>
+        {t('jam.shareCodeDesc')}
       </Text>
 
       <View style={styles.codeBtnRow}>
@@ -387,7 +399,7 @@ export default function JamRoomModal({ visible, onClose }) {
           activeOpacity={0.8}
         >
           {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color="#ffffff" />}
-          <Text style={styles.copyBtnText}>{copied ? 'COPIED!' : 'COPY CODE'}</Text>
+          <Text style={[styles.copyBtnText, rtlTextStyle]}>{copied ? t('jam.copied') : t('jam.copyCode')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -396,7 +408,7 @@ export default function JamRoomModal({ visible, onClose }) {
           activeOpacity={0.8}
         >
           <Headphones size={14} color="#082621" />
-          <Text style={styles.syncBtnText}>SYNC AUDIO</Text>
+          <Text style={[styles.syncBtnText, rtlTextStyle]}>{t('jam.syncAudio')}</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -408,17 +420,17 @@ export default function JamRoomModal({ visible, onClose }) {
 
     return (
       <View style={styles.controlModeBanner}>
-        <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+        <View style={{ flex: 1, minWidth: 0, marginHorizontal: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
             <Radio size={13} color={isHostOnly ? '#f59e0b' : colors.mint} />
-            <Text style={[styles.controlModeTitle, isHostOnly && { color: '#f59e0b' }]}>
-              {isHostOnly ? 'Host-Only Control Locked' : 'Collaborative Control Active'}
+            <Text style={[styles.controlModeTitle, isHostOnly && { color: '#f59e0b' }, rtlTextStyle]}>
+              {isHostOnly ? t('jam.hostLockedTitle') : t('jam.collabControlTitle')}
             </Text>
           </View>
-          <Text style={styles.controlModeDesc}>
+          <Text style={[styles.controlModeDesc, rtlTextStyle]}>
             {isHostOnly
-              ? 'Members can listen only; only host can change tracks'
-              : 'Any member in this room can play, pause & change tracks'}
+              ? t('jam.hostLockedDesc')
+              : t('jam.collabControlDesc')}
           </Text>
         </View>
 
@@ -433,8 +445,8 @@ export default function JamRoomModal({ visible, onClose }) {
             }}
             activeOpacity={0.8}
           >
-            <Text style={[styles.toggleControlBtnText, isHostOnly && { color: '#000000' }]}>
-              {isHostOnly ? 'Unlock for All' : 'Lock to Host'}
+            <Text style={[styles.toggleControlBtnText, isHostOnly && { color: '#000000' }, rtlTextStyle]}>
+              {isHostOnly ? t('jam.unlockForAll') : t('jam.lockToHost')}
             </Text>
           </TouchableOpacity>
         )}
@@ -476,8 +488,8 @@ export default function JamRoomModal({ visible, onClose }) {
           />
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={styles.syncStatusRow}>
-              <Text style={styles.syncStatusText}>
-                {isRoomPlaying ? 'PLAYING IN SYNC' : 'PLAYBACK PAUSED'}
+              <Text style={[styles.syncStatusText, rtlTextStyle]}>
+                {isRoomPlaying ? t('jam.playingInSync') : t('jam.playbackPaused')}
               </Text>
               <View
                 style={[
@@ -486,10 +498,10 @@ export default function JamRoomModal({ visible, onClose }) {
                 ]}
               />
             </View>
-            <Text style={styles.syncedTrackTitle} numberOfLines={1}>
+            <Text style={[styles.syncedTrackTitle, rtlTextStyle]} numberOfLines={1}>
               {activeTrack.title}
             </Text>
-            <Text style={styles.syncedTrackArtist} numberOfLines={1}>
+            <Text style={[styles.syncedTrackArtist, rtlTextStyle]} numberOfLines={1}>
               {activeTrack.artist}
             </Text>
           </View>
@@ -557,7 +569,7 @@ export default function JamRoomModal({ visible, onClose }) {
         {!canControl && (
           <View style={styles.hostLockedNotice}>
             <Lock size={11} color="#f59e0b" />
-            <Text style={styles.hostLockedNoticeText}>Host locked playback control</Text>
+            <Text style={[styles.hostLockedNoticeText, rtlTextStyle]}>{t('jam.hostLockedNotice')}</Text>
           </View>
         )}
       </View>
@@ -568,8 +580,8 @@ export default function JamRoomModal({ visible, onClose }) {
     <View style={styles.membersCard}>
       <View style={styles.membersHeader}>
         <Users size={14} color={colors.mint} />
-        <Text style={styles.membersTitle}>
-          LISTENERS IN ROOM ({jamSession.members?.length || 1})
+        <Text style={[styles.membersTitle, rtlTextStyle]}>
+          {t('jam.listenersInRoom', { count: jamSession.members?.length || 1 })}
         </Text>
       </View>
 
@@ -591,8 +603,8 @@ export default function JamRoomModal({ visible, onClose }) {
                   }}
                   style={styles.memberAvatar}
                 />
-                <Text style={styles.memberName} numberOfLines={1}>
-                  {m.name || 'Listener'}
+                <Text style={[styles.memberName, rtlTextStyle]} numberOfLines={1}>
+                  {m.name || t('profile.listener')}
                 </Text>
               </TouchableOpacity>
 
@@ -600,7 +612,7 @@ export default function JamRoomModal({ visible, onClose }) {
                 {m.isHost && (
                   <View style={styles.hostBadge}>
                     <Crown size={10} color="#082621" strokeWidth={3} />
-                    <Text style={styles.hostBadgeText}>HOST</Text>
+                    <Text style={[styles.hostBadgeText, rtlTextStyle]}>{t('jam.host')}</Text>
                   </View>
                 )}
 
@@ -610,12 +622,12 @@ export default function JamRoomModal({ visible, onClose }) {
                       style={styles.makeHostBtn}
                       onPress={() => {
                         Alert.alert(
-                          'Transfer Host',
-                          `Make ${m.name} the host of this Jam?`,
+                          t('jam.transferHost'),
+                          t('jam.transferHostPrompt', { name: m.name }),
                           [
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('jam.cancel'), style: 'cancel' },
                             {
-                              text: 'Make Host',
+                              text: t('jam.makeHost'),
                               onPress: () => transferJamHost(m),
                             },
                           ]
@@ -623,19 +635,19 @@ export default function JamRoomModal({ visible, onClose }) {
                       }}
                     >
                       <Crown size={10} color="#082621" />
-                      <Text style={styles.makeHostText}>MAKE HOST</Text>
+                      <Text style={[styles.makeHostText, rtlTextStyle]}>{t('jam.makeHost')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
                       style={styles.kickBtn}
                       onPress={() => {
                         Alert.alert(
-                          'Disconnect Listener',
-                          `Disconnect ${m.name} from this Jam?`,
+                          t('jam.disconnectListener'),
+                          t('jam.disconnectPrompt', { name: m.name }),
                           [
-                            { text: 'Cancel', style: 'cancel' },
+                            { text: t('jam.cancel'), style: 'cancel' },
                             {
-                              text: 'Disconnect',
+                              text: t('jam.disconnect'),
                               style: 'destructive',
                               onPress: () => kickJamMember(m),
                             },
@@ -657,7 +669,7 @@ export default function JamRoomModal({ visible, onClose }) {
 
   const renderLeaveBtn = () => (
     <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam} activeOpacity={0.8}>
-      <Text style={styles.leaveBtnText}>LEAVE JAM ROOM</Text>
+      <Text style={[styles.leaveBtnText, rtlTextStyle]}>{t('jam.leaveJam')}</Text>
     </TouchableOpacity>
   );
 
@@ -666,8 +678,8 @@ export default function JamRoomModal({ visible, onClose }) {
       <View style={styles.queueHeader}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Music size={15} color={colors.mint} />
-          <Text style={styles.queueTitle}>
-            JAM QUEUE ({jamSession.queue?.length || 0})
+          <Text style={[styles.queueTitle, rtlTextStyle]}>
+            {t('jam.jamQueue', { count: jamSession.queue?.length || 0 })}
           </Text>
         </View>
         <TouchableOpacity
@@ -676,8 +688,8 @@ export default function JamRoomModal({ visible, onClose }) {
           activeOpacity={0.8}
         >
           <Plus size={13} color="#082621" />
-          <Text style={styles.addSongToggleText}>
-            {isSearchOpen ? 'CLOSE' : 'ADD SONG'}
+          <Text style={[styles.addSongToggleText, rtlTextStyle]}>
+            {isSearchOpen ? t('jam.closeAddSong') : t('jam.addSong')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -700,9 +712,10 @@ export default function JamRoomModal({ visible, onClose }) {
                 style={[
                   styles.filterTabText,
                   jamContentFilter === 'songs' && styles.filterTabTextActive,
+                  rtlTextStyle,
                 ]}
               >
-                Songs
+                {t('jam.songsTab')}
               </Text>
             </TouchableOpacity>
 
@@ -719,9 +732,10 @@ export default function JamRoomModal({ visible, onClose }) {
                 style={[
                   styles.filterTabText,
                   jamContentFilter === 'quran' && styles.filterTabTextActive,
+                  rtlTextStyle,
                 ]}
               >
-                Quran
+                {t('jam.quranTab')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -729,8 +743,8 @@ export default function JamRoomModal({ visible, onClose }) {
           <View style={styles.searchBox}>
             <Search size={14} color="#9ca3af" />
             <TextInput
-              style={styles.searchInput}
-              placeholder={jamContentFilter === 'quran' ? "Search Quran recitations..." : "Search songs to queue..."}
+              style={[styles.searchInput, rtlTextStyle]}
+              placeholder={jamContentFilter === 'quran' ? t('jam.searchQuranPlaceholder') : t('jam.searchSongsPlaceholder')}
               placeholderTextColor="#6b7280"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -746,10 +760,10 @@ export default function JamRoomModal({ visible, onClose }) {
           <View style={styles.recsHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <Sparkles size={11} color={colors.mint} />
-              <Text style={styles.recsHeaderTitle}>
+              <Text style={[styles.recsHeaderTitle, rtlTextStyle]}>
                 {searchQuery.trim()
-                  ? `RESULTS (${filteredTracks.length})`
-                  : (jamContentFilter === 'quran' ? 'QURAN RECITATIONS' : 'YOUR FAVORITES & DISCOVERIES')}
+                  ? t('jam.resultsCount', { count: filteredTracks.length })
+                  : (jamContentFilter === 'quran' ? t('jam.quranRecitations') : t('jam.discoveries'))}
               </Text>
             </View>
             {!searchQuery.trim() && (
@@ -759,7 +773,7 @@ export default function JamRoomModal({ visible, onClose }) {
                 activeOpacity={0.8}
               >
                 <Shuffle size={11} color="#17a398" />
-                <Text style={styles.recsShuffleBtnText}>SHUFFLE</Text>
+                <Text style={[styles.recsShuffleBtnText, rtlTextStyle]}>{t('jam.shuffle')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -781,13 +795,13 @@ export default function JamRoomModal({ visible, onClose }) {
               return (
                 <View key={tId} style={styles.searchResultItem}>
                   <TouchableOpacity
-                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginRight: 8 }}
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginHorizontal: 8 }}
                     activeOpacity={0.7}
                     onPress={() => {
                       const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
                       if (canControl) {
                         playTrack(track);
-                        showToast(`Playing "${track.title}" in Jam`, 'info');
+                        showToast(t('jam.playingInJam', { title: track.title }), 'info');
                       } else {
                         handleAddTrack(track);
                       }
@@ -801,11 +815,11 @@ export default function JamRoomModal({ visible, onClose }) {
                       }}
                       style={styles.resultCover}
                     />
-                    <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                      <Text style={styles.resultTitle} numberOfLines={1}>
+                    <View style={{ flex: 1, minWidth: 0, marginHorizontal: 8 }}>
+                      <Text style={[styles.resultTitle, rtlTextStyle]} numberOfLines={1}>
                         {track.title}
                       </Text>
-                      <Text style={styles.resultArtist} numberOfLines={1}>
+                      <Text style={[styles.resultArtist, rtlTextStyle]} numberOfLines={1}>
                         {track.artist}
                       </Text>
                     </View>
@@ -823,8 +837,8 @@ export default function JamRoomModal({ visible, onClose }) {
                     ) : (
                       <Plus size={11} color="#082621" />
                     )}
-                    <Text style={styles.queueAddBtnText}>
-                      {isQueued ? 'QUEUED' : 'QUEUE'}
+                    <Text style={[styles.queueAddBtnText, rtlTextStyle]}>
+                      {isQueued ? t('jam.queued') : t('jam.queueBtn')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -845,9 +859,12 @@ export default function JamRoomModal({ visible, onClose }) {
           handleReorder={handleReorder}
           removeFromJamQueue={removeFromJamQueue}
           styles={styles}
+          t={t}
+          isRTL={isRTL}
+          rtlTextStyle={rtlTextStyle}
         />
       ) : (
-        <Text style={styles.emptyQueueText}>JAM QUEUE IS CURRENTLY EMPTY.</Text>
+        <Text style={[styles.emptyQueueText, rtlTextStyle]}>{t('jam.queueEmpty')}</Text>
       )}
     </View>
   );
@@ -866,10 +883,10 @@ export default function JamRoomModal({ visible, onClose }) {
                 </View>
                 <View>
                   <View style={styles.titleRow}>
-                    <Text style={styles.title}>JAM SESSION</Text>
+                    <Text style={[styles.title, rtlTextStyle]}>{t('jam.title')}</Text>
                     {jamSession && <View style={styles.liveDot} />}
                   </View>
-                  <Text style={styles.subTitle}>Listen together with friends in real-time</Text>
+                  <Text style={[styles.subTitle, rtlTextStyle]}>{t('jam.subtitle')}</Text>
                 </View>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
@@ -912,9 +929,9 @@ export default function JamRoomModal({ visible, onClose }) {
                 <View style={styles.inactiveContainer}>
                   {/* Host Card */}
                   <View style={styles.actionCard}>
-                    <Text style={styles.actionCardTitle}>HOST A JAM</Text>
-                    <Text style={styles.actionCardDesc}>
-                      Start a live Jam room and invite friends to listen together in real-time.
+                    <Text style={[styles.actionCardTitle, rtlTextStyle]}>{t('jam.hostJam')}</Text>
+                    <Text style={[styles.actionCardDesc, rtlTextStyle]}>
+                      {t('jam.hostJamDesc')}
                     </Text>
                     <TouchableOpacity
                       style={styles.createJamBtn}
@@ -922,24 +939,24 @@ export default function JamRoomModal({ visible, onClose }) {
                       activeOpacity={0.8}
                     >
                       <Radio size={16} color="#082621" />
-                      <Text style={styles.createJamBtnText}>CREATE JAM</Text>
+                      <Text style={[styles.createJamBtnText, rtlTextStyle]}>{t('jam.createJamBtn')}</Text>
                     </TouchableOpacity>
                   </View>
 
                   {/* Join Card */}
                   <View style={styles.actionCard}>
-                    <Text style={styles.actionCardTitle}>JOIN A JAM</Text>
-                    <Text style={styles.actionCardDesc}>
-                      Enter the Jam room code provided by another listener.
+                    <Text style={[styles.actionCardTitle, rtlTextStyle]}>{t('jam.joinJam')}</Text>
+                    <Text style={[styles.actionCardDesc, rtlTextStyle]}>
+                      {t('jam.joinJamDesc')}
                     </Text>
 
                     <View style={styles.joinInputRow}>
                       <TextInput
-                        style={styles.joinInput}
-                        placeholder="e.g. JAM-9921"
+                        style={[styles.joinInput, rtlTextStyle]}
+                        placeholder={t('jam.joinInputPlaceholder')}
                         placeholderTextColor="#6b7280"
                         value={inputCode}
-                        onChangeText={(t) => setInputCode(t.toUpperCase())}
+                        onChangeText={(tVal) => setInputCode(tVal.toUpperCase())}
                         autoCapitalize="characters"
                         autoCorrect={false}
                       />
@@ -949,7 +966,7 @@ export default function JamRoomModal({ visible, onClose }) {
                         disabled={!inputCode.trim()}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.joinSubmitBtnText}>JOIN</Text>
+                        <Text style={[styles.joinSubmitBtnText, rtlTextStyle]}>{t('jam.joinBtn')}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

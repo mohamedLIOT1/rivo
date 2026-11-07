@@ -2,7 +2,7 @@ import React, { memo, useState } from 'react';
 import { Play, Radio, MessageSquare, Disc, Clock, User, Volume2 } from 'lucide-react';
 import VerifiedBadge from '../VerifiedBadge';
 import { usePreferences } from '../../context/PreferencesContext';
-import { normalizeCoverUrl, MUSIC_PLACEHOLDER_SVG, handleCoverImageError } from '../../utils/coverUtils';
+import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils';
 
 function formatBadgePill(lastActiveAt, isRTL) {
   if (!lastActiveAt) return isRTL ? 'غير متصل' : 'Offline';
@@ -59,15 +59,15 @@ function ActivityListItemComponent({
           : 'bg-[#ede5d3] border-[#0b1110] hover:bg-[#f6eedf]'
       }`}
     >
-      {/* ── Top Row: User Avatar + Name + Status Pill + Direct Actions ── */}
-      <div className="flex items-center justify-between gap-2">
-        {/* Left: Avatar + Friend Name */}
+      {/* ── Top Row: User Avatar + Name (ample space) + Clean Status Pill on Top End ── */}
+      <div className="flex items-center justify-between gap-2.5 min-w-0">
+        {/* Left: Avatar + Friend Name (Takes maximum horizontal space) */}
         <div
           onClick={() => onOpenUserProfile?.(friend)}
           className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
           title={friend.name || 'Friend'}
         >
-          {/* Avatar with Status Ring */}
+          {/* Avatar with Status Ring & Crisp Status Dot */}
           <div className="relative shrink-0">
             <div
               className={`w-10 h-10 rounded-full p-[2px] transition-transform group-hover:scale-105 ${
@@ -95,30 +95,30 @@ function ActivityListItemComponent({
               )}
             </div>
 
-            {/* Status Dot */}
+            {/* Status Dot - Crisp border & perfectly aligned for LTR and RTL */}
             {isLive ? (
-              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-[#10b981] border-2 border-[#141d1b] rounded-full animate-pulse shadow-[0_0_6px_#10b981]" />
+              <span className={`absolute -bottom-0.5 ltr:-right-0.5 rtl:-left-0.5 w-3 h-3 bg-[#10b981] border-2 ${isDark ? 'border-[#141d1b]' : 'border-[#ede5d3]'} rounded-full animate-pulse shadow-[0_0_6px_#10b981]`} />
             ) : isOnline ? (
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 border-[#141d1b] rounded-full" />
+              <span className={`absolute -bottom-0.5 ltr:-right-0.5 rtl:-left-0.5 w-2.5 h-2.5 bg-emerald-400 border-2 ${isDark ? 'border-[#141d1b]' : 'border-[#ede5d3]'} rounded-full`} />
             ) : (
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-zinc-500 border-2 border-[#141d1b] rounded-full" />
+              <span className={`absolute -bottom-0.5 ltr:-right-0.5 rtl:-left-0.5 w-2.5 h-2.5 bg-zinc-500 border-2 ${isDark ? 'border-[#141d1b]' : 'border-[#ede5d3]'} rounded-full`} />
             )}
           </div>
 
-          {/* Name + Verified */}
+          {/* Name & Subtitle Block - Generous horizontal room, never squished */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span
-                className={`text-xs font-bold truncate hover:underline ${
+                className={`text-xs sm:text-[13px] font-bold truncate hover:underline ${
                   isDark ? 'text-white' : 'text-[#082621]'
                 } ${isRTL ? 'font-sans tracking-normal' : ''}`}
               >
                 {friend.name || 'Friend'}
               </span>
-              {friend.isVerified && <VerifiedBadge userOrName={friend} size={13} />}
+              {friend.isVerified && <VerifiedBadge userOrName={friend} size={13} className="shrink-0" />}
             </div>
 
-            {/* Status Text under Name */}
+            {/* Subtitle Under Name */}
             <span
               className={`text-[10px] block truncate mt-0.5 ${
                 isLive
@@ -137,72 +137,39 @@ function ActivityListItemComponent({
           </div>
         </div>
 
-        {/* Right: Quick Action Buttons */}
-        <div className="flex items-center gap-1 shrink-0">
-          {/* Jam Invite */}
-          {onStartJamWithUser && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onStartJamWithUser(friend);
-              }}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                isDark
-                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
-              }`}
-              title={isRTL ? `دعوة ${friend.name || ''} للجام` : `Invite ${friend.name || 'friend'} to Jam`}
-            >
-              <Radio size={12} strokeWidth={2.2} />
-            </button>
-          )}
-
-          {/* Chat Message */}
-          {openChatModal && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                openChatModal(friend);
-              }}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                isDark
-                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
-              }`}
-              title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
-            >
-              <MessageSquare size={12} strokeWidth={2} />
-            </button>
-          )}
-
-          {/* Profile */}
-          {onOpenUserProfile && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenUserProfile(friend);
-              }}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
-                isDark
-                  ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
-                  : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
-              }`}
-              title={isRTL ? 'الملف الشخصي' : 'Profile'}
-            >
-              <User size={12} strokeWidth={2} />
-            </button>
+        {/* Right: Clean, Dedicated Status Pill (Never squishes username) */}
+        <div className="shrink-0 flex items-center">
+          {isLive ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-[#10b981] font-bold text-[10px] shadow-xs">
+              <Radio size={10} className="animate-pulse shrink-0" strokeWidth={3} />
+              <span className={isRTL ? 'font-sans' : 'font-mono'}>{isRTL ? 'مباشر' : 'LIVE'}</span>
+            </div>
+          ) : isOnline ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-bold text-[10px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+              <span className={isRTL ? 'font-sans' : 'font-mono'}>{isRTL ? 'متصل' : 'ONLINE'}</span>
+            </div>
+          ) : (
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[9.5px] font-mono ${
+              isDark
+                ? 'bg-zinc-800/80 border-zinc-700/60 text-zinc-400'
+                : 'bg-white/80 border-black/15 text-zinc-600'
+            }`}>
+              <Clock size={9.5} className="shrink-0 opacity-70" />
+              <span className={isRTL ? 'font-sans' : 'font-mono'}>{formatBadgePill(friend.lastActiveAt, isRTL)}</span>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── Bottom Section: Dedicated Track Card (or Idle state) ── */}
+      {/* ── Bottom Section: Dedicated Track Card OR Idle Box (Utilizes full width) ── */}
       {hasTrack ? (
         <div
           onClick={(e) => {
             e.stopPropagation();
             onPlayFriendTrack?.(friend);
           }}
-          className={`px-2.5 py-2 rounded-xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all ${
+          className={`w-full px-2.5 py-2 rounded-xl border flex items-center justify-between gap-2.5 cursor-pointer transition-all ${
             isLive
               ? isDark
                 ? 'bg-[#0d1f1c] border-[#17a398]/40 hover:border-[#17a398]'
@@ -260,33 +227,121 @@ function ActivityListItemComponent({
             )}
           </div>
 
-          {/* Quick Play Action Button */}
-          <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform hover:scale-105 shadow-xs ${
-              isLive
-                ? 'bg-[#10b981] text-[#0b1110]'
-                : 'bg-[#17a398] text-[#0b1110]'
-            }`}
-          >
-            <Play size={11} fill="#0b1110" color="#0b1110" className="ms-0.5" />
+          {/* Quick Actions inside Track Card */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Jam Invite if Live */}
+            {isLive && onStartJamWithUser && !friend.isBot && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartJamWithUser(friend);
+                }}
+                className="w-7 h-7 rounded-lg bg-[#f59e0b] hover:bg-[#fbbf24] text-[#0b1110] flex items-center justify-center transition cursor-pointer shadow-xs"
+                title={isRTL ? `دعوة ${friend.name || ''} للجام` : `Invite ${friend.name || 'friend'} to Jam`}
+              >
+                <Radio size={11} strokeWidth={2.5} />
+              </button>
+            )}
+
+            {/* Quick Chat Message */}
+            {openChatModal && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openChatModal(friend);
+                }}
+                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
+                  isDark
+                    ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                    : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
+                }`}
+                title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
+              >
+                <MessageSquare size={11} strokeWidth={2} />
+              </button>
+            )}
+
+            {/* Play Button */}
+            <div
+              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform hover:scale-105 shadow-xs ${
+                isLive
+                  ? 'bg-[#10b981] text-[#0b1110]'
+                  : 'bg-[#17a398] text-[#0b1110]'
+              }`}
+            >
+              <Play size={11} fill="#0b1110" color="#0b1110" className="ms-0.5" />
+            </div>
           </div>
         </div>
       ) : (
+        /* Idle State Card - spans full width with informative text and interactive quick actions */
         <div
-          className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-2 ${
+          className={`w-full px-2.5 py-1.5 rounded-xl border flex items-center justify-between gap-2 ${
             isDark ? 'bg-[#0b1110]/40 border-zinc-800/60' : 'bg-white/40 border-[#0b1110]/10'
           }`}
         >
-          <Disc size={12} className="text-zinc-500 shrink-0" />
-          <span
-            className={`text-[10.5px] text-zinc-400 truncate ${
-              isRTL ? 'font-sans tracking-normal' : ''
-            }`}
-          >
-            {isOnline
-              ? (isRTL ? 'يتصفح الموسيقى وقوائم التشغيل' : 'Browsing music & playlists')
-              : (isRTL ? 'لم يستمع لأي مقطع مؤخراً' : 'No recent listening activity')}
-          </span>
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Disc size={13} className="text-zinc-500 shrink-0" />
+            <span
+              className={`text-[10.5px] text-zinc-400 truncate ${
+                isRTL ? 'font-sans tracking-normal' : ''
+              }`}
+            >
+              {isOnline
+                ? (isRTL ? 'يتصفح الموسيقى وقوائم التشغيل' : 'Browsing music & playlists')
+                : (isRTL ? 'لم يستمع لأي مقطع مؤخراً' : 'No recent listening activity')}
+            </span>
+          </div>
+
+          {/* Quick Action Buttons for Idle Friends - utilizes full width elegantly */}
+          <div className="flex items-center gap-1 shrink-0">
+            {openChatModal && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openChatModal(friend);
+                }}
+                className={`w-6 h-6 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                  isDark
+                    ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                    : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
+                }`}
+                title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
+              >
+                <MessageSquare size={10} strokeWidth={2} />
+              </button>
+            )}
+
+            {onStartJamWithUser && !friend.isBot && isOnline && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartJamWithUser(friend);
+                }}
+                className="w-6 h-6 rounded-md bg-[#f59e0b] hover:bg-[#fbbf24] text-[#0b1110] flex items-center justify-center transition cursor-pointer shadow-xs"
+                title={isRTL ? `بدء جام مع ${friend.name || ''}` : `Jam with ${friend.name || 'friend'}`}
+              >
+                <Radio size={10} strokeWidth={2.5} />
+              </button>
+            )}
+
+            {onOpenUserProfile && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenUserProfile(friend);
+                }}
+                className={`w-6 h-6 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                  isDark
+                    ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
+                    : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
+                }`}
+                title={isRTL ? 'الملف الشخصي' : 'Profile'}
+              >
+                <User size={10} strokeWidth={2} />
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
