@@ -151,6 +151,20 @@ function MainAppShell() {
     const remotePlatform = data?.platforms?.[currentPlatform];
     const remoteVersion = remotePlatform?.version || data?.version;
 
+    if (!remoteVersion) return;
+
+    // The authoritative running version of the app MUST be:
+    const currentOta = await getCurrentOtaVersion().catch(() => null);
+    const activeVersion = (currentOta && otaCompareVersions(currentOta, APP_VERSION) > 0)
+      ? currentOta
+      : (APP_VERSION || getBaseAppVersion());
+
+    // CRITICAL: If remoteVersion <= activeVersion, app is completely up to date!
+    // NEVER show the update modal!
+    if (otaCompareVersions(remoteVersion, activeVersion) <= 0) {
+      return;
+    }
+
     // ─── 1. Check Fast OTA Update first (Android only) ───
     if (Platform.OS === 'android') {
       try {
@@ -159,22 +173,19 @@ function MainAppShell() {
           ota = await fetchOtaManifest();
         }
         if (ota && ota.enabled) {
-          const currentOta = await getCurrentOtaVersion();
-          const baseVersion = getBaseAppVersion();
-
-          if (isOtaUpdateAvailable(ota, currentOta, baseVersion)) {
+          if (isOtaUpdateAvailable(ota, currentOta, activeVersion)) {
             setOtaUpdateInfo({
               enabled: true,
               version: ota.version,
               notes: ota.notes || remotePlatform?.notes || 'تحديث هوائي سريع فوري بدون إعادة تثبيت التطبيق • إصلاحات في الأداء وسرعة الاستجابة',
               notesEn: ota.notesEn || ota.notes_en || 'Instant in-app OTA update • Performance enhancements, smoother audio playback, and bug fixes.',
               bundleUrl: ota.bundleUrl?.startsWith('http') ? ota.bundleUrl : `${API_BASE_URL}${ota.bundleUrl || '/downloads/ota/index.android.bundle'}`,
-              minAppVersion: ota.minAppVersion || '1.9.6',
+              minAppVersion: ota.minAppVersion || '1.0.0',
               bundleSize: ota.bundleSize,
               sizeMb: ota.sizeMb || (ota.bundleSize ? `${(ota.bundleSize / 1048576).toFixed(2)} MB` : null)
             });
             setIsOtaModalOpen(true);
-            return; // Handled via lightweight OTA!
+            return; // Handled via lightweight OTA! NEVER show full binary modal!
           }
         }
       } catch (e) {
@@ -183,10 +194,7 @@ function MainAppShell() {
     }
 
     // ─── 2. Fallback to full binary update (APK / IPA) ───
-    const currentOta = await getCurrentOtaVersion().catch(() => null);
-    const activeVersion = currentOta || getBaseAppVersion();
-
-    if (remoteVersion && isNewerVersion(remoteVersion, activeVersion)) {
+    if (isNewerVersion(remoteVersion, activeVersion)) {
       setUpdateInfo({
         remoteVersion,
         releaseNotes: remotePlatform?.notesEn || remotePlatform?.notes || data?.releaseNotes || 'New improvements and bug fixes.',
@@ -273,7 +281,10 @@ function MainAppShell() {
       }
       const params = new URLSearchParams();
       if (email) params.set('email', email);
-      const safeVersion = (typeof APP_VERSION !== 'undefined' && APP_VERSION) ? APP_VERSION : getBaseAppVersion();
+      const currentOta = await getCurrentOtaVersion().catch(() => null);
+      const safeVersion = (currentOta && otaCompareVersions(currentOta, APP_VERSION) > 0)
+        ? currentOta
+        : (APP_VERSION || getBaseAppVersion());
       params.set('currentVersion', safeVersion);
       params.set('platform', Platform.OS);
       const query = `?${params.toString()}`;
@@ -482,7 +493,7 @@ function MainAppShell() {
             </View>
 
             <Text style={styles.updateVersionText}>
-              Current: v{(typeof activeOtaVersion !== 'undefined' && activeOtaVersion) ? activeOtaVersion : APP_VERSION} → New: v{updateInfo?.remoteVersion}
+              Current: v{(activeOtaVersion && otaCompareVersions(activeOtaVersion, APP_VERSION) > 0) ? activeOtaVersion : APP_VERSION} → New: v{updateInfo?.remoteVersion}
             </Text>
 
             <Text style={styles.updateNotesText}>

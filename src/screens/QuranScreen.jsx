@@ -16,9 +16,14 @@ import {
   sortQuranTracks,
   getSurahNumber,
   getSurahName,
-  FAMOUS_RECITERS,
   isRadioTrack
 } from '../utils/quranUtils';
+import {
+  getQuranRecitersList,
+  getSurahsForReciter,
+  filterQuranSurahs,
+  fetchMp3QuranReciters,
+} from '../utils/quranRecitersService';
 
 export default function QuranScreen({
   tracks = [],
@@ -82,85 +87,42 @@ export default function QuranScreen({
     return (playlists || []).filter(p => isQuranContent(p) && !isRadioTrack(p) && !/إذاعة|اذاعة|راديو|بث مباشر/i.test(p.name || ''));
   }, [playlists]);
 
-  // Extract unique reciters using smart Arabic name detection
+  const [apiReciters, setApiReciters] = useState([]);
+
+  // Fetch full mp3quran reciters catalog asynchronously in background with cancellation support
+  React.useEffect(() => {
+    const controller = new AbortController();
+    fetchMp3QuranReciters(controller.signal)
+      .then((list) => {
+        if (!controller.signal.aborted && Array.isArray(list) && list.length > 0) {
+          setApiReciters(list);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      try { controller.abort(); } catch {}
+    };
+  }, []);
+
+  // Reciters catalog combining canonical famous reciters (114 surahs each), custom DB reciters, and mp3quran
   const reciters = useMemo(() => {
-    const map = new Map();
-    quranTracks.forEach(t => {
-      const name = getQuranReciterName(t, quranPlaylists);
-      if (!map.has(name)) {
-        map.set(name, { 
-          name, 
-          count: 0, 
-          cover: t.cover,
-          searchKey: name
-        });
-      }
-      const item = map.get(name);
-      item.count += 1;
-      if (!item.cover && t.cover) {
-        item.cover = t.cover;
-      }
-    });
+    return getQuranRecitersList({ quranTracks, apiReciters });
+  }, [quranTracks, apiReciters]);
 
-    // Also check playlists if any playlist has a reciter not yet in tracks
-    quranPlaylists.forEach(pl => {
-      const plReciter = getQuranReciterName(pl, quranPlaylists);
-      if (!map.has(plReciter) && plReciter !== 'تلاوات قرآنية' && plReciter !== 'قارئ غير معروف') {
-        map.set(plReciter, {
-          name: plReciter,
-          count: (pl.trackIds || []).length || 1,
-          cover: pl.cover,
-          searchKey: plReciter
-        });
-      }
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [quranTracks, quranPlaylists]);
-
-  // Tracks belonging to the selected reciter, strictly sorted by canonical Quranic order (1 to 114)
+  // Full Surahs Catalog (1 to 114) for selected reciter with instant CDN playback
   const reciterTracks = useMemo(() => {
     if (!selectedReciter) return [];
-    const normSelected = normalizeArabicText(selectedReciter);
-    const famousItem = FAMOUS_RECITERS.find(r => normalizeArabicText(r.name) === normSelected);
-    const aliases = famousItem ? famousItem.aliases.map(normalizeArabicText) : [normSelected];
-
-    const matched = quranTracks.filter((t) => {
-      const rName = getQuranReciterName(t, quranPlaylists);
-      const normR = normalizeArabicText(rName);
-      if (normR === normSelected || normR.includes(normSelected) || normSelected.includes(normR)) {
-        return true;
-      }
-      const textToSearch = normalizeArabicText(`${t.title || ''} ${t.artist || ''} ${t.album || ''} ${rName}`);
-      return aliases.some(a => a.length >= 3 && textToSearch.includes(a));
-    });
-
-    return sortQuranTracks(matched);
-  }, [quranTracks, quranPlaylists, selectedReciter]);
+    return getSurahsForReciter(selectedReciter, { quranTracks, apiReciters });
+  }, [selectedReciter, quranTracks, apiReciters]);
 
   // Filtered tracks with canonical Quranic sorting (1 to 114)
   const filteredTracks = useMemo(() => {
     if (!searchQuery.trim()) {
       return selectedReciter ? reciterTracks : sortQuranTracks(quranTracks);
     }
-    const q = searchQuery.toLowerCase().trim();
-    const normQ = normalizeArabicText(q);
-
     const source = selectedReciter ? reciterTracks : quranTracks;
-    const filtered = source.filter(t => {
-      const reciter = getQuranReciterName(t, quranPlaylists);
-      const title = t.title || '';
-      const artist = t.artist || '';
-      const album = t.album || '';
-
-      const combined = `${title} ${artist} ${album} ${reciter}`;
-      const normCombined = normalizeArabicText(combined);
-
-      return normCombined.includes(normQ) || combined.toLowerCase().includes(q);
-    });
-
-    return sortQuranTracks(filtered);
-  }, [quranTracks, quranPlaylists, selectedReciter, reciterTracks, searchQuery]);
+    return filterQuranSurahs(source, searchQuery);
+  }, [selectedReciter, reciterTracks, quranTracks, searchQuery]);
 
   const filteredPlaylists = useMemo(() => {
     if (!searchQuery.trim()) return quranPlaylists;

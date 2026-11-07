@@ -1325,6 +1325,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const handlePlaying = () => {
         if (deck !== audioRef.current) return;
         consecutiveErrorsRef.current = 0;
+        isContinuousPlaybackRef.current = false;
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
         if (stallRecoveryTimerRef.current) {
@@ -1402,9 +1403,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (deck) {
             resumeAudioContext();
             deck.play().catch(() => {
-              if (playNextTrackRef.current && isContinuousPlaybackRef.current) {
-                playNextTrackRef.current(true);
-              }
+              // Never auto-advance or skip track while buffering!
+              // Keep loading state until stream packets arrive and playback resumes naturally
             });
           }
         }, 5000);
@@ -1412,8 +1412,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       const handleError = () => {
         if (deck !== audioRef.current) return;
-        setIsLoadingTrack(false);
-        isLoadingTrackRef.current = false;
         deck.crossOrigin = null;
         if (isChangingTrackRef.current) return;
         if (!isPlayingRef.current && !shouldPlayRef.current) return;
@@ -1435,76 +1433,53 @@ export function AudioProvider({ children, tracks, setTracks }) {
           }, 1200);
           return;
         }
+
+        // Show buffering / loading indicator while attempting recovery
+        setIsLoadingTrack(true);
+        isLoadingTrackRef.current = true;
+
         if (cur && (cur.title || cur.artist) && !cur._retryDone) {
           cur._retryDone = true;
-          fetch(`${API_BASE_URL}/api/tracks/resolve-stream?title=${encodeURIComponent(cur.title || '')}&artist=${encodeURIComponent(cur.artist || '')}`)
-            .then(r => r.json())
-            .then(d => {
+          const curId = String(cur.id || cur._id || '');
+          if (curId) clientStreamCache.delete(curId);
+          console.warn('[AudioContext] Playback error encountered, attempting fresh stream recovery for:', cur.title);
+          const resumePos = deck.currentTime || 0;
+
+          doResolvePlayableAudioStream(cur, null, false, false)
+            .then(res => {
               if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
               const latestCur = currentTrackRef.current;
-              if (latestCur && String(latestCur.id || latestCur._id) === String(cur.id || cur._id) && d.success && d.url && deck) {
+              if (latestCur && String(latestCur.id || latestCur._id) === curId && res?.url && deck === audioRef.current) {
                 stopYouTube();
-                const fullUrl = d.url.startsWith('/') ? `${API_BASE_URL}${d.url}` : d.url;
+                const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
                 deck.src = fullUrl;
+                try { deck.currentTime = resumePos; } catch {}
                 resumeAudioContext();
                 deck.play().catch(() => {});
               } else {
-                const isContinuous = isContinuousPlaybackRef.current;
-                if (isContinuous && consecutiveErrorsRef.current < 2) {
-                  consecutiveErrorsRef.current += 1;
-                  if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-                  errorAdvanceTimerRef.current = setTimeout(() => {
-                    if (isChangingTrackRef.current) return;
-                    if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-                      playNextTrackRef.current(true);
-                    }
-                  }, 1500);
-                } else {
-                  isContinuousPlaybackRef.current = false;
-                  consecutiveErrorsRef.current = 0;
-                  setIsPlaying(false);
-                  isPlayingRef.current = false;
-                  shouldPlayRef.current = false;
-                }
-              }
-            })
-            .catch(() => {
-              const isContinuous = isContinuousPlaybackRef.current;
-              if (isContinuous && consecutiveErrorsRef.current < 2) {
-                consecutiveErrorsRef.current += 1;
-                if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-                errorAdvanceTimerRef.current = setTimeout(() => {
-                  if (isChangingTrackRef.current) return;
-                  if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-                    playNextTrackRef.current(true);
-                  }
-                }, 1500);
-              } else {
-                isContinuousPlaybackRef.current = false;
-                consecutiveErrorsRef.current = 0;
+                // Recovery did not yield a playable stream - cleanly stop loading without auto-advancing track
+                setIsLoadingTrack(false);
+                isLoadingTrackRef.current = false;
                 setIsPlaying(false);
                 isPlayingRef.current = false;
                 shouldPlayRef.current = false;
               }
+            })
+            .catch(() => {
+              // Recovery failed - cleanly stop loading without auto-advancing track
+              setIsLoadingTrack(false);
+              isLoadingTrackRef.current = false;
+              setIsPlaying(false);
+              isPlayingRef.current = false;
+              shouldPlayRef.current = false;
             });
-        } else if (cur && (isPlayingRef.current || shouldPlayRef.current)) {
-          const isContinuous = isContinuousPlaybackRef.current;
-          if (isContinuous && consecutiveErrorsRef.current < 2) {
-            consecutiveErrorsRef.current += 1;
-            if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-            errorAdvanceTimerRef.current = setTimeout(() => {
-              if (isChangingTrackRef.current) return;
-              if (playNextTrackRef.current && (isPlayingRef.current || shouldPlayRef.current)) {
-                playNextTrackRef.current(true);
-              }
-            }, 1500);
-          } else {
-            isContinuousPlaybackRef.current = false;
-            consecutiveErrorsRef.current = 0;
-            setIsPlaying(false);
-            isPlayingRef.current = false;
-            shouldPlayRef.current = false;
-          }
+        } else {
+          // Retry was already attempted or no valid track info - cleanly stop loading without auto-advancing track
+          setIsLoadingTrack(false);
+          isLoadingTrackRef.current = false;
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          shouldPlayRef.current = false;
         }
       };
 

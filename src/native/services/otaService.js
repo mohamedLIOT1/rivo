@@ -37,11 +37,11 @@ export const compareVersions = (v1, v2) => {
  */
 export const getBaseAppVersion = () => {
   return (
+    APP_VERSION ||
+    ANDROID_VERSION ||
     Constants?.nativeAppVersion ||
     Constants?.expoConfig?.version ||
-    ANDROID_VERSION ||
-    APP_VERSION ||
-    '2.3.3'
+    '2.4.1'
   );
 };
 
@@ -71,11 +71,13 @@ export const getCurrentOtaVersion = async () => {
 export const isOtaUpdateAvailable = (otaManifest, currentOta, baseVersion = getBaseAppVersion()) => {
   if (Platform.OS !== 'android') return false;
   if (!otaManifest || otaManifest.enabled === false || !otaManifest.version) return false;
-  const activeVer = currentOta || baseVersion;
+  const base = APP_VERSION || baseVersion;
+  const activeVer = (currentOta && compareVersions(currentOta, base) > 0) ? currentOta : base;
   if (activeVer && compareVersions(activeVer, otaManifest.version) >= 0) {
     return false;
   }
-  if (otaManifest.minAppVersion && compareVersions(baseVersion, otaManifest.minAppVersion) < 0) {
+  const minRequired = otaManifest.minAppVersion || '1.0.0';
+  if (compareVersions(base, minRequired) < 0) {
     return false;
   }
   return true;
@@ -148,16 +150,17 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
     return { available: false, reason: 'manifest_empty' };
   }
 
-  const baseVersion = getBaseAppVersion();
+  const baseVersion = APP_VERSION || getBaseAppVersion();
 
   // Check minimum binary compatibility
-  if (otaManifest.minAppVersion && compareVersions(baseVersion, otaManifest.minAppVersion) < 0) {
-    return { available: false, reason: 'requires_full_apk', minAppVersion: otaManifest.minAppVersion };
+  const minRequired = otaManifest.minAppVersion || '1.0.0';
+  if (compareVersions(baseVersion, minRequired) < 0) {
+    return { available: false, reason: 'requires_full_apk', minAppVersion: minRequired };
   }
 
   const currentOta = await getCurrentOtaVersion();
   // If already running this or newer OTA version, no update needed
-  const activeVer = currentOta || baseVersion;
+  const activeVer = (currentOta && compareVersions(currentOta, baseVersion) > 0) ? currentOta : baseVersion;
   if (activeVer && compareVersions(activeVer, otaManifest.version) >= 0) {
     return { available: false, reason: 'already_up_to_date' };
   }

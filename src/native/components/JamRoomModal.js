@@ -45,6 +45,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useLocalization } from '../context/LocalizationContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import UserDetailModal from './UserDetailModal';
 
@@ -62,6 +63,7 @@ function DraggableJamQueue({
   t,
   isRTL,
   rtlTextStyle,
+  isDark = true,
 }) {
   const [draggingIdx, setDraggingIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
@@ -127,12 +129,13 @@ function DraggableJamQueue({
             key={`${qId}-${idx}`}
             style={[
               styles.queueItem,
+              !isDark && styles.queueItemLight,
               isDragging && {
                 transform: [{ translateY: panY }, { scale: 1.03 }],
                 zIndex: 9999,
                 elevation: Platform.OS === 'android' ? 0 : 12,
                 borderColor: '#17a398',
-                backgroundColor: '#1a2e29',
+                backgroundColor: isDark ? '#1a2e29' : '#e0f2f1',
                 shadowColor: '#17a398',
                 shadowOffset: { width: 0, height: 4 },
                 shadowOpacity: 0.4,
@@ -158,20 +161,20 @@ function DraggableJamQueue({
               activeOpacity={0.7}
               disabled={isDragging}
             >
-              <Text style={styles.queueIndex}>{idx + 1}</Text>
+              <Text style={[styles.queueIndex, !isDark && styles.queueIndexLight]}>{idx + 1}</Text>
               <Image
                 source={{
                   uri:
                     qTrack.cover ||
                     'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
                 }}
-                style={styles.queueCover}
+                style={[styles.queueCover, !isDark && styles.queueCoverLight]}
               />
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={[styles.queueTrackTitle, rtlTextStyle]} numberOfLines={1}>
+                <Text style={[styles.queueTrackTitle, !isDark && styles.queueTrackTitleLight, rtlTextStyle]} numberOfLines={1}>
                   {qTrack.title}
                 </Text>
-                <Text style={[styles.queueTrackArtist, rtlTextStyle]} numberOfLines={1}>
+                <Text style={[styles.queueTrackArtist, !isDark && styles.queueTrackArtistLight, rtlTextStyle]} numberOfLines={1}>
                   {qTrack.artist}
                 </Text>
               </View>
@@ -191,11 +194,12 @@ function DraggableJamQueue({
                   {...(panResponders[idx] ? panResponders[idx].panHandlers : {})}
                   style={[
                     styles.dragHandle,
+                    !isDark && styles.dragHandleLight,
                     isDragging && { backgroundColor: 'rgba(23, 163, 152, 0.3)' }
                   ]}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <GripVertical size={16} color={isDragging ? '#17a398' : '#94a3b8'} />
+                  <GripVertical size={16} color={isDragging ? '#17a398' : (!isDark ? '#57534e' : '#94a3b8')} />
                 </View>
               )}
             </View>
@@ -237,6 +241,7 @@ export default function JamRoomModal({ visible, onClose }) {
   const progress = useAudioProgress();
   const { showToast } = useToast();
   const { t, isRTL } = useLocalization();
+  const { isDark = true } = useTheme();
 
   const rtlTextStyle = useMemo(() => (
     isRTL ? {
@@ -385,21 +390,21 @@ export default function JamRoomModal({ visible, onClose }) {
   const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
 
   const renderBanner = () => (
-    <View style={styles.codeCard}>
-      <Text style={[styles.codeSubtitle, rtlTextStyle]}>{t('jam.activeCode')}</Text>
-      <Text style={styles.codeText}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
-      <Text style={[styles.codeDesc, rtlTextStyle]}>
+    <View style={[styles.codeCard, !isDark && styles.codeCardLight]}>
+      <Text style={[styles.codeSubtitle, !isDark && styles.codeSubtitleLight, rtlTextStyle]}>{t('jam.activeCode')}</Text>
+      <Text style={[styles.codeText, !isDark && styles.codeTextLight]}>{jamSession.code || jamSession.roomCode || 'LIVE'}</Text>
+      <Text style={[styles.codeDesc, !isDark && styles.codeDescLight, rtlTextStyle]}>
         {t('jam.shareCodeDesc')}
       </Text>
 
       <View style={styles.codeBtnRow}>
         <TouchableOpacity
-          style={styles.copyBtn}
+          style={[styles.copyBtn, !isDark && styles.copyBtnLight]}
           onPress={handleCopyCode}
           activeOpacity={0.8}
         >
-          {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color="#ffffff" />}
-          <Text style={[styles.copyBtnText, rtlTextStyle]}>{copied ? t('jam.copied') : t('jam.copyCode')}</Text>
+          {copied ? <Check size={14} color="#10b981" /> : <Copy size={14} color={!isDark ? '#082621' : '#ffffff'} />}
+          <Text style={[styles.copyBtnText, !isDark && styles.copyBtnTextLight, rtlTextStyle]}>{copied ? t('jam.copied') : t('jam.copyCode')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -419,15 +424,20 @@ export default function JamRoomModal({ visible, onClose }) {
     const roomCode = jamSession?.code || jamSession?.roomCode;
 
     return (
-      <View style={styles.controlModeBanner}>
+      <View style={[styles.controlModeBanner, !isDark && styles.controlModeBannerLight]}>
         <View style={{ flex: 1, minWidth: 0, marginHorizontal: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-            <Radio size={13} color={isHostOnly ? '#f59e0b' : colors.mint} />
-            <Text style={[styles.controlModeTitle, isHostOnly && { color: '#f59e0b' }, rtlTextStyle]}>
+            <Radio size={13} color={isHostOnly ? '#f59e0b' : (isDark ? colors.mint : '#0f756d')} />
+            <Text style={[
+              styles.controlModeTitle,
+              !isDark && styles.controlModeTitleLight,
+              isHostOnly && { color: isDark ? '#f59e0b' : '#b45309' },
+              rtlTextStyle
+            ]}>
               {isHostOnly ? t('jam.hostLockedTitle') : t('jam.collabControlTitle')}
             </Text>
           </View>
-          <Text style={[styles.controlModeDesc, rtlTextStyle]}>
+          <Text style={[styles.controlModeDesc, !isDark && styles.controlModeDescLight, rtlTextStyle]}>
             {isHostOnly
               ? t('jam.hostLockedDesc')
               : t('jam.collabControlDesc')}
@@ -475,7 +485,7 @@ export default function JamRoomModal({ visible, onClose }) {
     };
 
     return activeTrack ? (
-      <View style={styles.syncedTrackCard}>
+      <View style={[styles.syncedTrackCard, !isDark && styles.syncedTrackCardLight]}>
         <View style={styles.syncedTrackTopRow}>
           <Image
             source={{
@@ -484,24 +494,24 @@ export default function JamRoomModal({ visible, onClose }) {
                 activeTrack.cover ||
                 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=200',
             }}
-            style={styles.syncedTrackCover}
+            style={[styles.syncedTrackCover, !isDark && styles.syncedTrackCoverLight]}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
             <View style={styles.syncStatusRow}>
-              <Text style={[styles.syncStatusText, rtlTextStyle]}>
+              <Text style={[styles.syncStatusText, !isDark && styles.syncStatusTextLight, rtlTextStyle]}>
                 {isRoomPlaying ? t('jam.playingInSync') : t('jam.playbackPaused')}
               </Text>
               <View
                 style={[
                   styles.statusPulseDot,
-                  { backgroundColor: isRoomPlaying ? colors.mint : '#f59e0b' },
+                  { backgroundColor: isRoomPlaying ? (isDark ? colors.mint : '#0f756d') : '#f59e0b' },
                 ]}
               />
             </View>
-            <Text style={[styles.syncedTrackTitle, rtlTextStyle]} numberOfLines={1}>
+            <Text style={[styles.syncedTrackTitle, !isDark && styles.syncedTrackTitleLight, rtlTextStyle]} numberOfLines={1}>
               {activeTrack.title}
             </Text>
-            <Text style={[styles.syncedTrackArtist, rtlTextStyle]} numberOfLines={1}>
+            <Text style={[styles.syncedTrackArtist, !isDark && styles.syncedTrackArtistLight, rtlTextStyle]} numberOfLines={1}>
               {activeTrack.artist}
             </Text>
           </View>
@@ -522,29 +532,29 @@ export default function JamRoomModal({ visible, onClose }) {
               const targetSec = Math.round(ratio * durTime);
               seekTo(targetSec);
             }}
-            style={styles.progressBarBg}
+            style={[styles.progressBarBg, !isDark && styles.progressBarBgLight]}
           >
             <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
           </TouchableOpacity>
           <View style={styles.progressTimeRow}>
-            <Text style={styles.progressTimeText}>{formatTime(curTime)}</Text>
-            <Text style={styles.progressTimeText}>{formatTime(durTime)}</Text>
+            <Text style={[styles.progressTimeText, !isDark && styles.progressTimeTextLight]}>{formatTime(curTime)}</Text>
+            <Text style={[styles.progressTimeText, !isDark && styles.progressTimeTextLight]}>{formatTime(durTime)}</Text>
           </View>
         </View>
 
         {/* Transport Controls (Skip Prev, Play/Pause, Skip Next) */}
         <View style={styles.playerControlsRow}>
           <TouchableOpacity
-            style={[styles.playerControlBtn, !canControl && { opacity: 0.35 }]}
+            style={[styles.playerControlBtn, !isDark && styles.playerControlBtnLight, !canControl && { opacity: 0.35 }]}
             disabled={!canControl}
             onPress={playPrevTrack}
             activeOpacity={0.7}
           >
-            <SkipBack size={18} color="#ffffff" />
+            <SkipBack size={18} color={!isDark ? '#082621' : '#ffffff'} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.playerPlayPauseBtn, !canControl && { opacity: 0.35 }]}
+            style={[styles.playerPlayPauseBtn, !isDark && styles.playerPlayPauseBtnLight, !canControl && { opacity: 0.35 }]}
             disabled={!canControl}
             onPress={handleTogglePlay}
             activeOpacity={0.8}
@@ -557,19 +567,19 @@ export default function JamRoomModal({ visible, onClose }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.playerControlBtn, !canControl && { opacity: 0.35 }]}
+            style={[styles.playerControlBtn, !isDark && styles.playerControlBtnLight, !canControl && { opacity: 0.35 }]}
             disabled={!canControl}
             onPress={playNextTrack}
             activeOpacity={0.7}
           >
-            <SkipForward size={18} color="#ffffff" />
+            <SkipForward size={18} color={!isDark ? '#082621' : '#ffffff'} />
           </TouchableOpacity>
         </View>
 
         {!canControl && (
           <View style={styles.hostLockedNotice}>
-            <Lock size={11} color="#f59e0b" />
-            <Text style={[styles.hostLockedNoticeText, rtlTextStyle]}>{t('jam.hostLockedNotice')}</Text>
+            <Lock size={11} color={!isDark ? '#b45309' : '#f59e0b'} />
+            <Text style={[styles.hostLockedNoticeText, !isDark && styles.hostLockedNoticeTextLight, rtlTextStyle]}>{t('jam.hostLockedNotice')}</Text>
           </View>
         )}
       </View>
@@ -577,10 +587,10 @@ export default function JamRoomModal({ visible, onClose }) {
   };
 
   const renderMembers = () => (
-    <View style={styles.membersCard}>
+    <View style={[styles.membersCard, !isDark && styles.membersCardLight]}>
       <View style={styles.membersHeader}>
-        <Users size={14} color={colors.mint} />
-        <Text style={[styles.membersTitle, rtlTextStyle]}>
+        <Users size={14} color={isDark ? colors.mint : '#0f756d'} />
+        <Text style={[styles.membersTitle, !isDark && styles.membersTitleLight, rtlTextStyle]}>
           {t('jam.listenersInRoom', { count: jamSession.members?.length || 1 })}
         </Text>
       </View>
@@ -589,7 +599,7 @@ export default function JamRoomModal({ visible, onClose }) {
         {(jamSession.members || []).map((m) => {
           const mId = m.id || m._id || m.socketId;
           return (
-            <View key={mId} style={styles.memberItem}>
+            <View key={mId} style={[styles.memberItem, !isDark && styles.memberItemLight]}>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
                 onPress={() => setSelectedUser(m)}
@@ -601,9 +611,9 @@ export default function JamRoomModal({ visible, onClose }) {
                       m.avatar ||
                       'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
                   }}
-                  style={styles.memberAvatar}
+                  style={[styles.memberAvatar, !isDark && styles.memberAvatarLight]}
                 />
-                <Text style={[styles.memberName, rtlTextStyle]} numberOfLines={1}>
+                <Text style={[styles.memberName, !isDark && styles.memberNameLight, rtlTextStyle]} numberOfLines={1}>
                   {m.name || t('profile.listener')}
                 </Text>
               </TouchableOpacity>
@@ -668,22 +678,22 @@ export default function JamRoomModal({ visible, onClose }) {
   );
 
   const renderLeaveBtn = () => (
-    <TouchableOpacity style={styles.leaveBtn} onPress={leaveJam} activeOpacity={0.8}>
-      <Text style={[styles.leaveBtnText, rtlTextStyle]}>{t('jam.leaveJam')}</Text>
+    <TouchableOpacity style={[styles.leaveBtn, !isDark && styles.leaveBtnLight]} onPress={leaveJam} activeOpacity={0.8}>
+      <Text style={[styles.leaveBtnText, !isDark && styles.leaveBtnTextLight, rtlTextStyle]}>{t('jam.leaveJam')}</Text>
     </TouchableOpacity>
   );
 
   const renderQueue = () => (
-    <View style={styles.queueCard}>
-      <View style={styles.queueHeader}>
+    <View style={[styles.queueCard, !isDark && styles.queueCardLight]}>
+      <View style={[styles.queueHeader, !isDark && styles.queueHeaderLight]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Music size={15} color={colors.mint} />
-          <Text style={[styles.queueTitle, rtlTextStyle]}>
+          <Music size={15} color={isDark ? colors.mint : '#0f756d'} />
+          <Text style={[styles.queueTitle, !isDark && styles.queueTitleLight, rtlTextStyle]}>
             {t('jam.jamQueue', { count: jamSession.queue?.length || 0 })}
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.addSongToggleBtn}
+          style={[styles.addSongToggleBtn, !isDark && styles.addSongToggleBtnLight]}
           onPress={() => setIsSearchOpen((p) => !p)}
           activeOpacity={0.8}
         >
@@ -696,21 +706,24 @@ export default function JamRoomModal({ visible, onClose }) {
 
       {/* Add Song Drawer */}
       {isSearchOpen && (
-        <View style={styles.searchDrawer}>
+        <View style={[styles.searchDrawer, !isDark && styles.searchDrawerLight]}>
           {/* Content Type Filter: Songs vs Quran */}
           <View style={styles.filterTabRow}>
             <TouchableOpacity
               style={[
                 styles.filterTabBtn,
+                !isDark && styles.filterTabBtnLight,
                 jamContentFilter === 'songs' && styles.filterTabBtnActive,
+                !isDark && jamContentFilter === 'songs' && styles.filterTabBtnActiveLight,
               ]}
               onPress={() => setJamContentFilter('songs')}
               activeOpacity={0.8}
             >
-              <Music size={12} color={jamContentFilter === 'songs' ? '#082621' : '#9ca3af'} />
+              <Music size={12} color={jamContentFilter === 'songs' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} />
               <Text
                 style={[
                   styles.filterTabText,
+                  !isDark && styles.filterTabTextLight,
                   jamContentFilter === 'songs' && styles.filterTabTextActive,
                   rtlTextStyle,
                 ]}
@@ -722,15 +735,18 @@ export default function JamRoomModal({ visible, onClose }) {
             <TouchableOpacity
               style={[
                 styles.filterTabBtn,
+                !isDark && styles.filterTabBtnLight,
                 jamContentFilter === 'quran' && styles.filterTabBtnActive,
+                !isDark && jamContentFilter === 'quran' && styles.filterTabBtnActiveLight,
               ]}
               onPress={() => setJamContentFilter('quran')}
               activeOpacity={0.8}
             >
-              <BookOpen size={12} color={jamContentFilter === 'quran' ? '#082621' : '#9ca3af'} />
+              <BookOpen size={12} color={jamContentFilter === 'quran' ? '#082621' : (!isDark ? '#57534e' : '#9ca3af')} />
               <Text
                 style={[
                   styles.filterTabText,
+                  !isDark && styles.filterTabTextLight,
                   jamContentFilter === 'quran' && styles.filterTabTextActive,
                   rtlTextStyle,
                 ]}
@@ -740,27 +756,27 @@ export default function JamRoomModal({ visible, onClose }) {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.searchBox}>
-            <Search size={14} color="#9ca3af" />
+          <View style={[styles.searchBox, !isDark && styles.searchBoxLight]}>
+            <Search size={14} color={!isDark ? '#57534e' : '#9ca3af'} />
             <TextInput
-              style={[styles.searchInput, rtlTextStyle]}
+              style={[styles.searchInput, !isDark && styles.searchInputLight, rtlTextStyle]}
               placeholder={jamContentFilter === 'quran' ? t('jam.searchQuranPlaceholder') : t('jam.searchSongsPlaceholder')}
-              placeholderTextColor="#6b7280"
+              placeholderTextColor={!isDark ? '#71717a' : '#6b7280'}
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoCorrect={false}
             />
             {searchQuery ? (
               <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <X size={13} color="#9ca3af" />
+                <X size={13} color={!isDark ? '#082621' : '#9ca3af'} />
               </TouchableOpacity>
             ) : null}
           </View>
 
           <View style={styles.recsHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Sparkles size={11} color={colors.mint} />
-              <Text style={[styles.recsHeaderTitle, rtlTextStyle]}>
+              <Sparkles size={11} color={isDark ? colors.mint : '#0f756d'} />
+              <Text style={[styles.recsHeaderTitle, !isDark && styles.recsHeaderTitleLight, rtlTextStyle]}>
                 {searchQuery.trim()
                   ? t('jam.resultsCount', { count: filteredTracks.length })
                   : (jamContentFilter === 'quran' ? t('jam.quranRecitations') : t('jam.discoveries'))}
@@ -768,12 +784,12 @@ export default function JamRoomModal({ visible, onClose }) {
             </View>
             {!searchQuery.trim() && (
               <TouchableOpacity
-                style={styles.recsShuffleBtn}
+                style={[styles.recsShuffleBtn, !isDark && styles.recsShuffleBtnLight]}
                 onPress={() => setShuffleSeed((s) => s + 1)}
                 activeOpacity={0.8}
               >
-                <Shuffle size={11} color="#17a398" />
-                <Text style={[styles.recsShuffleBtnText, rtlTextStyle]}>{t('jam.shuffle')}</Text>
+                <Shuffle size={11} color={!isDark ? '#0f756d' : '#17a398'} />
+                <Text style={[styles.recsShuffleBtnText, !isDark && styles.recsShuffleBtnTextLight, rtlTextStyle]}>{t('jam.shuffle')}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -793,7 +809,7 @@ export default function JamRoomModal({ visible, onClose }) {
               const tId = track._id || track.id;
               const isQueued = justAddedId === tId;
               return (
-                <View key={tId} style={styles.searchResultItem}>
+                <View key={tId} style={[styles.searchResultItem, !isDark && styles.searchResultItemLight]}>
                   <TouchableOpacity
                     style={{ flex: 1, flexDirection: 'row', alignItems: 'center', minWidth: 0, marginHorizontal: 8 }}
                     activeOpacity={0.7}
@@ -813,13 +829,13 @@ export default function JamRoomModal({ visible, onClose }) {
                           track.cover ||
                           'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100',
                       }}
-                      style={styles.resultCover}
+                      style={[styles.resultCover, !isDark && styles.resultCoverLight]}
                     />
                     <View style={{ flex: 1, minWidth: 0, marginHorizontal: 8 }}>
-                      <Text style={[styles.resultTitle, rtlTextStyle]} numberOfLines={1}>
+                      <Text style={[styles.resultTitle, !isDark && styles.resultTitleLight, rtlTextStyle]} numberOfLines={1}>
                         {track.title}
                       </Text>
-                      <Text style={[styles.resultArtist, rtlTextStyle]} numberOfLines={1}>
+                      <Text style={[styles.resultArtist, !isDark && styles.resultArtistLight, rtlTextStyle]} numberOfLines={1}>
                         {track.artist}
                       </Text>
                     </View>
@@ -827,6 +843,7 @@ export default function JamRoomModal({ visible, onClose }) {
                   <TouchableOpacity
                     style={[
                       styles.queueAddBtn,
+                      !isDark && styles.queueAddBtnLight,
                       isQueued && { backgroundColor: colors.mint },
                     ]}
                     onPress={() => handleAddTrack(track)}
@@ -862,9 +879,10 @@ export default function JamRoomModal({ visible, onClose }) {
           t={t}
           isRTL={isRTL}
           rtlTextStyle={rtlTextStyle}
+          isDark={isDark}
         />
       ) : (
-        <Text style={[styles.emptyQueueText, rtlTextStyle]}>{t('jam.queueEmpty')}</Text>
+        <Text style={[styles.emptyQueueText, !isDark && styles.emptyQueueTextLight, rtlTextStyle]}>{t('jam.queueEmpty')}</Text>
       )}
     </View>
   );
@@ -873,24 +891,24 @@ export default function JamRoomModal({ visible, onClose }) {
     <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={[styles.overlay, isLandscape && { justifyContent: 'center', alignItems: 'center' }]}>
         <View style={[styles.sheetOuter, isLandscape && { width: '94%', maxWidth: 960, height: '94%', maxHeight: '94%' }]}>
-          <View style={styles.hardShadow} />
-          <View style={styles.sheet}>
+          <View style={[styles.hardShadow, !isDark && styles.hardShadowLight]} />
+          <View style={[styles.sheet, !isDark && styles.sheetLight]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[styles.header, !isDark && styles.headerLight]}>
               <View style={styles.headerLeft}>
                 <View style={styles.iconBox}>
                   <Radio size={18} color="#082621" />
                 </View>
                 <View>
                   <View style={styles.titleRow}>
-                    <Text style={[styles.title, rtlTextStyle]}>{t('jam.title')}</Text>
+                    <Text style={[styles.title, !isDark && styles.titleLight, rtlTextStyle]}>{t('jam.title')}</Text>
                     {jamSession && <View style={styles.liveDot} />}
                   </View>
-                  <Text style={[styles.subTitle, rtlTextStyle]}>{t('jam.subtitle')}</Text>
+                  <Text style={[styles.subTitle, !isDark && styles.subTitleLight, rtlTextStyle]}>{t('jam.subtitle')}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.8}>
-                <X size={18} color={colors.ink} />
+              <TouchableOpacity onPress={onClose} style={[styles.closeBtn, !isDark && styles.closeBtnLight]} activeOpacity={0.8}>
+                <X size={18} color={!isDark ? '#082621' : '#ffffff'} />
               </TouchableOpacity>
             </View>
 
@@ -928,9 +946,9 @@ export default function JamRoomModal({ visible, onClose }) {
                 /* ── Inactive View: Host or Join ── */
                 <View style={styles.inactiveContainer}>
                   {/* Host Card */}
-                  <View style={styles.actionCard}>
-                    <Text style={[styles.actionCardTitle, rtlTextStyle]}>{t('jam.hostJam')}</Text>
-                    <Text style={[styles.actionCardDesc, rtlTextStyle]}>
+                  <View style={[styles.actionCard, !isDark && styles.actionCardLight]}>
+                    <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight, rtlTextStyle]}>{t('jam.hostJam')}</Text>
+                    <Text style={[styles.actionCardDesc, !isDark && styles.actionCardDescLight, rtlTextStyle]}>
                       {t('jam.hostJamDesc')}
                     </Text>
                     <TouchableOpacity
@@ -944,17 +962,17 @@ export default function JamRoomModal({ visible, onClose }) {
                   </View>
 
                   {/* Join Card */}
-                  <View style={styles.actionCard}>
-                    <Text style={[styles.actionCardTitle, rtlTextStyle]}>{t('jam.joinJam')}</Text>
-                    <Text style={[styles.actionCardDesc, rtlTextStyle]}>
+                  <View style={[styles.actionCard, !isDark && styles.actionCardLight]}>
+                    <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight, rtlTextStyle]}>{t('jam.joinJam')}</Text>
+                    <Text style={[styles.actionCardDesc, !isDark && styles.actionCardDescLight, rtlTextStyle]}>
                       {t('jam.joinJamDesc')}
                     </Text>
 
                     <View style={styles.joinInputRow}>
                       <TextInput
-                        style={[styles.joinInput, rtlTextStyle]}
+                        style={[styles.joinInput, !isDark && styles.joinInputLight, rtlTextStyle]}
                         placeholder={t('jam.joinInputPlaceholder')}
-                        placeholderTextColor="#6b7280"
+                        placeholderTextColor={!isDark ? '#71717a' : '#6b7280'}
                         value={inputCode}
                         onChangeText={(tVal) => setInputCode(tVal.toUpperCase())}
                         autoCapitalize="characters"
@@ -1701,5 +1719,227 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     color: '#082621',
+  },
+  // ── Light Theme Adaptations (Apothecary Brutalist) ──
+  hardShadowLight: {
+    backgroundColor: '#0b1110',
+  },
+  sheetLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  headerLight: {
+    borderBottomColor: '#d6c8b0',
+  },
+  titleLight: {
+    color: '#082621',
+  },
+  subTitleLight: {
+    color: '#57534e',
+  },
+  closeBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  actionCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  actionCardTitleLight: {
+    color: '#082621',
+  },
+  actionCardDescLight: {
+    color: '#57534e',
+  },
+  joinInputLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+    color: '#0b1110',
+  },
+  codeCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  codeSubtitleLight: {
+    color: '#0f756d',
+  },
+  codeTextLight: {
+    color: '#d97706',
+  },
+  codeDescLight: {
+    color: '#57534e',
+  },
+  copyBtnLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+  },
+  copyBtnTextLight: {
+    color: '#082621',
+  },
+  controlModeBannerLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  controlModeTitleLight: {
+    color: '#0f756d',
+  },
+  controlModeDescLight: {
+    color: '#57534e',
+  },
+  toggleControlBtnLight: {
+    borderColor: '#0b1110',
+  },
+  syncedTrackCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  syncedTrackCoverLight: {
+    backgroundColor: '#ded2bb',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  syncStatusTextLight: {
+    color: '#0f756d',
+  },
+  syncedTrackTitleLight: {
+    color: '#082621',
+  },
+  syncedTrackArtistLight: {
+    color: '#57534e',
+  },
+  progressBarBgLight: {
+    backgroundColor: '#ded2bb',
+  },
+  progressTimeTextLight: {
+    color: '#57534e',
+  },
+  playerControlBtnLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  playerPlayPauseBtnLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  hostLockedNoticeTextLight: {
+    color: '#b45309',
+  },
+  membersCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  membersTitleLight: {
+    color: '#082621',
+  },
+  memberItemLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  memberAvatarLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  memberNameLight: {
+    color: '#082621',
+  },
+  leaveBtnLight: {
+    backgroundColor: '#fee2e2',
+    borderColor: '#dc2626',
+  },
+  leaveBtnTextLight: {
+    color: '#dc2626',
+  },
+  queueCardLight: {
+    backgroundColor: '#fdfbf7',
+    borderColor: '#0b1110',
+  },
+  queueHeaderLight: {
+    borderBottomColor: '#d6c8b0',
+  },
+  queueTitleLight: {
+    color: '#082621',
+  },
+  addSongToggleBtnLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  searchDrawerLight: {
+    backgroundColor: '#ede5d3',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  filterTabBtnLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+  },
+  filterTabBtnActiveLight: {
+    backgroundColor: '#17a398',
+    borderColor: '#0b1110',
+  },
+  filterTabTextLight: {
+    color: '#57534e',
+  },
+  searchBoxLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  searchInputLight: {
+    color: '#0b1110',
+  },
+  recsHeaderTitleLight: {
+    color: '#57534e',
+  },
+  recsShuffleBtnLight: {
+    backgroundColor: '#ffffff',
+    borderColor: '#0b1110',
+  },
+  recsShuffleBtnTextLight: {
+    color: '#0f756d',
+  },
+  searchResultItemLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1c7b7',
+  },
+  resultCoverLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  resultTitleLight: {
+    color: '#082621',
+  },
+  resultArtistLight: {
+    color: '#57534e',
+  },
+  queueAddBtnLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  queueItemLight: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  queueIndexLight: {
+    color: '#57534e',
+  },
+  queueCoverLight: {
+    borderWidth: 1,
+    borderColor: '#0b1110',
+  },
+  queueTrackTitleLight: {
+    color: '#082621',
+  },
+  queueTrackArtistLight: {
+    color: '#57534e',
+  },
+  dragHandleLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.06)',
+  },
+  emptyQueueTextLight: {
+    color: '#78716c',
   },
 });

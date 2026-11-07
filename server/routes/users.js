@@ -208,7 +208,7 @@ router.post('/listening-activity', auth, async (req, res) => {
         currentListening: user.currentListening,
         lastActiveAt: user.lastActiveAt,
         isOnline,
-        isLive: Boolean(user.currentListening?.isPlaying && isOnline)
+        isLive: Boolean(user.currentListening?.isPlaying)
       });
     }
 

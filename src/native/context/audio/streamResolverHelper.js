@@ -2,7 +2,7 @@ import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
 import NetInfo from '@react-native-community/netinfo';
 import { API_BASE_URL } from '../../config';
-import { resolveAudioStream } from '../../services/youtubeResolver';
+import { resolveAudioStream, clearStreamCache } from '../../services/youtubeResolver';
 import { isQuranContent } from '../../../utils/quranUtils';
 import { reanchorDocumentUri, updateTrackDownloadRecord } from '../../services/download/storageManifestService';
 
@@ -199,9 +199,9 @@ export const createAudioSound = async ({
         throw new Error('This offline media file is damaged and cannot be played while offline');
       }
 
-      // Transparently fall back to resolving online stream
+      // Transparently fall back to resolving online stream (bypassing any stale cache)
       let streamUri = await resolveAudioStream(
-        track,
+        { ...track, isRetry: true, _clearCache: true },
         isQuranContent(track) ? false : isVocalOnly,
         isQuranContent(track) ? null : updateVocalStatus,
         signal
@@ -226,6 +226,46 @@ export const createAudioSound = async ({
         }
       );
       return { sound: fallbackResult.sound, status: fallbackResult.status, uri: streamUri };
+    }
+
+    // If remote HTTP/HTTPS stream failed in AVPlayer (e.g. error -1008 NSURLErrorResourceUnavailable, expired token, network glitch)
+    if (activeUri && typeof activeUri === 'string' && (activeUri.startsWith('http://') || activeUri.startsWith('https://')) && (!signal || !signal.aborted)) {
+      console.warn('[streamResolverHelper] AVPlayer failed on remote stream (-1008 or network error), clearing cache and retrying fresh stream:', err?.message);
+      const trackId = String(track?._id || track?.id || '');
+      if (trackId) {
+        clearStreamCache(trackId);
+      }
+
+      try {
+        const retryTrack = { ...track, isRetry: true, _clearCache: true };
+        let freshUri = await resolveAudioStream(
+          retryTrack,
+          isQuranContent(track) ? false : isVocalOnly,
+          isQuranContent(track) ? null : updateVocalStatus,
+          signal
+        );
+
+        if (signal?.aborted) return { sound: null, status: null, uri: null };
+
+        if (freshUri && typeof freshUri === 'string') {
+          if (freshUri.startsWith('/')) {
+            freshUri = `${API_BASE_URL}${freshUri}`;
+          }
+
+          const retryResult = await Audio.Sound.createAsync(
+            { uri: freshUri },
+            {
+              shouldPlay: autoPlay !== false,
+              positionMillis: Math.round(safeTargetSec * 1000),
+              volume,
+              progressUpdateIntervalMillis: 250,
+            }
+          );
+          return { sound: retryResult.sound, status: retryResult.status, uri: freshUri };
+        }
+      } catch (retryErr) {
+        console.warn('[streamResolverHelper] Fresh stream retry also failed:', retryErr?.message);
+      }
     }
 
     // If vocal-only stream playback failed in AVPlayer, smoothly fall back to high-quality regular audio

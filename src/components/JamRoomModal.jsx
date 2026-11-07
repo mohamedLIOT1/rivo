@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { resumeAudioContext } from '../utils/audioEngine';
 import { isQuranContent } from '../utils/quranUtils';
+import { useUI } from '../context/UIContext';
 import VerifiedBadge from './VerifiedBadge';
 
 export default function JamRoomModal({ 
@@ -26,7 +27,7 @@ export default function JamRoomModal({
   socket = null,
   onKickMember = () => {},
   onViewProfile = () => {},
-  globalTheme = 'dark'
+  globalTheme
 }) {
   const [inputCode, setInputCode] = useState('');
   const [copied, setCopied] = useState(false);
@@ -36,7 +37,9 @@ export default function JamRoomModal({
   const [draggedQueueIndex, setDraggedQueueIndex] = useState(null);
   const [jamContentFilter, setJamContentFilter] = useState('songs'); // 'songs' | 'quran'
 
-  const isDark = globalTheme === 'dark' || (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const ui = useUI ? useUI() : null;
+  const activeGlobalTheme = globalTheme || ui?.globalTheme || 'dark';
+  const isDark = activeGlobalTheme === 'dark';
 
   if (!isOpen) return null;
 
@@ -123,11 +126,11 @@ export default function JamRoomModal({
             <div className="flex flex-col gap-3">
               {/* Active Jam Room Banner */}
               <div className={`p-3.5 brutal-border brutal-shadow text-center relative overflow-hidden rounded-xl ${
-                isDark ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-[#082621] text-[#fdfbf7]'
+                isDark ? 'bg-zinc-900 text-white border-zinc-800' : 'bg-[#ede5d3] text-[#082621] border-[#0b1110]'
               }`}>
-                <span className="text-[10px] font-mono font-black uppercase text-[#17a398]">ACTIVE JAM ROOM CODE</span>
-                <h2 className="text-2xl sm:text-3xl font-mono font-black text-[#f59e0b] mt-0.5 tracking-wider">{jamSession.code}</h2>
-                <p className={`text-[11px] mt-0.5 font-sans ${isDark ? 'text-zinc-400' : 'text-[#ded2bb]'}`}>
+                <span className={`text-[10px] font-mono font-black uppercase ${isDark ? 'text-[#17a398]' : 'text-[#0f756d]'}`}>ACTIVE JAM ROOM CODE</span>
+                <h2 className={`text-2xl sm:text-3xl font-mono font-black mt-0.5 tracking-wider ${isDark ? 'text-[#f59e0b]' : 'text-[#d97706]'}`}>{jamSession.code}</h2>
+                <p className={`text-[11px] mt-0.5 font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
                   Share this code with friends to synchronize listening.
                 </p>
 
@@ -135,7 +138,7 @@ export default function JamRoomModal({
                   <button
                     onClick={handleCopyCode}
                     className={`brutal-btn px-3.5 py-1.5 font-mono font-black text-xs uppercase brutal-border brutal-shadow-sm inline-flex items-center gap-1.5 cursor-pointer rounded-lg ${
-                      isDark ? 'bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700' : 'bg-[#fdfbf7] text-[#082621]'
+                      isDark ? 'bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110] hover:bg-white'
                     }`}
                   >
                     {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
@@ -161,7 +164,7 @@ export default function JamRoomModal({
 
                 return (
                   <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2.5 ${
-                    isDark ? 'bg-zinc-900/80 border-zinc-800 text-white' : 'bg-[#f4eee0] border-black/20 text-[#0b1110]'
+                    isDark ? 'bg-zinc-900/80 border-zinc-800 text-white' : 'bg-[#ede5d3] border-[#0b1110] text-[#0b1110]'
                   }`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <Radio size={15} className={isHostOnly ? 'text-amber-400 shrink-0' : 'text-[#17a398] shrink-0'} />
@@ -299,7 +302,9 @@ export default function JamRoomModal({
                   onLeaveJam();
                   onClose();
                 }}
-                className="brutal-btn w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-[#dc2626] font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm rounded-lg cursor-pointer"
+                className={`brutal-btn w-full py-2 font-mono text-[11px] font-black uppercase brutal-border brutal-shadow-sm rounded-lg cursor-pointer ${
+                  isDark ? 'bg-red-500/10 hover:bg-red-500/20 text-[#dc2626] border-red-500/30' : 'bg-red-50 hover:bg-red-100 text-[#dc2626] border-red-300'
+                }`}
               >
                 LEAVE JAM ROOM
               </button>

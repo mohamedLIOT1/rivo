@@ -74,7 +74,7 @@ module.exports = function (io, updateConfig = {}) {
       manifest.platforms.android.ota = {
         ...manifest.platforms.android.ota,
         ...dynamicOta,
-        minAppVersion: '1.9.6'
+        minAppVersion: dynamicOta.minAppVersion || '1.0.0'
       };
     }
     return manifest;
@@ -189,14 +189,8 @@ module.exports = function (io, updateConfig = {}) {
           }
 
           if (!hasRemainingSockets) {
-            const isActivelyPlaying = typeof discordActivity.isUserActivelyPlaying === 'function' && discordActivity.isUserActivelyPlaying(uidStr);
-            const activeDiscordSession = typeof discordActivity.getActiveSession === 'function' ? discordActivity.getActiveSession(uidStr) : null;
-            const hasActivePlayback = Boolean(isActivelyPlaying || (activeDiscordSession && activeDiscordSession.currentTrack));
-
-            if (!hasActivePlayback) {
-              try { discordActivity.disconnectUserSession(uidStr).catch(() => {}); } catch (e) {}
-            }
-
+            // Mobile devices suspend/disconnect WebSockets when screen locks or app backgrounds.
+            // DO NOT kill Discord activity or clear playback synchronously here!
             if (userDisconnectGraceTimers.has(uidStr)) {
               clearTimeout(userDisconnectGraceTimers.get(uidStr));
             }
@@ -211,11 +205,31 @@ module.exports = function (io, updateConfig = {}) {
 
                 userSocketMap.delete(uidStr);
 
-                const stillPlaying = typeof discordActivity.isUserActivelyPlaying === 'function' && discordActivity.isUserActivelyPlaying(uidStr);
-                const currentDiscordSession = typeof discordActivity.getActiveSession === 'function' ? discordActivity.getActiveSession(uidStr) : null;
-                const keepDiscordActive = Boolean(stillPlaying || (currentDiscordSession && currentDiscordSession.currentTrack));
+                // Determine if user is still actively listening in background or on lockscreen
+                let isDbPlaying = false;
+                let dbUser = null;
+                try {
+                  dbUser = await User.findById(uidStr).select('currentListening discord name avatar').lean();
+                  if (dbUser?.currentListening?.isPlaying && dbUser?.currentListening?.title) {
+                    const now = Date.now();
+                    const trackDur = Number(dbUser.currentListening.duration) > 0 ? Number(dbUser.currentListening.duration) : 240;
+                    const curSec = Math.max(0, Number(dbUser.currentListening.currentTime) || 0);
+                    const updatedAtTs = dbUser.currentListening.updatedAt ? new Date(dbUser.currentListening.updatedAt).getTime() : now;
+                    const elapsedSec = Math.max(0, (now - updatedAtTs) / 1000);
+                    const graceSec = 180; // 3-minute grace window for backgrounded playback
+                    if (curSec + elapsedSec < trackDur + graceSec) {
+                      isDbPlaying = true;
+                    }
+                  }
+                } catch (e) {}
 
-                if (!keepDiscordActive) {
+                const isDiscordPlaying = typeof discordActivity.isUserActivelyPlaying === 'function' && discordActivity.isUserActivelyPlaying(uidStr);
+                const currentDiscordSession = typeof discordActivity.getActiveSession === 'function' ? discordActivity.getActiveSession(uidStr) : null;
+                const hasDiscordSession = Boolean(currentDiscordSession && currentDiscordSession.currentTrack && (currentDiscordSession.isPlaying || (currentDiscordSession.expiresAt && Date.now() < currentDiscordSession.expiresAt)));
+
+                const isActivelyListening = Boolean(isDbPlaying || isDiscordPlaying || hasDiscordSession);
+
+                if (!isActivelyListening) {
                   userDeviceSessions.delete(uidStr);
 
                   try {
@@ -242,6 +256,7 @@ module.exports = function (io, updateConfig = {}) {
 
                   try { await discordActivity.disconnectUserSession(uidStr); } catch (e) {}
                 } else {
+                  // User is listening in background or on lockscreen: keep currentListening.isPlaying and Discord active!
                   try {
                     await User.findByIdAndUpdate(uidStr, {
                       $set: {
@@ -256,6 +271,15 @@ module.exports = function (io, updateConfig = {}) {
                     isLive: true
                   });
                   notifyFollowersStatus(uidStr, false);
+
+                  io.emit('activity:updated', {
+                    userId: uidStr,
+                    name: dbUser?.name,
+                    avatar: dbUser?.avatar,
+                    currentListening: dbUser?.currentListening,
+                    isOnline: false,
+                    isLive: true
+                  });
                 }
               } catch (gErr) {
                 console.error('[Socket Disconnect Grace Timer error]', gErr.message);

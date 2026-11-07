@@ -118,13 +118,13 @@ function isUserActivelyPlaying(userId) {
   if (!userId) return false;
   const uidStr = String(userId);
   const session = activeUserBots.get(uidStr);
-  if (!session || !session.currentTrack) return false;
+  if (!session || !session.currentTrack || !session.isPlaying) return false;
   const now = Date.now();
   const trackDur = Number(session.currentTrack.duration) > 0 ? Number(session.currentTrack.duration) : 240;
   const curSec = Math.max(0, Number(session.currentTime) || 0);
   const fallbackExpiry = (session.lastStartTs || session.lastHeartbeat || now) + (trackDur - curSec + 180) * 1000;
   const expiresAt = session.expiresAt || fallbackExpiry;
-  return Boolean(session.currentTrack && (session.isPlaying || now < expiresAt));
+  return now < expiresAt;
 }
 
 const isUserPlaying = isUserActivelyPlaying;
@@ -171,11 +171,12 @@ async function disconnectUserSession(userId) {
   } catch (e) {}
 
   if (ioInstance) {
+    const isOnline = Boolean(ioInstance.sockets?.adapter?.rooms?.get(`user:${uidStr}`)?.size > 0);
     ioInstance.emit('activity:updated', {
       userId: uidStr,
       currentListening: { isPlaying: false },
       isLive: false,
-      isOnline: false
+      isOnline
     });
   }
 }
@@ -235,12 +236,12 @@ async function handleUserListening(user, track, isPlaying, currentTime = 0) {
     return;
   }
 
-  // Calculate remaining track duration + 3-minute grace period (up to 15m, min 60s)
+  // Calculate remaining track duration + 3-minute grace period (up to 120m, min 60s)
   const trackDuration = Number(track.duration) > 0 ? Number(track.duration) : 240;
   const curSec = Math.max(0, Number(currentTime) || 0);
   const remainingTrackSec = Math.max(0, trackDuration - curSec);
   const graceSec = 180; // 3-minute grace period for backgrounded playback
-  const remainingMs = Math.min(15 * 60 * 1000, Math.max(60000, (remainingTrackSec + graceSec) * 1000));
+  const remainingMs = Math.min(120 * 60 * 1000, Math.max(60000, (remainingTrackSec + graceSec) * 1000));
   const now = Date.now();
   const sessionExpiresAt = now + remainingMs;
 

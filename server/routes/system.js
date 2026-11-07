@@ -66,7 +66,7 @@ const APP_VERSIONS_DATA = {
         enabled: true,
         version: '2.4.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.6',
+        minAppVersion: '1.0.0',
         notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
         notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
         bundleSize: 4889888,
@@ -122,7 +122,7 @@ const BETA_VERSIONS_DATA = {
         enabled: true,
         version: '2.4.1',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
-        minAppVersion: '1.9.6',
+        minAppVersion: '1.0.0',
         notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
         notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
         bundleSize: 4889888,
@@ -239,7 +239,7 @@ router.get('/api/app/version', optionalAuth, (req, res) => {
       ...(manifest.platforms.android.ota || {}),
       ...dynamicOta,
       bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-      minAppVersion: dynamicOta.minAppVersion || '1.9.6'
+      minAppVersion: dynamicOta.minAppVersion || '1.0.0'
     };
   }
 
@@ -259,13 +259,13 @@ router.get('/api/app/ota', optionalAuth, (req, res) => {
 
   res.json({
     enabled: true,
-    version: dynamicOta.version || '2.3.7',
+    version: dynamicOta.version || '2.4.1',
     bundleUrl: dynamicOta.bundleUrl?.startsWith('http')
       ? dynamicOta.bundleUrl
       : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl || '/downloads/ota/index.android.bundle'}`,
-    minAppVersion: dynamicOta.minAppVersion || '1.9.6',
-    notes: dynamicOta.notes || 'تحديث هوائي فوري v2.3.7 • أحدث التحسينات والإصلاحات',
-    notesEn: dynamicOta.notesEn || 'Instant OTA update v2.3.7 • Smart Queue & performance fixes',
+    minAppVersion: dynamicOta.minAppVersion || '1.0.0',
+    notes: dynamicOta.notes || 'تحديث هوائي فوري v2.4.1 • أحدث التحسينات والإصلاحات',
+    notesEn: dynamicOta.notesEn || 'Instant OTA update v2.4.1 • Smart Queue & performance fixes',
     bundleSize: dynamicOta.bundleSize || 4807809,
     sizeMb: dynamicOta.sizeMb || '4.59 MB',
     updatedAt: dynamicOta.updatedAt || new Date().toISOString()
@@ -441,7 +441,7 @@ router.post('/api/app/broadcast-update', adminAuth, (req, res) => {
           ...(manifest.platforms.android.ota || {}),
           ...dynamicOta,
           bundleUrl: dynamicOta.bundleUrl?.startsWith('http') ? dynamicOta.bundleUrl : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl}`,
-          minAppVersion: dynamicOta.minAppVersion || '1.9.6'
+          minAppVersion: dynamicOta.minAppVersion || '1.0.0'
         };
       }
       req.io.emit('app:update_manifest', manifest);

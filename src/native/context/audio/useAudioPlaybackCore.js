@@ -102,6 +102,11 @@ export const useAudioPlaybackCore = ({
   }, [setIsVocalOnly]);
 
   const onPlaybackStatusUpdate = useCallback((status) => {
+    if (status?.didJustFinish) {
+      if (repeatModeRef?.current === 'one' && currentTrackRef.current && typeof broadcastListeningActivity === 'function') {
+        broadcastListeningActivity(currentTrackRef.current, true, 0);
+      }
+    }
     handlePlaybackStatusUpdate({
       status,
       playbackStatusRef,
@@ -140,6 +145,7 @@ export const useAudioPlaybackCore = ({
     completeSeamlessHandoff, preloadNextTrackForDjMix, repeatModeRef,
     autoPersistFinishedTrack, handleDownloadTrack, autoDownloadFinishedRef,
     likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef, setIsPlaying,
+    broadcastListeningActivity,
   ]);
 
   const playTrack = useCallback(async (track, trackList = [], isRetry = false, targetTime = 0, isRemoteParam = false, isSmartMood = false, autoPlay = true) => {
@@ -177,6 +183,9 @@ export const useAudioPlaybackCore = ({
         setIsPlaying(true);
         const isLikedTrack = likedTrackIds.some(id => String(id) === curId);
         updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
+        if (typeof broadcastListeningActivity === 'function') {
+          broadcastListeningActivity(track, true, safeTargetSec);
+        }
       }
       return;
     }
@@ -201,6 +210,10 @@ export const useAudioPlaybackCore = ({
       currentTime: safeTargetSec,
       duration: Number(track.duration || 240),
     });
+
+    if (autoPlay && typeof broadcastListeningActivity === 'function') {
+      broadcastListeningActivity(track, true, safeTargetSec);
+    }
 
     try {
       if (Array.isArray(trackList) && trackList.length > 0) {
@@ -263,7 +276,9 @@ export const useAudioPlaybackCore = ({
         isPlayingRef.current = true;
         setIsPlaying(true);
         updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
-        broadcastListeningActivity(track, true, safeTargetSec);
+        if (typeof broadcastListeningActivity === 'function') {
+          broadcastListeningActivity(track, true, safeTargetSec);
+        }
         if (!Boolean(isRemoteParam) && jamSyncRef?.current?.jamSession && canControlJam()) {
           jamSyncRef.current.broadcastPlayState?.(true, track, safeTargetSec);
         }

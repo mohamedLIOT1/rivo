@@ -118,22 +118,20 @@ function ActivityListItemComponent({
               {friend.isVerified && <VerifiedBadge userOrName={friend} size={13} className="shrink-0" />}
             </div>
 
-            {/* Subtitle Under Name */}
-            <span
-              className={`text-[10px] block truncate mt-0.5 ${
-                isLive
-                  ? 'text-[#10b981] font-bold'
-                  : isOnline
-                  ? 'text-emerald-400 font-semibold'
-                  : 'text-zinc-400'
-              } ${isRTL ? 'font-sans tracking-normal' : ''}`}
-            >
-              {isLive
-                ? (isRTL ? 'يستمع الآن على ريفو' : 'Listening live on Rivo')
-                : isOnline
-                ? (isRTL ? 'متصل الآن' : 'Online now')
-                : formatBadgePill(friend.lastActiveAt, isRTL)}
-            </span>
+            {/* Subtitle Under Name (Only shown when live or online; offline time is in the right badge) */}
+            {(isLive || isOnline) && (
+              <span
+                className={`text-[10px] block truncate mt-0.5 ${
+                  isLive
+                    ? 'text-[#10b981] font-bold'
+                    : 'text-emerald-400 font-semibold'
+                } ${isRTL ? 'font-sans tracking-normal' : ''}`}
+              >
+                {isLive
+                  ? (isRTL ? 'يستمع الآن على ريفو' : 'Listening live on Rivo')
+                  : (isRTL ? 'متصل الآن' : 'Online now')}
+              </span>
+            )}
           </div>
         </div>
 

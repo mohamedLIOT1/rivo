@@ -138,21 +138,21 @@ const FriendActivityCard = React.memo(function FriendActivityCard({
                 />
               )}
             </View>
-            <Text
-              style={[
-                styles.statusSubtitle,
-                isRTL && styles.arabicText,
-                isRTL && styles.textRight
-              ]}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {isLive
-                ? (isRTL ? 'يستمع الآن على ريفو' : 'Listening live on Rivo')
-                : isOnline
-                ? (isRTL ? 'متصل الآن' : 'Online now')
-                : formatLastSeenSubtitle(item.lastActiveAt, isRTL)}
-            </Text>
+            {(isLive || isOnline) && (
+              <Text
+                style={[
+                  styles.statusSubtitle,
+                  isRTL && styles.arabicText,
+                  isRTL && styles.textRight
+                ]}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {isLive
+                  ? (isRTL ? 'يستمع الآن على ريفو' : 'Listening live on Rivo')
+                  : (isRTL ? 'متصل الآن' : 'Online now')}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
 

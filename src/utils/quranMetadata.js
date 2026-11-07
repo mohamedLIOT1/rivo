@@ -129,65 +129,168 @@ export const getMushafPageUrl = (pageNum) => {
   return `https://android.quran.com/data/width_1260/page${pageStr}.png`;
 };
 
+import { SURAH_ALIASES } from './quranSurahAliases.js';
+export { SURAH_ALIASES };
+
+/**
+ * Normalizes text for Quranic search
+ */
+const normText = (str) => String(str || '')
+  .toLowerCase()
+  .replace(/[\u064B-\u065F\u0670]/g, '')
+  .replace(/[أإآا]/g, 'ا')
+  .replace(/[ة]/g, 'ه')
+  .replace(/[ى]/g, 'ي')
+  .replace(/[-_.]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
 /**
  * Detects the Surah and resolves its page range from track metadata
+ * Prioritizes explicit Surah prefixes, prevents reciter names (e.g. عبد الرحمن)
+ * from triggering wrong Surahs, and checks both English and Arabic.
  * @param {string} title Track title or Surah name
  * @param {string} [artist] Reciter or artist name
  * @returns {Object|null} Surah page range details or default fallback
  */
 export const getSurahPageRange = (title = '', artist = '') => {
   if (!title) return null;
-  const cleanTitle = String(title).trim().toLowerCase();
+  const cleanTitle = String(title).trim();
+  const normTitle = normText(cleanTitle);
 
-  // Normalize Arabic text for searching
-  const norm = (str) => String(str)
-    .replace(/[إأآا]/g, 'ا')
-    .replace(/[ة]/g, 'ه')
-    .replace(/[ى]/g, 'ي')
-    .replace(/[\u064B-\u065F]/g, '') // remove tashkeel
-    .replace(/[-_.]/g, ' ')
-    .trim();
-
-  const normTitle = norm(cleanTitle);
-
-  // 1. Prioritize Surah name matching (exact or contained canonical names)
-  const sortedSurahs = [...SURAH_METADATA].sort((a, b) => b.name.length - a.name.length);
-  for (const s of sortedSurahs) {
-    const normSurah = norm(s.name);
-    const wordPattern = new RegExp('(^|\\s)' + normSurah + '(\\s|$)', 'i');
-    if (wordPattern.test(normTitle) || cleanTitle.includes(s.englishName.toLowerCase())) {
-      return s;
-    }
-  }
-
-  // Check if any Surah is preceded by "سورة" or "سوره"
-  for (const s of sortedSurahs) {
-    const normSurah = norm(s.name);
-    if (normTitle.includes('سورة ' + normSurah) || normTitle.includes('سوره ' + normSurah)) {
-      return s;
-    }
-  }
-
-  // 2. Strict number match: ONLY if explicitly prefixed by "سورة" / "سوره" / "surah"
-  // NEVER treat Taraweeh nights ("ليلة 27"), Juz ("جزء 27"), or dates as Surah numbers!
-  const explicitNumMatch = cleanTitle.match(/(?:surah|سورة|سوره)\s*#?\s*0*([1-9][0-9]?|10[0-9]|11[0-4])\b/i);
+  // 1. Explicit Surah number match: e.g. "سورة 55" or "Surah 11"
+  const explicitNumMatch = cleanTitle.match(/(?:surah|surat|surate|sourah|sourat|سورة|سوره)\s*#?\s*0*([1-9][0-9]?|10[0-9]|11[0-4])\b/i);
   if (explicitNumMatch) {
     const num = parseInt(explicitNumMatch[1], 10);
-    if (num >= 1 && num <= 114) {
-      const match = SURAH_METADATA.find(s => s.id === num);
-      if (match) return match;
+    const match = SURAH_METADATA.find(s => s.id === num);
+    if (match) return match;
+  }
+
+  // 2. Explicit Surah Name Match: "سورة [اسم]" or "Surah/Surat [name]"
+  const arSurahPrefixRegex = /(?:سورة|سوره)\s+([\u0621-\u064A]+(?:\s+[\u0621-\u064A]+)?)/g;
+  let m;
+  while ((m = arSurahPrefixRegex.exec(normTitle)) !== null) {
+    const cand = m[1].trim();
+    const candWords = cand.split(/\s+/);
+    for (const testName of [cand, candWords[0]]) {
+      for (const [idStr, aliases] of Object.entries(SURAH_ALIASES)) {
+        if (aliases.ar.some(a => normText(a) === testName)) {
+          return SURAH_METADATA.find(s => s.id === parseInt(idStr, 10));
+        }
+      }
     }
   }
 
-  // 3. Track number prefix at start of title (e.g. "027 - An-Naml")
+  const enSurahPrefixRegex = /(?:surah|surat|surate|sourah|sourat)\s+([a-z'\-]+(?:\s+[a-z'\-]+)?)/gi;
+  while ((m = enSurahPrefixRegex.exec(normText(cleanTitle))) !== null) {
+    const cand = m[1].trim();
+    const candWords = cand.split(/\s+/);
+    for (const testName of [cand, candWords[0]]) {
+      for (const [idStr, aliases] of Object.entries(SURAH_ALIASES)) {
+        if (aliases.en.some(a => normText(a) === testName)) {
+          return SURAH_METADATA.find(s => s.id === parseInt(idStr, 10));
+        }
+      }
+    }
+  }
+
+  // 3. Leading Track Number match (e.g. "011 - Hud" or "11. Hud")
   const isNightOrJuz = /(?:ليلة|ليله|تراويح|جزء|حزب|ركعة|ركعه|رمضان)/i.test(normTitle);
   if (!isNightOrJuz) {
     const leadingTrackNumMatch = cleanTitle.match(/^0*([1-9][0-9]?|10[0-9]|11[0-4])(?:\s*[\.\-–\s])/);
     if (leadingTrackNumMatch) {
       const num = parseInt(leadingTrackNumMatch[1], 10);
-      if (num >= 1 && num <= 114) {
-        const match = SURAH_METADATA.find(s => s.id === num);
-        if (match) return match;
+      const match = SURAH_METADATA.find(s => s.id === num);
+      if (match) return match;
+    }
+  }
+
+  // 4. Match Surah Name without explicit prefix
+  // Clean reciter/artist references first so that reciter names (e.g. 'عبد الرحمن مسعد' or 'محمد المنشاوي')
+  // NEVER trigger false Surah matches!
+  let titleWithoutReciter = normTitle;
+  let enTitleWithoutReciter = normText(cleanTitle);
+
+  // Never let 'عبد الرحمن' or 'عبدالرحمن' in reciter names trigger Surah 55
+  titleWithoutReciter = titleWithoutReciter
+    .replace(/عبد\s*الرحمن/g, '__reciter_abd__')
+    .replace(/عبدالرحمن/g, '__reciter_abd__');
+
+  enTitleWithoutReciter = enTitleWithoutReciter
+    .replace(/abdul(?:\s*|-)?(?:rhman|rahman|mossad|mosad)/g, '__reciter_abd__')
+    .replace(/abdel(?:\s*|-)?(?:rhman|rahman|mossad|mosad)/g, '__reciter_abd__')
+    .replace(/abdurrahman/g, '__reciter_abd__');
+
+  if (artist) {
+    const normArt = normText(artist);
+    if (normArt.length > 2) {
+      titleWithoutReciter = titleWithoutReciter.replace(new RegExp(normArt, 'g'), ' ');
+      enTitleWithoutReciter = enTitleWithoutReciter.replace(new RegExp(normArt, 'g'), ' ');
+    }
+  }
+
+  const reciterNamesToClean = [
+    'مسعد', 'المنشاوي', 'الحصري', 'العفاسي', 'المعيقلي', 'الدوسري', 'السديس', 
+    'الغامدي', 'الشريم', 'العجمي', 'البنا', 'الطبلاوي', 'عبدالباسط', 'عبد الباسط',
+    'اسلام صبحي', 'هزاع البلوشي', 'رعد الكردي', 'وديع اليمني'
+  ];
+  for (const r of reciterNamesToClean) {
+    titleWithoutReciter = titleWithoutReciter.replace(new RegExp(normText(r), 'g'), ' ');
+  }
+
+  titleWithoutReciter = titleWithoutReciter.replace(/محمد\s+(صديق|ايوب|جبريل|رفعت|محمود|على|علي)/g, ' ');
+
+  const sortedSurahEntries = Object.entries(SURAH_ALIASES).sort((a, b) => {
+    const maxA = Math.max(...a[1].ar.map(x => x.length), ...a[1].en.map(x => x.length));
+    const maxB = Math.max(...b[1].ar.map(x => x.length), ...b[1].en.map(x => x.length));
+    return maxB - maxA;
+  });
+
+  for (const [idStr, aliases] of sortedSurahEntries) {
+    const id = parseInt(idStr, 10);
+    // Special guard for Surah 55 (الرحمن):
+    // Only match if standalone 'الرحمن' is found and NOT preceded by 'عبد'
+    if (id === 55) {
+      const rahmanWordPattern = /(?:^|\s)الرحمن(?:\s|$)/;
+      const rahmanEnPattern = /(?:^|\s)(?:ar rahman|al rahman|rahman)(?:\s|$)/;
+      if (rahmanWordPattern.test(titleWithoutReciter) || rahmanEnPattern.test(enTitleWithoutReciter)) {
+        return SURAH_METADATA.find(s => s.id === 55);
+      }
+      continue;
+    }
+
+    // Special guard for Surah 47 (محمد):
+    if (id === 47) {
+      const muhammadWordPattern = /(?:^|\s)محمد(?:\s|$)/;
+      const muhammadEnPattern = /(?:^|\s)(?:muhammad|mohammed)(?:\s|$)/;
+      if (muhammadWordPattern.test(titleWithoutReciter) || muhammadEnPattern.test(enTitleWithoutReciter)) {
+        return SURAH_METADATA.find(s => s.id === 47);
+      }
+      continue;
+    }
+
+    if (['ص', 'ق', 'ن'].includes(aliases.ar[0])) {
+      const letter = aliases.ar[0];
+      const letterPattern = new RegExp('(?:^|\\s)' + letter + '(?:\\s|$)', 'i');
+      if (letterPattern.test(titleWithoutReciter) || titleWithoutReciter === letter) {
+        return SURAH_METADATA.find(s => s.id === id);
+      }
+      continue;
+    }
+
+    for (const a of aliases.ar) {
+      const normA = normText(a);
+      const wordPattern = new RegExp('(?:^|\\s)' + normA + '(?:\\s|$)', 'i');
+      if (wordPattern.test(titleWithoutReciter)) {
+        return SURAH_METADATA.find(s => s.id === id);
+      }
+    }
+
+    for (const e of aliases.en) {
+      const normE = normText(e);
+      const wordPattern = new RegExp('(?:^|\\s)' + normE + '(?:\\s|$)', 'i');
+      if (wordPattern.test(enTitleWithoutReciter)) {
+        return SURAH_METADATA.find(s => s.id === id);
       }
     }
   }

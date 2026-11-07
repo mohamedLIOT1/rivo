@@ -2,7 +2,7 @@
   "enabled": true,
   "version": "2.4.1",
   "bundleUrl": "/downloads/ota/index.android.bundle",
-  "minAppVersion": "1.9.6",
+  "minAppVersion": "1.0.0",
   "notes": "تحديث هوائي فوري (4.68 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
   "notesEn": "Instant in-app OTA update (4.68 MB) • No reinstall required • Performance improvements and bug fixes.",
   "bundleSize": 4904400,
