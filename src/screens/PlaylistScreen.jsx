@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Play, Shuffle, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
+import {
+  Play, Pause, Shuffle, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
   Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical,
   Download, CheckCircle2, CheckSquare, Square, ListPlus, FolderPlus
@@ -116,7 +116,7 @@ export default function PlaylistScreen({
         .catch(() => {});
     }
   }, [initialPlaylist?.id, initialPlaylist?._id, initialPlaylist?.name]);
-  const { currentTrack, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoadingTrack, togglePlay, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
     downloadTrack,
@@ -1180,18 +1180,36 @@ export default function PlaylistScreen({
         isDark ? 'bg-[#141d1b] border-zinc-700' : 'bg-[#fdfbf7] border-black'
       }`}>
         <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
-          <button
-            disabled={filteredPlaylistTracks.length === 0}
-            onClick={() => filteredPlaylistTracks.length > 0 && handlePlayPlaylistTrack(filteredPlaylistTracks[0])}
-            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
-              filteredPlaylistTracks.length > 0
-                ? 'bg-[#10b981] hover:bg-emerald-400 text-[#0b1110] cursor-pointer'
-                : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
-            }`}
-            title="Play playlist"
-          >
-            <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
-          </button>
+          {(() => {
+            const isThisPlaylistPlaying = currentTrack && filteredPlaylistTracks.some(t => String(t.id || t._id) === String(currentTrack.id || currentTrack._id));
+            return (
+              <button
+                disabled={filteredPlaylistTracks.length === 0}
+                onClick={() => {
+                  if (filteredPlaylistTracks.length === 0) return;
+                  if (isThisPlaylistPlaying) {
+                    togglePlay?.();
+                  } else {
+                    handlePlayPlaylistTrack(filteredPlaylistTracks[0]);
+                  }
+                }}
+                className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
+                  filteredPlaylistTracks.length > 0
+                    ? 'bg-[#10b981] hover:bg-emerald-400 text-[#0b1110] cursor-pointer'
+                    : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
+                }`}
+                title={isThisPlaylistPlaying && isLoadingTrack ? 'Loading...' : isThisPlaylistPlaying && isPlaying ? 'Pause playlist' : 'Play playlist'}
+              >
+                {isThisPlaylistPlaying && isLoadingTrack ? (
+                  <Loader2 size={18} className="animate-spin text-[#0b1110]" />
+                ) : isThisPlaylistPlaying && isPlaying ? (
+                  <Pause size={18} fill="currentColor" className="text-[#0b1110] sm:w-5 sm:h-5" />
+                ) : (
+                  <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />
+                )}
+              </button>
+            );
+          })()}
 
           <button
             disabled={filteredPlaylistTracks.length === 0}

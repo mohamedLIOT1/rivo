@@ -1,5 +1,5 @@
 // Rivo Service Worker v30 — iOS PWA & Offline Support
-const CACHE_VER = 'rivo-v41';
+const CACHE_VER = 'rivo-v42';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────
