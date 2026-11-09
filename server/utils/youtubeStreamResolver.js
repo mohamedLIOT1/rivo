@@ -59,7 +59,6 @@ async function extractDirectStreamUrl(videoId, options = {}) {
   const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
   const ytdlpArgs = [
-    '--ignore-config',
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',

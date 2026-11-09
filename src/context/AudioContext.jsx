@@ -376,7 +376,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const backendController = new AbortController();
   const backendTimeoutId = setTimeout(() => {
     try { backendController.abort(); } catch {}
-  }, 4500);
+  }, 12000);
 
   const onParentAbort = () => {
     clearTimeout(backendTimeoutId);
@@ -439,11 +439,11 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   }
 
   // 6. Direct backend resolve-stream endpoint: only attempted if primary didn't time out (bounded to 2s to eliminate double 7s waterfall)
-  if (!signal?.aborted && !backendController.signal.aborted) {
+  if (!signal?.aborted) {
     const resolveController = new AbortController();
     const resolveTimeoutId = setTimeout(() => {
       try { resolveController.abort(); } catch {}
-    }, 2000);
+    }, 5000);
     const onResolveParentAbort = () => {
       clearTimeout(resolveTimeoutId);
       try { resolveController.abort(); } catch {}
@@ -1074,7 +1074,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isPlayingRef,
         shouldPlayRef,
         onStall: () => triggerRecovery('stall_at_zero'),
-        timeoutMs: 4500
+        timeoutMs: 12000
       });
 
       const handleTimeUpdate = () => {
@@ -1518,7 +1518,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           if (!isPlayingRef.current || isChangingTrackRef.current) return;
           if (deck !== audioRef.current) return;
           triggerRecovery('stalled_buffering');
-        }, 4500);
+        }, 12000);
       };
 
       const handleError = () => {

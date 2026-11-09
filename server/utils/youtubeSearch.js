@@ -340,8 +340,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     const cookiesPath = getCookiesPath();
     const simpleQ = `${cleanArt} ${cleanTit}`.trim() || finalQuery;
     const ytdlpArgs = [
-      '--ignore-config',
-      '--no-check-certificates',
+        '--no-check-certificates',
       '--no-playlist',
       '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
       '--get-id',

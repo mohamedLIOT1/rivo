@@ -27,9 +27,9 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 1. Try endpoint /api/tracks/:id/stream with retryAlt=1 (timeout: 8s)
+  // 1. Try endpoint /api/tracks/:id/stream with retryAlt=1 (timeout: 12s)
   const controller1 = new AbortController();
-  const t1 = setTimeout(() => { try { controller1.abort(); } catch {} }, 8000);
+  const t1 = setTimeout(() => { try { controller1.abort(); } catch {} }, 12000);
   const onParentAbort1 = () => { clearTimeout(t1); try { controller1.abort(); } catch {} };
   if (signal) signal.addEventListener('abort', onParentAbort1, { once: true });
 
@@ -60,9 +60,9 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
     if (signal?.aborted) return null;
   }
 
-  // 2. Try endpoint /api/tracks/resolve-stream with retryAlt=1 (timeout: 8s)
+  // 2. Try endpoint /api/tracks/resolve-stream with retryAlt=1 (timeout: 12s)
   const controller2 = new AbortController();
-  const t2 = setTimeout(() => { try { controller2.abort(); } catch {} }, 8000);
+  const t2 = setTimeout(() => { try { controller2.abort(); } catch {} }, 12000);
   const onParentAbort2 = () => { clearTimeout(t2); try { controller2.abort(); } catch {} };
   if (signal) signal.addEventListener('abort', onParentAbort2, { once: true });
 
@@ -99,7 +99,7 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
 /**
  * Creates a watchdog that detects 0:00 playback freeze or stall
  */
-export function createPlaybackWatchdog({ getAudio, isPlayingRef, shouldPlayRef, onStall, timeoutMs = 4500 }) {
+export function createPlaybackWatchdog({ getAudio, isPlayingRef, shouldPlayRef, onStall, timeoutMs = 12000 }) {
   let timerId = null;
 
   const start = () => {

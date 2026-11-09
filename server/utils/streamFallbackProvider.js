@@ -290,7 +290,7 @@ async function resolveBulletproofAudioStream({ videoId, uploadsDir, primaryExtra
     try {
       const primaryRes = await Promise.race([
         primaryExtractor(videoId),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 15000))
       ]);
       if (primaryRes && primaryRes.url) {
         cacheStreamUrl(videoId, primaryRes.url, primaryRes.duration);

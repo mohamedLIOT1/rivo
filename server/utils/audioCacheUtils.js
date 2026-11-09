@@ -151,7 +151,7 @@ async function extractInnertubeDirectStream(videoId) {
       },
       {
         headers: Object.assign({ 'Content-Type': 'application/json' }, p.headers),
-        timeout: 3800
+        timeout: 2000
       }
     );
 
@@ -196,7 +196,7 @@ async function extractInnertubeDirectStream(videoId) {
   };
 
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2200));
     return await Promise.race([
       Promise.any(clientProfiles.map(p => fetchProfile(p))),
       timeoutPromise
@@ -254,7 +254,6 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
   const tempTarget = path.join(cacheDir, `${videoId}_dl_${Date.now()}.%(ext)s`);
 
   const ytdlpArgs = [
-    '--ignore-config',
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',

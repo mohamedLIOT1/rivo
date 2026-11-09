@@ -234,6 +234,7 @@ router.get('/stream-proxy', async (req, res) => {
     if (url.includes('c=VISIONOS')) return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
     if (url.includes('c=ANDROID')) return 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip';
     if (url.includes('c=IOS')) return 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)';
+    if (url.includes('googlevideo.com')) return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
     if (req.headers['user-agent']) return req.headers['user-agent'];
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   };
@@ -297,6 +298,8 @@ router.get('/stream-proxy', async (req, res) => {
       headers['Range'] = req.headers.range;
     }
 
+    console.log('[AXIOS GOOGLEVIDEO URL]:', targetUrl);
+    console.log('[AXIOS GOOGLEVIDEO HEADERS]:', headers);
     const response = await axios({
       method: 'get',
       url: targetUrl,
@@ -305,12 +308,23 @@ router.get('/stream-proxy', async (req, res) => {
       signal: activeAbortController.signal,
       timeout: 180000,
       maxRedirects: 5,
-      validateStatus: (status) => status < 400 || status === 416
+      validateStatus: () => true
     });
+    if (response.status >= 400 && response.status !== 416) {
+      let errBody = '';
+      try {
+        const chunks = [];
+        for await (const chunk of response.data) chunks.push(chunk);
+        errBody = Buffer.concat(chunks).toString('utf-8');
+      } catch {}
+      console.error('[GOOGLEVIDEO ERROR STATUS]:', response.status, 'BODY:', errBody);
+      throw new Error('GoogleVideo responded with ' + response.status + ': ' + errBody);
+    }
 
     forwardStreamResponse(response, targetUrl);
   } catch (err) {
     cleanupStream();
+    console.error('[STREAM PROXY ERROR]:', err.message, err.stack);
 
     // Check upstream timeout conditions
     const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || (err.message && err.message.toLowerCase().includes('timeout'));
