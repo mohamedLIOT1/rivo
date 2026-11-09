@@ -31,6 +31,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
   setFolderTab,
   musicCount,
   quranCount,
+  podcastCount = 0,
   handleImportAudio,
   handleImportFolder,
   handleScanVault,
@@ -218,6 +219,28 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
                 numberOfLines={1}
               >
                 {isRTL ? `📖 قرآن (${quranCount})` : `📖 QURAN (${quranCount})`}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.folderTabBtn,
+                !isDark && styles.folderTabBtnLight,
+                folderTab === 'podcasts' && styles.folderTabBtnActive,
+              ]}
+              onPress={() => setFolderTab('podcasts')}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.folderTabText,
+                  !isDark && styles.folderTabTextLight,
+                  folderTab === 'podcasts' && styles.folderTabTextActive,
+                  rtlTextStyle,
+                ]}
+                numberOfLines={1}
+              >
+                {isRTL ? `🎙️ بودكاست (${podcastCount})` : `🎙️ PODCASTS (${podcastCount})`}
               </Text>
             </TouchableOpacity>
           </View>

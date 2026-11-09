@@ -243,8 +243,8 @@ export function calculateCrossfadeGains(progress, style = 'fade', crossoverBias 
 
   if (style === 'cut' || style === 'slam') {
     return { 
-      gainA: p < 0.90 ? 1.0 : 0.0, 
-      gainB: p >= 0.90 ? 1.0 : 0.0 
+      gainA: p < 0.50 ? 1.0 : 0.0, 
+      gainB: p >= 0.50 ? 1.0 : 0.0 
     };
   }
 
@@ -283,8 +283,8 @@ export function calculateCrossfadeGains(progress, style = 'fade', crossoverBias 
   }
 
   if (style === 'melt') {
-    const gainA = Math.pow(1 - p, 1.4);
-    const gainB = Math.pow(p, 1.4);
+    const gainA = Math.pow(1 - p, 0.75);
+    const gainB = Math.pow(p, 0.75);
     return {
       gainA: Math.max(0, Math.min(1, gainA)),
       gainB: Math.max(0, Math.min(1, gainB))

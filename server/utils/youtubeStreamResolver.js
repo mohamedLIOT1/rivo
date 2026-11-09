@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
 const { execFile } = require('child_process');
-const { resolveBulletproofAudioStream } = require('./streamFallbackProvider');
+const { resolveBulletproofAudioStream, invalidateMemoryCache } = require('./streamFallbackProvider');
 const { extractViaWarmWorker, getYtDlpBin, queueBackgroundAudioCache } = require('./ytDlpWorker');
 const {
   getCookiesPath,
@@ -16,7 +16,26 @@ const { searchYouTubeId } = require('./youtubeSearch');
 const directStreamCache = new Map();
 const downloadingAudioMap = new Map();
 
-async function extractDirectStreamUrl(videoId) {
+function clearStreamMemoryCache(videoId) {
+  if (!videoId) return;
+  const vid = String(videoId).trim();
+  directStreamCache.delete(vid);
+  invalidateMemoryCache(vid);
+}
+
+async function extractDirectStreamUrl(videoId, options = {}) {
+  const bypassInnertube = Boolean(options?.bypassInnertube);
+  // 1. Prioritize direct Innertube player API call (fastest: 250-700ms, no process spawn)
+  if (!bypassInnertube) {
+    try {
+      const itResult = await extractInnertubeDirectStream(videoId);
+      if (itResult && itResult.url) {
+        return itResult;
+      }
+    } catch {}
+  }
+
+  // 2. Warm yt-dlp worker fallback
   try {
     const warmRes = await extractViaWarmWorker(videoId);
     const warmUrl = warmRes ? (warmRes.url || String(warmRes)) : null;
@@ -35,15 +54,7 @@ async function extractDirectStreamUrl(videoId) {
     }
   } catch {}
 
-  // 1. Direct fast Innertube player API call BEFORE yt-dlp (bypasses bot block with itag 140)
-  try {
-    const itResult = await extractInnertubeDirectStream(videoId);
-    if (itResult && itResult.url) {
-      return itResult;
-    }
-  } catch {}
-
-  // 2. Fallback to yt-dlp with reduced timeout (25s)
+  // 3. Fallback to single fast yt-dlp execution (15s timeout, no redundant duplicate execution)
   const bin = getYtDlpBin();
   const cp = getCookiesPath();
   const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -52,24 +63,18 @@ async function extractDirectStreamUrl(videoId) {
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
+    '--js-runtimes', 'node',
     '--print', '%(duration)s'
   ];
   if (cp) {
     ytdlpArgs.push('--cookies', cp);
-    ytdlpArgs.push('--extractor-args', 'youtube:player_client=web');
-  } else {
-    ytdlpArgs.push('--extractor-args', 'youtube:player_client=web,mweb');
   }
   ytdlpArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
 
   const nodeBinDir = path.dirname(process.execPath);
   const execEnv = { ...process.env, PATH: `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:` + (process.env.PATH || '') };
   return new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 25000, env: execEnv }, (err, stdout, stderr) => {
-      const allErr = `${err?.message || ''} ${stderr || ''}`;
-      const isBotBlock = /403|forbidden|bot|sign in to confirm/i.test(allErr);
-
+    execFile(bin, ytdlpArgs, { timeout: 15000, env: execEnv }, (err, stdout) => {
       if (stdout) {
         const lines = stdout.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
         const directUrl = lines.find(l => l.startsWith('http')) || null;
@@ -90,50 +95,7 @@ async function extractDirectStreamUrl(videoId) {
           return resolve(res);
         }
       }
-
-      // If bot blocked, skip fallback yt-dlp call immediately
-      if (isBotBlock) {
-        return resolve(null);
-      }
-
-      // Instant fallback without extractor args (timeout 25s)
-      const fbArgs = [
-        '--ignore-config',
-        '--no-check-certificates',
-        '--no-playlist',
-        '--no-warnings',
-        '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
-        '--print', '%(duration)s'
-      ];
-      if (cp) {
-        fbArgs.push('--cookies', cp);
-        fbArgs.push('--extractor-args', 'youtube:player_client=web');
-      } else {
-        fbArgs.push('--extractor-args', 'youtube:player_client=web,mweb');
-      }
-      fbArgs.push('-g', '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b', ytUrl);
-      execFile(bin, fbArgs, { timeout: 25000, env: execEnv }, (err2, stdout2) => {
-        if (!stdout2) return resolve(null);
-        const lines2 = stdout2.trim().split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const directUrl2 = lines2.find(l => l.startsWith('http')) || null;
-        let duration2 = null;
-        const durLine2 = lines2.find(l => !l.startsWith('http') && !isNaN(Number(l)));
-        if (durLine2 && Number(durLine2) > 0) {
-          duration2 = Math.round(Number(durLine2));
-        } else if (directUrl2) {
-          const mDur2 = directUrl2.match(/[?&]dur=([0-9.]+)/);
-          if (mDur2 && !isNaN(Number(mDur2[1]))) {
-            duration2 = Math.round(Number(mDur2[1]));
-          }
-        }
-        if (directUrl2) {
-          const res2 = new String(directUrl2);
-          res2.url = directUrl2;
-          res2.duration = duration2;
-          return resolve(res2);
-        }
-        resolve(null);
-      });
+      resolve(null);
     });
   });
 }
@@ -141,7 +103,14 @@ async function extractDirectStreamUrl(videoId) {
 async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = '', options = {}) {
   const targetDuration = Number(options?.duration || options?.targetDuration) || null;
   const defaultDur = targetDuration && targetDuration > 0 ? targetDuration : 209;
-  if (rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/'))) {
+  const isRetryAlt = Boolean(options?.retryAlt || options?.forceAlternative);
+  const bypassCache = Boolean(options?.bypassCache || isRetryAlt);
+  const excludedVid = options?.excludeVideoId || null;
+  const excludedSet = new Set(
+    (Array.isArray(excludedVid) ? excludedVid : [excludedVid]).filter(Boolean).map(String)
+  );
+
+  if (!isRetryAlt && rawUrl && typeof rawUrl === 'string' && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/'))) {
     const cleanUpload = rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`;
     const retObj = new String(cleanUpload);
     retObj.url = cleanUpload;
@@ -164,14 +133,23 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       break;
     }
   }
+
+  if (videoId && (excludedSet.has(videoId) || isRetryAlt)) {
+    if (excludedSet.has(videoId)) {
+      clearStreamMemoryCache(videoId);
+      videoId = null;
+      isExplicitVideoId = false;
+    }
+  }
+
   if (!videoId && (title || artist)) {
     try {
-      videoId = await searchYouTubeId({ artist, title, targetDuration });
+      videoId = await searchYouTubeId({ artist, title, targetDuration, excludeVideoIds: Array.from(excludedSet) });
     } catch {}
   }
-  if (!videoId && rawUrl) {
+  if (!videoId && rawUrl && !isRetryAlt) {
     const rawMatch = rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
-    if (rawMatch && rawMatch[1]) { videoId = rawMatch[1]; isExplicitVideoId = true; }
+    if (rawMatch && rawMatch[1] && !excludedSet.has(rawMatch[1])) { videoId = rawMatch[1]; isExplicitVideoId = true; }
   }
   if (videoId) {
     if (typeof videoId === 'object') {
@@ -192,11 +170,13 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
   // 0. Fast bulletproof stream & cache resolver (<500ms)
   const uploadsDir = path.join(__dirname, '../../uploads');
+  const bypassInnertube = Boolean(options?.bypassInnertube || isRetryAlt);
   try {
     const bulletproofRes = await resolveBulletproofAudioStream({
       videoId,
       uploadsDir,
-      primaryExtractor: extractDirectStreamUrl
+      primaryExtractor: (vid) => extractDirectStreamUrl(vid, { bypassInnertube }),
+      bypassCache
     });
     if (bulletproofRes && bulletproofRes.success && bulletproofRes.url) {
       const streamPath = bulletproofRes.url;
@@ -206,7 +186,13 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       retObj.duration = dur;
       retObj.videoId = videoId;
       if (streamPath.startsWith('http')) {
-        directStreamCache.set(videoId, { url: streamPath, duration: dur, expireAt: Date.now() + 3 * 3600 * 1000 });
+        let ttl = 3 * 3600 * 1000;
+        const expMatch = streamPath.match(/[?&]expire=([0-9]+)/);
+        if (expMatch && !isNaN(Number(expMatch[1]))) {
+          const remaining = Number(expMatch[1]) * 1000 - Date.now() - 300000;
+          if (remaining > 60000) ttl = Math.min(ttl, remaining);
+        }
+        directStreamCache.set(videoId, { url: streamPath, duration: dur, expireAt: Date.now() + ttl });
         const targetM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
         queueBackgroundAudioCache(videoId, targetM4a, true, streamPath);
       }
@@ -222,42 +208,44 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   const cachedM4a = path.join(audioCacheDir, `${videoId}.m4a`);
   const cachedMp3 = path.join(audioCacheDir, `${videoId}.mp3`);
 
-  if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
-    if (isAudioFileValid(cachedM4a)) {
-      const realDur = getLocalAudioFileDuration(cachedM4a) || targetDuration || defaultDur;
-      const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
-      retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
-      retObj.duration = realDur;
-      retObj.videoId = videoId;
-      return retObj;
-    } else {
-      try { fs.unlinkSync(cachedM4a); } catch {}
+  if (!bypassCache) {
+    if (fs.existsSync(cachedM4a) && fs.statSync(cachedM4a).size > 20000) {
+      if (isAudioFileValid(cachedM4a)) {
+        const realDur = (await getLocalAudioFileDuration(cachedM4a)) || targetDuration || defaultDur;
+        const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
+        retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
+        retObj.duration = realDur;
+        retObj.videoId = videoId;
+        return retObj;
+      } else {
+        try { fs.unlinkSync(cachedM4a); } catch {}
+      }
     }
-  }
-  if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
-    if (isAudioFileValid(cachedMp3)) {
-      const realDur = getLocalAudioFileDuration(cachedMp3) || targetDuration || defaultDur;
-      const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
-      retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
-      retObj.duration = realDur;
-      retObj.videoId = videoId;
-      return retObj;
-    } else {
-      try { fs.unlinkSync(cachedMp3); } catch {}
+    if (fs.existsSync(cachedMp3) && fs.statSync(cachedMp3).size > 20000) {
+      if (isAudioFileValid(cachedMp3)) {
+        const realDur = (await getLocalAudioFileDuration(cachedMp3)) || targetDuration || defaultDur;
+        const retObj = new String(`/uploads/audio-cache/${videoId}.mp3`);
+        retObj.url = `/uploads/audio-cache/${videoId}.mp3`;
+        retObj.duration = realDur;
+        retObj.videoId = videoId;
+        return retObj;
+      } else {
+        try { fs.unlinkSync(cachedMp3); } catch {}
+      }
     }
-  }
 
-  const cachedStream = directStreamCache.get(videoId);
-  if (cachedStream && Date.now() < cachedStream.expireAt) {
-    if (cachedStream.url && cachedStream.url.includes('.m3u8')) {
-      directStreamCache.delete(videoId);
-    } else {
-      queueBackgroundAudioCache(videoId, cachedM4a, true, cachedStream.url);
-      const retObj = new String(cachedStream.url);
-      retObj.url = cachedStream.url;
-      retObj.duration = cachedStream.duration || targetDuration || defaultDur;
-      retObj.videoId = videoId;
-      return retObj;
+    const cachedStream = directStreamCache.get(videoId);
+    if (cachedStream && Date.now() < cachedStream.expireAt) {
+      if (cachedStream.url && cachedStream.url.includes('.m3u8')) {
+        directStreamCache.delete(videoId);
+      } else {
+        queueBackgroundAudioCache(videoId, cachedM4a, true, cachedStream.url);
+        const retObj = new String(cachedStream.url);
+        retObj.url = cachedStream.url;
+        retObj.duration = cachedStream.duration || targetDuration || defaultDur;
+        retObj.videoId = videoId;
+        return retObj;
+      }
     }
   }
 
@@ -275,19 +263,29 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
   }
 
   const extractPromise = (async () => {
-    let directResult = await extractDirectStreamUrl(videoId);
-    let directUrl = directResult ? (directResult.url || String(directResult)) : null;
-    let authenticDuration = directResult?.duration || targetDuration || null;
-    if (!directUrl && !isExplicitVideoId && (title || artist)) {
+    let directResult = null;
+    if (!isRetryAlt) {
       try {
-        const freshId = await searchYouTubeId({ artist, title, targetDuration });
+        directResult = await extractDirectStreamUrl(videoId, { bypassInnertube });
+      } catch {}
+    }
+    if ((!directResult || isRetryAlt) && (title || artist)) {
+      try {
+        const toExclude = [videoId, ...Array.from(excludedSet)].filter(Boolean);
+        const freshId = await searchYouTubeId({ artist, title, targetDuration, excludeVideoIds: toExclude });
         if (freshId && String(freshId) !== videoId) {
           const freshVidStr = String(freshId);
-          const freshStream = await extractDirectStreamUrl(freshVidStr);
+          const freshStream = await extractDirectStreamUrl(freshVidStr, { bypassInnertube });
           if (freshStream) {
             const fUrl = freshStream.url || String(freshStream);
             const fDur = freshStream.duration || freshId.duration || targetDuration || null;
-            directStreamCache.set(freshVidStr, { url: fUrl, duration: fDur, expireAt: Date.now() + 3 * 3600 * 1000 });
+            let fTtl = 3 * 3600 * 1000;
+            const fExp = fUrl.match(/[?&]expire=([0-9]+)/);
+            if (fExp && !isNaN(Number(fExp[1]))) {
+              const rem = Number(fExp[1]) * 1000 - Date.now() - 300000;
+              if (rem > 60000) fTtl = Math.min(fTtl, rem);
+            }
+            directStreamCache.set(freshVidStr, { url: fUrl, duration: fDur, expireAt: Date.now() + fTtl });
             const resObj = new String(fUrl);
             resObj.url = fUrl;
             resObj.duration = fDur || defaultDur;
@@ -298,9 +296,16 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
       } catch {}
     }
 
+    const directUrl = directResult ? (directResult.url || String(directResult)) : null;
     if (directUrl && !directUrl.includes('.m3u8')) {
-      const chosenDur = authenticDuration || targetDuration || defaultDur;
-      directStreamCache.set(videoId, { url: directUrl, duration: chosenDur, expireAt: Date.now() + 3 * 3600 * 1000 });
+      const chosenDur = directResult?.duration || targetDuration || defaultDur;
+      let dttl = 3 * 3600 * 1000;
+      const dExp = directUrl.match(/[?&]expire=([0-9]+)/);
+      if (dExp && !isNaN(Number(dExp[1]))) {
+        const rem = Number(dExp[1]) * 1000 - Date.now() - 300000;
+        if (rem > 60000) dttl = Math.min(dttl, rem);
+      }
+      directStreamCache.set(videoId, { url: directUrl, duration: chosenDur, expireAt: Date.now() + dttl });
       queueBackgroundAudioCache(videoId, cachedM4a, true, directUrl);
       const resObj = new String(directUrl);
       resObj.url = directUrl;
@@ -312,7 +317,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
     // Direct YouTube download to disk with cookies & format fixup
     const downloadedCache = await downloadYouTubeAudioToCache(videoId, audioCacheDir);
     if (downloadedCache && isAudioFileValid(downloadedCache)) {
-      const fileDur = getLocalAudioFileDuration(downloadedCache) || targetDuration || defaultDur;
+      const fileDur = (await getLocalAudioFileDuration(downloadedCache)) || targetDuration || defaultDur;
       const retObj = new String(`/uploads/audio-cache/${videoId}.m4a`);
       retObj.url = `/uploads/audio-cache/${videoId}.m4a`;
       retObj.duration = fileDur;
@@ -349,6 +354,7 @@ async function resolveOfficialYouTubeAudioStream(rawUrl, title = '', artist = ''
 
 module.exports = {
   directStreamCache,
+  clearStreamMemoryCache,
   extractDirectStreamUrl,
   resolveOfficialYouTubeAudioStream
 };

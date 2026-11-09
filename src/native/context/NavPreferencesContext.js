@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Home, Music, BookOpen, Disc, Download } from 'lucide-react-native';
+import { Home, Music, BookOpen, Disc, Download, Radio } from 'lucide-react-native';
 import { API_BASE_URL } from '../config';
 
 const NAV_STYLE_STORAGE_KEY = '@rivo_native_nav_style_v1';
@@ -8,6 +8,7 @@ const HIDDEN_ITEMS_STORAGE_KEY = '@rivo_native_hidden_items_v1';
 
 export const NAV_MENU_ITEMS = [
   { id: 'music', label: 'Music', icon: Music, screen: 'music' },
+  { id: 'podcasts', label: 'Podcasts', icon: Radio, screen: 'podcasts' },
   { id: 'quran', label: 'Quran', icon: BookOpen, screen: 'quran' },
   { id: 'library', label: 'Playlists', icon: Disc, screen: 'library' },
   { id: 'offline', label: 'Vault', icon: Download, screen: 'offline' },
@@ -76,6 +77,8 @@ export const NavPreferencesProvider = ({ children }) => {
             const next = new Set(prev);
             if (modes.music === false) next.add('music');
             else next.delete('music');
+            if (modes.podcasts === false) next.add('podcasts');
+            else next.delete('podcasts');
             if (modes.quran === false) next.add('quran');
             else next.delete('quran');
             return Array.from(next);

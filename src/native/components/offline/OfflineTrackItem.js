@@ -4,6 +4,7 @@ import { Disc, Check, FolderDown, Trash2, Play, Pause } from 'lucide-react-nativ
 import { colors } from '../../theme/colors';
 import { normalizeCoverUri } from '../../utils/coverUtils';
 import { isQuranContent } from '../../../utils/quranUtils';
+import { isPodcastContent } from '../../utils/podcastUtils';
 import { useTranslation } from '../../context/LocalizationContext';
 
 function areEqualOfflineItem(prev, next) {
@@ -77,33 +78,56 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
           {track?.artist || 'Unknown Artist'}
         </Text>
         <View style={styles.badgeRow}>
-          <View
-            style={[
-              styles.localPill,
-              isQuranContent(track) && {
+          {(() => {
+            const isQ = Boolean(
+              track?.isQuran === true ||
+              track?.isQuran === 'true' ||
+              track?.category === 'quran' ||
+              track?.contentType === 'quran' ||
+              isQuranContent(track)
+            );
+            const isP = !isQ && Boolean(
+              track?.isPodcast === true ||
+              track?.isPodcast === 'true' ||
+              track?.contentType === 'podcast' ||
+              isPodcastContent(track)
+            );
+
+            let pillStyle = null;
+            let textStyle = null;
+            let label = isRTL ? 'محفوظ أوفلاين' : 'OFFLINE SONG';
+
+            if (isQ) {
+              pillStyle = {
                 borderColor: '#10b981',
                 backgroundColor: 'rgba(16,185,129,0.16)',
-              },
-              track?.isLocalImport && !isQuranContent(track) && {
+              };
+              textStyle = { color: '#6ee7b7' };
+              label = isRTL ? 'القرآن الكريم' : 'HOLY QURAN';
+            } else if (isP) {
+              pillStyle = {
+                borderColor: '#a855f7',
+                backgroundColor: 'rgba(168,85,247,0.16)',
+              };
+              textStyle = { color: '#c084fc' };
+              label = isRTL ? 'بودكاست' : 'PODCAST';
+            } else if (track?.isLocalImport) {
+              pillStyle = {
                 borderColor: colors.mint,
                 backgroundColor: 'rgba(52,211,153,0.12)',
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.localPillText,
-                isQuranContent(track) && { color: '#6ee7b7' },
-                track?.isLocalImport && !isQuranContent(track) && { color: colors.mint },
-              ]}
-            >
-              {isQuranContent(track)
-                ? (isRTL ? 'القرآن الكريم' : 'HOLY QURAN')
-                : track?.isLocalImport
-                  ? (isRTL ? 'ملف مستورد' : 'IMPORTED MP3')
-                  : (isRTL ? 'محفوظ أوفلاين' : 'OFFLINE SONG')}
-            </Text>
-          </View>
+              };
+              textStyle = { color: colors.mint };
+              label = isRTL ? 'ملف مستورد' : 'IMPORTED MP3';
+            }
+
+            return (
+              <View style={[styles.localPill, pillStyle]}>
+                <Text style={[styles.localPillText, textStyle]}>
+                  {label}
+                </Text>
+              </View>
+            );
+          })()}
         </View>
       </View>
 

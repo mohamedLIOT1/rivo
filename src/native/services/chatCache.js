@@ -201,3 +201,19 @@ export function appendCachedMessage(userId, msg) {
 
   setCachedMessages(key, updated);
 }
+
+/**
+ * Update reactions for a message in cache
+ */
+export function updateCachedMessageReactions(userId, messageId, reactions) {
+  if (!userId || !messageId) return;
+  const key = String(userId);
+  const current = memoryMessages.get(key) || [];
+  const updated = current.map((m) =>
+    String(m._id || m.id) === String(messageId)
+      ? { ...m, reactions }
+      : m
+  );
+  setCachedMessages(key, updated);
+}
+

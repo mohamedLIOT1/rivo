@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Audio } from 'expo-av';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { updateMediaNotification } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
@@ -30,6 +31,16 @@ export const AudioProvider = ({ children }) => {
   } catch {}
   const { token, currentUser, likedTrackIds = [], tracks: userTracks = [] } = userCtx;
 
+  useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false
+    }).catch(() => {});
+  }, []);
+
   const tokenRef = useRef(token);
   useEffect(() => {
     tokenRef.current = token;
@@ -58,6 +69,7 @@ export const AudioProvider = ({ children }) => {
   // Shared forward callback refs
   const playTrackCallbackRef = useRef(null);
   const seekToCallbackRef = useRef(null);
+  const playbackStatusUpdateCallbackRef = useRef(null);
 
   // Audio Downloads Hook
   const currentTrackRef = useRef(null);
@@ -139,12 +151,15 @@ export const AudioProvider = ({ children }) => {
     setCurrentTrack: (t) => setCurrentTrackRef.current?.(t),
     setIsPlaying: (p) => setIsPlayingRef.current?.(p),
     setIsLoading: (l) => {},
-    onPlaybackStatusUpdate: () => {},
+    onPlaybackStatusUpdate: (status) => playbackStatusUpdateCallbackRef.current?.(status),
     playNextTrackCallbackRef: { current: queue.playNextTrack },
     updateMediaNotificationCallback: updateMediaNotification,
     likedTrackIds,
     repeatModeRef,
     isShuffleRef,
+    autoDownloadFinishedRef: downloads.autoDownloadFinishedRef,
+    handleDownloadTrack: downloads.handleDownloadTrack,
+    autoPersistFinishedTrack: autoPersistFinishedTrackHandler,
   });
 
   isMixModeRef.current = dj.isMixMode;
@@ -192,6 +207,7 @@ export const AudioProvider = ({ children }) => {
   setIsPlayingRef.current = playback.setIsPlaying;
   playTrackCallbackRef.current = playback.playTrack;
   seekToCallbackRef.current = playback.seekTo;
+  playbackStatusUpdateCallbackRef.current = playback.onPlaybackStatusUpdate;
   playback.playNextTrackRef.current = queue.playNextTrack;
 
   // Hydrate last played track and queue on cold boot
@@ -278,6 +294,9 @@ export const AudioProvider = ({ children }) => {
       playPlaylist: playback.playPlaylist,
       togglePlay: playback.togglePlay,
       seekTo: playback.seekTo,
+      jumpBy: playback.jumpBy,
+      playbackRate: playback.playbackRate,
+      setPlaybackRate: playback.setPlaybackRate,
       setIsShuffle: queue.setIsShuffle,
       toggleShuffle: queue.toggleShuffle,
       toggleRepeat: queue.toggleRepeat,

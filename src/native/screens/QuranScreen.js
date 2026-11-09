@@ -30,6 +30,7 @@ import {
   getSurahNumber,
   getSurahName,
   isRadioTrack,
+  isAyahOrClip,
 } from '../../utils/quranUtils';
 import {
   getQuranRecitersList,
@@ -116,14 +117,13 @@ function QuranScreen({ onTrackAction }) {
     return getQuranRecitersList({ quranTracks, downloadedTracks, isOffline, apiReciters });
   }, [quranTracks, downloadedTracks, isOffline, apiReciters]);
 
-  // Full Surahs Catalog (1 to 114) for selected reciter with instant CDN playback
+  // Full Surahs Catalog (1 to 114) for selected reciter or full library sorted
   const displayedTracks = useMemo(() => {
-    if (!selectedReciter && !searchQuery.trim()) return [];
     let result = [];
     if (selectedReciter) {
       result = getSurahsForReciter(selectedReciter, { quranTracks, downloadedTracks, isOffline, apiReciters });
     } else {
-      result = quranTracks;
+      result = sortQuranTracks(quranTracks);
     }
     if (searchQuery.trim()) {
       result = filterQuranSurahs(result, searchQuery);
@@ -131,24 +131,12 @@ function QuranScreen({ onTrackAction }) {
     return result;
   }, [selectedReciter, searchQuery, quranTracks, downloadedTracks, isOffline, apiReciters]);
 
-  const handlePlayTrack = useCallback((track) => {
-    playTrack(track, displayedTracks);
-  }, [playTrack, displayedTracks]);
-
-  const handleMorePress = useCallback((track) => {
-    if (onTrackAction) onTrackAction(track);
-  }, [onTrackAction]);
-
-  const keyExtractor = useCallback((track, idx) => {
-    return String(track?._id || track?.id || `quran-${idx}`);
-  }, []);
-
+  const handlePlayTrack = useCallback((track) => playTrack(track, displayedTracks), [playTrack, displayedTracks]);
+  const handleMorePress = useCallback((track) => { if (onTrackAction) onTrackAction(track); }, [onTrackAction]);
+  const keyExtractor = useCallback((track, idx) => String(track?._id || track?.id || `quran-${idx}`), []);
   const handlePlayAll = useCallback(() => {
-    if (displayedTracks.length > 0) {
-      playTrack(displayedTracks[0], displayedTracks);
-    }
+    if (displayedTracks.length > 0) playTrack(displayedTracks[0], displayedTracks);
   }, [displayedTracks, playTrack]);
-
   const handleClearFilter = useCallback(() => {
     setSelectedReciter(null);
     setSearchQuery('');
@@ -156,7 +144,8 @@ function QuranScreen({ onTrackAction }) {
 
   const renderSongItem = useCallback(({ item: track, index }) => {
     const sNum = getSurahNumber(track);
-    const displayIndex = (sNum >= 1 && sNum <= 114) ? sNum : (index + 1);
+    const isAyah = track.isAyah || isAyahOrClip(track);
+    const displayIndex = isAyah ? (isRTL ? 'آية' : 'Ayah') : ((sNum >= 1 && sNum <= 114) ? sNum : (index + 1));
     const trackId = String(track._id || track.id || '');
     const isCurrent = curTrackId !== '' && curTrackId === trackId;
     return (
@@ -175,7 +164,7 @@ function QuranScreen({ onTrackAction }) {
         onMorePress={handleMorePress}
       />
     );
-  }, [curTrackId, isPlaying, isLoading, likedSet, downloadedSet, isDark, handlePlayTrack, handleMorePress]);
+  }, [curTrackId, isPlaying, isLoading, likedSet, downloadedSet, isDark, isRTL, handlePlayTrack, handleMorePress]);
 
   const renderHeader = useMemo(() => {
     return (
@@ -260,10 +249,13 @@ function QuranScreen({ onTrackAction }) {
                   onPress={() => setSelectedReciter(reciter.name)}
                   activeOpacity={0.8}
                 >
-                  <Image
-                    source={{ uri: reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300' }}
-                    style={styles.reciterCardCover}
-                  />
+                  {reciter.cover ? (
+                    <Image source={{ uri: reciter.cover }} style={styles.reciterCardCover} />
+                  ) : (
+                    <View style={styles.reciterCardCover}>
+                      <Text style={styles.reciterCardCoverFallbackText}>{reciter.name?.slice(0, 2) || 'ق'}</Text>
+                    </View>
+                  )}
                   <View style={styles.reciterCardInfo}>
                     <Text style={[styles.reciterCardName, !isDark && { color: colors.ink }]} numberOfLines={1}>
                       {reciter.name}
@@ -277,6 +269,24 @@ function QuranScreen({ onTrackAction }) {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {displayedTracks.length > 0 && (
+              <View style={{ marginTop: 20, marginBottom: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
+                <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
+                  {t('quran.allTracksTitle') || (isRTL ? 'جميع التلاوات والآيات المسجلة' : 'All Recitations & Saved Ayahs')} ({displayedTracks.length})
+                </Text>
+                <TouchableOpacity
+                  style={[styles.playAllBtn, { marginTop: 0 }]}
+                  onPress={handlePlayAll}
+                  activeOpacity={0.8}
+                >
+                  <Play size={12} color={colors.ink} fill={colors.ink} />
+                  <Text style={[styles.playAllBtnText, isRTL && { letterSpacing: 0 }]}>
+                    {t('quran.playAllRecitations', { count: displayedTracks.length }) || (isRTL ? 'تشغيل الكل' : 'Play All')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         ) : (
           <>

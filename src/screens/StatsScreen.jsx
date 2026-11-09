@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Trophy, Headphones, Flame, UserCheck, Activity, Clock, Sparkles, ArrowLeft } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from '../components/VerifiedBadge';
 import { useTranslation } from '../context/PreferencesContext';
@@ -15,6 +15,9 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
   const [localStats, setLocalStats] = useState(() => getListeningStats());
   const [serverLeaderboard, setServerLeaderboard] = useState([]);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(false);
+  const [timeframe, setTimeframe] = useState('weekly'); // 'weekly' | 'all_time'
+
+  const isAllTime = timeframe === 'all_time';
 
   // Subscribe to live listening updates (ticks as audio plays in real-time)
   useEffect(() => {
@@ -30,63 +33,60 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
     };
   }, []);
 
-  // Fetch real platform leaderboard from backend
-  useEffect(() => {
-    let isMounted = true;
-    const fetchLeaderboard = async () => {
-      try {
-        setIsLoadingLeaderboard(true);
-        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {}
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data.success && Array.isArray(data.leaderboard)) {
-            setServerLeaderboard(data.leaderboard);
-          }
+  // Fetch real platform leaderboard from backend based on selected timeframe
+  const fetchLeaderboard = useCallback(async (tf = timeframe) => {
+    try {
+      setIsLoadingLeaderboard(true);
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard?timeframe=${tf}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.leaderboard)) {
+          setServerLeaderboard(data.leaderboard);
         }
-      } catch (err) {
-        console.warn('[StatsScreen] Error fetching leaderboard:', err);
-      } finally {
-        if (isMounted) setIsLoadingLeaderboard(false);
       }
-    };
+    } catch (err) {
+      console.warn('[StatsScreen] Error fetching leaderboard:', err);
+    } finally {
+      setIsLoadingLeaderboard(false);
+    }
+  }, [timeframe]);
 
-    fetchLeaderboard();
-    const interval = setInterval(fetchLeaderboard, 30000);
-    return () => {
-      isMounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  useEffect(() => {
+    fetchLeaderboard(timeframe);
+    const interval = setInterval(() => fetchLeaderboard(timeframe), 25000);
+    return () => clearInterval(interval);
+  }, [timeframe, fetchLeaderboard]);
 
-  // Compute real current user stats
-  const userRealSeconds = Math.max(
-    Number(localStats.weeklySeconds) || 0,
-    Number(localStats.totalSeconds) || 0
-  );
-  const userFormattedTime = formatListeningMinutes(userRealSeconds, isRTL);
+  // Compute real current user stats strictly by timeframe
+  const userWeeklySeconds = Number(localStats.weeklySeconds) || 0;
+  const userTotalSeconds = Number(localStats.totalSeconds) || 0;
+  const userEffectiveSeconds = isAllTime ? userTotalSeconds : userWeeklySeconds;
+  const userFormattedTime = formatListeningMinutes(userEffectiveSeconds, isRTL);
   const realTopTrack = useMemo(() => getRealTopTrack(tracks), [tracks, localStats]);
 
-  // Merge server leaderboard with live local user stats
+  // Merge server leaderboard with live local user stats cleanly
   const realLeaderboard = useMemo(() => {
     let list = [...serverLeaderboard];
 
     if (currentUser) {
       const curId = String(currentUser.id || currentUser._id || '');
       const curName = (currentUser.name || '').trim().toLowerCase();
-      const existingIdx = list.findIndex(u => 
-        (curId && String(u.id) === curId) || 
+      const existingIdx = list.findIndex(u =>
+        (curId && String(u.id) === curId) ||
         ((u.name || '').trim().toLowerCase() === curName)
       );
 
       const topSongTitle = realTopTrack ? `${realTopTrack.title} - ${realTopTrack.artist}` : (isRTL ? 'مقاطع متنوعة' : 'Various Tracks');
 
       if (existingIdx !== -1) {
-        // Update existing entry with live maximum seconds
         const prev = list[existingIdx];
-        const maxSec = Math.max(prev.seconds || 0, userRealSeconds);
+        const prevSec = isAllTime
+          ? (Number(prev.totalSeconds) || Number(prev.seconds) || 0)
+          : (prev.weeklySeconds !== undefined ? Number(prev.weeklySeconds) : Number(prev.seconds) || 0);
+        const maxSec = Math.max(prevSec, userEffectiveSeconds);
         list[existingIdx] = {
           ...prev,
           seconds: maxSec,
@@ -97,14 +97,13 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
           isCurrentUser: true,
           isVerified: isUserVerified(currentUser) || Boolean(prev.isVerified)
         };
-      } else if (userRealSeconds > 0 || (currentUser && currentUser.name)) {
-        // Current user not yet in server list: insert them
+      } else if (userEffectiveSeconds > 0 || (currentUser && currentUser.name)) {
         list.push({
           id: curId || 'current_user',
           name: currentUser.name,
           avatar: currentUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
-          minutes: Math.floor(userRealSeconds / 60),
-          seconds: userRealSeconds,
+          minutes: Math.floor(userEffectiveSeconds / 60),
+          seconds: userEffectiveSeconds,
           topSong: topSongTitle,
           isVerified: isUserVerified(currentUser),
           isCurrentUser: true
@@ -112,17 +111,14 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
       }
     }
 
-    // Sort by seconds strictly
     list.sort((a, b) => (Number(b.seconds) || 0) - (Number(a.seconds) || 0));
 
-    // Reassign ranks
     return list.map((item, idx) => ({
       ...item,
       rank: idx + 1
     }));
-  }, [serverLeaderboard, currentUser, userRealSeconds, realTopTrack, isRTL]);
+  }, [serverLeaderboard, currentUser, userEffectiveSeconds, isAllTime, realTopTrack, isRTL]);
 
-  // Top listener of the week is rank #1
   const topListener = realLeaderboard.length > 0 ? realLeaderboard[0] : null;
 
   return (
@@ -161,11 +157,30 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <div className={`brutal-border px-3 py-1.5 text-xs font-black flex items-center gap-1.5 ${isRTL ? 'font-sans' : 'font-mono'} ${
-            isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black'
+          {/* Timeframe Selector Pill */}
+          <div className={`brutal-border flex items-center p-0.5 gap-1 ${
+            isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
-            <Flame size={15} className="text-[#dc2626]" />
-            <span>{isRTL ? 'إحصائيات موثقة' : 'VERIFIED STATS'}</span>
+            <button
+              onClick={() => setTimeframe('weekly')}
+              className={`px-3 py-1 text-xs font-black uppercase transition cursor-pointer ${
+                !isAllTime
+                  ? (isDark ? 'bg-[#17a398] text-[#082621]' : 'bg-[#082621] text-[#26c4b7]')
+                  : (isDark ? 'text-zinc-400 hover:text-white' : 'text-[#082621]/70 hover:text-black')
+              }`}
+            >
+              {isRTL ? 'هذا الأسبوع' : 'WEEKLY'}
+            </button>
+            <button
+              onClick={() => setTimeframe('all_time')}
+              className={`px-3 py-1 text-xs font-black uppercase transition cursor-pointer ${
+                isAllTime
+                  ? (isDark ? 'bg-[#17a398] text-[#082621]' : 'bg-[#082621] text-[#26c4b7]')
+                  : (isDark ? 'text-zinc-400 hover:text-white' : 'text-[#082621]/70 hover:text-black')
+              }`}
+            >
+              {isRTL ? 'كل الأوقات' : 'ALL-TIME'}
+            </button>
           </div>
 
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#082621] text-[#26c4b7] text-[11px] font-mono font-black brutal-border">
@@ -195,7 +210,11 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
               <div className="relative z-10 truncate">
                 <span className={`text-[10px] uppercase font-black text-[#17a398] flex items-center gap-1 ${isRTL ? 'font-sans' : 'font-mono'}`}>
                   <Trophy size={13} />
-                  <span>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</span>
+                  <span>
+                    {isAllTime
+                      ? (isRTL ? 'المستمع الأول في كل الأوقات' : 'ALL-TIME TOP LISTENER')
+                      : (isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK')}
+                  </span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>
@@ -218,7 +237,11 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
               <div className="relative z-10 truncate">
                 <span className={`text-[10px] uppercase font-black text-[#17a398] flex items-center gap-1 ${isRTL ? 'font-sans' : 'font-mono'}`}>
                   <Trophy size={13} />
-                  <span>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</span>
+                  <span>
+                    {isAllTime
+                      ? (isRTL ? 'إجمالي استماعك' : 'YOUR TOTAL STREAMING')
+                      : (isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK')}
+                  </span>
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <h3 className={`text-xl font-display font-black truncate ${isDark ? 'text-white' : 'text-[#082621]'}`}>
@@ -227,7 +250,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                   <VerifiedBadge userOrName={currentUser} size={18} />
                 </div>
                 <p className={`text-xs mt-1 font-bold ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/80'}`}>
-                  {userRealSeconds > 0 ? `${userFormattedTime} ${isRTL ? 'استماع' : 'STREAMED'}` : (isRTL ? 'جاهز للاستماع' : 'READY TO STREAM')}
+                  {userEffectiveSeconds > 0 ? `${userFormattedTime} ${isRTL ? 'استماع' : 'STREAMED'}` : (isRTL ? 'جاهز للاستماع' : 'READY TO STREAM')}
                 </p>
               </div>
             </>
@@ -273,7 +296,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
         </div>
       </div>
 
-      {/* Weekly Leaderboard Table */}
+      {/* Leaderboard Table */}
       <section className={`brutal-border-thick brutal-shadow-lg p-6 ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
       }`}>
@@ -282,10 +305,16 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
         }`}>
           <h3 className={`text-lg font-black uppercase flex items-center gap-2 ${isRTL ? 'font-sans' : 'font-mono'}`}>
             <UserCheck size={18} className="text-[#17a398]" />
-            <span>{isRTL ? 'لوحة متصدري الاستماع' : 'LISTENING LEADERBOARD'}</span>
+            <span>
+              {isAllTime
+                ? (isRTL ? 'لوحة متصدري الاستماع الكلية' : 'ALL-TIME LISTENING LEADERBOARD')
+                : (isRTL ? 'لوحة متصدري الاستماع الأسبوعية' : 'WEEKLY LISTENING LEADERBOARD')}
+            </span>
           </h3>
           <span className={`text-xs ${isRTL ? 'font-sans font-bold' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-            {isRTL ? 'تقرير الأسبوع' : 'WEEKLY REPORT'}
+            {isAllTime
+              ? (isRTL ? 'سجل المنصة الشامل' : 'ALL-TIME REPORT')
+              : (isRTL ? 'تقرير الأسبوع الحالي' : 'CURRENT WEEK')}
           </span>
         </div>
 
@@ -340,7 +369,7 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
                     {formatListeningMinutes(user.seconds || user.minutes * 60, isRTL)}
                   </span>
                   <p className={`text-[10px] font-bold uppercase ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-                    {isRTL ? 'هذا الأسبوع' : 'THIS WEEK'}
+                    {isAllTime ? (isRTL ? 'إجمالي' : 'ALL-TIME') : (isRTL ? 'هذا الأسبوع' : 'THIS WEEK')}
                   </p>
                 </div>
               </div>
@@ -348,7 +377,9 @@ export default function StatsScreen({ tracks = [], currentUser, onBack, globalTh
           </div>
         ) : (
           <div className={`text-center py-8 text-xs ${isRTL ? 'font-sans' : 'font-mono'} ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-            {isRTL ? 'لم يتم توثيق أي سجلات استماع هذا الأسبوع.' : 'NO STREAMING RECORDS DOCUMENTED THIS WEEK.'}
+            {isLoadingLeaderboard
+              ? (isRTL ? 'جاري تحميل لوحة المتصدرين...' : 'LOADING LEADERBOARD...')
+              : (isRTL ? 'لم يتم توثيق أي سجلات استماع بعد.' : 'NO STREAMING RECORDS DOCUMENTED YET.')}
           </div>
         )}
       </section>

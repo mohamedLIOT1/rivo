@@ -6,7 +6,8 @@ const PreferencesContext = createContext(null);
 
 const DEFAULT_CONTENT_MODES = {
   music: true,
-  quran: true
+  quran: true,
+  podcasts: true
 };
 
 export function PreferencesProvider({ children, currentUser }) {
@@ -61,7 +62,14 @@ export function PreferencesProvider({ children, currentUser }) {
   const [contentModes, setContentModesState] = useState(() => {
     try {
       const saved = localStorage.getItem('rivo_content_modes');
-      if (saved) return { ...DEFAULT_CONTENT_MODES, ...JSON.parse(saved) };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          music: parsed.music !== false,
+          quran: parsed.quran !== false,
+          podcasts: parsed.podcasts !== false,
+        };
+      }
     } catch {}
     return DEFAULT_CONTENT_MODES;
   });
@@ -79,10 +87,16 @@ export function PreferencesProvider({ children, currentUser }) {
         if (data?.success && data?.preferences) {
           if (data.preferences.contentModes) {
             setContentModesState(prev => ({
+              ...DEFAULT_CONTENT_MODES,
               ...prev,
-              ...data.preferences.contentModes
+              ...data.preferences.contentModes,
+              podcasts: data.preferences.contentModes.podcasts !== false
             }));
-            localStorage.setItem('rivo_content_modes', JSON.stringify(data.preferences.contentModes));
+            localStorage.setItem('rivo_content_modes', JSON.stringify({
+              ...DEFAULT_CONTENT_MODES,
+              ...data.preferences.contentModes,
+              podcasts: data.preferences.contentModes.podcasts !== false
+            }));
           }
           if (data.preferences.preferredLanguage === 'ar' || data.preferences.preferredLanguage === 'en') {
             setLanguageState(data.preferences.preferredLanguage);
@@ -144,6 +158,7 @@ export function PreferencesProvider({ children, currentUser }) {
 
   const showMusic = contentModes.music !== false;
   const showQuran = contentModes.quran !== false;
+  const showPodcasts = contentModes.podcasts !== false;
 
   const value = useMemo(() => ({
     language,
@@ -156,7 +171,7 @@ export function PreferencesProvider({ children, currentUser }) {
     toggleContentMode,
     showMusic,
     showQuran,
-    showPodcasts: false,
+    showPodcasts,
     showAudiobooks: false,
     isPureIslamicMode: !showMusic,
     vocalOnlyMode,
@@ -171,6 +186,7 @@ export function PreferencesProvider({ children, currentUser }) {
     toggleContentMode,
     showMusic,
     showQuran,
+    showPodcasts,
     vocalOnlyMode,
     toggleVocalOnlyMode
   ]);
@@ -196,7 +212,7 @@ export function usePreferences() {
       toggleContentMode: () => {},
       showMusic: true,
       showQuran: true,
-      showPodcasts: false,
+      showPodcasts: true,
       showAudiobooks: false,
       isPureIslamicMode: false,
       vocalOnlyMode: false,

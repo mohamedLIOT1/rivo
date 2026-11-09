@@ -9,6 +9,8 @@ import { saveLastPlayedState } from './useAudioPersistence';
 import { buildSmartSeedQueue } from '../../utils/tasteAlgorithm';
 import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
+import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
+import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
 
 export const useAudioPlaybackCore = ({
   likedTrackIds = [], showToast, queueRef, setQueue, isShuffleRef, repeatModeRef,
@@ -32,6 +34,7 @@ export const useAudioPlaybackCore = ({
   const stallRecoveryTimerRef = useRef(null);
   const isSeekingRef = useRef(false);
   const lastSeekTimestampRef = useRef(0);
+  const trackCompletionHandledRef = useRef(null);
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const currentTrackRef = useRef(null);
@@ -139,6 +142,7 @@ export const useAudioPlaybackCore = ({
       likedTrackIds, isShuffleRef,
       setIsPlaying,
       isPlayingRef,
+      trackCompletionHandledRef,
     });
   }, [
     isMixModeRef, activeTransRef, queueRef, nextSoundRef, isMixTransitioningRef,
@@ -165,6 +169,7 @@ export const useAudioPlaybackCore = ({
     const currentLoadId = ++soundLoadIdRef.current;
     const requestSeq = ++playRequestSeqRef.current;
     const safeTargetSec = Math.max(0, Number(targetTime) || 0);
+    trackCompletionHandledRef.current = null;
 
     isLoadingRef.current = true;
     setIsLoading(true);
@@ -218,20 +223,24 @@ export const useAudioPlaybackCore = ({
     try {
       if (Array.isArray(trackList) && trackList.length > 0) {
         if (trackList.length === 1 && !isRadioTrack(track) && !isQuranContent(track)) {
-          const pool = ((userTracks?.length > 0) ? userTracks : (INITIAL_TRACKS || [])).filter(t => !isQuranContent(t));
-          setQueue(buildSmartSeedQueue(track, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
+          if (isPodcastContent(track)) {
+            const podcastPool = ((userTracks?.length > 0) ? userTracks : []).filter(t => isPodcastContent(t));
+            const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
+            setQueue(buildPodcastSeedQueue(track, fullPool, 20));
+          } else {
+            const pool = ((userTracks?.length > 0) ? userTracks : (INITIAL_TRACKS || [])).filter(t => !isQuranContent(t) && !isPodcastContent(t));
+            setQueue(buildSmartSeedQueue(track, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
+          }
         } else {
           setQueue(trackList);
         }
       }
 
-      if (soundRef.current) {
-        const prevSound = soundRef.current;
-        soundRef.current = null;
-        loadedTrackIdRef.current = null;
+      const prevSound = soundRef.current;
+      soundRef.current = null;
+      loadedTrackIdRef.current = null;
+      if (prevSound) {
         try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
-        await prevSound.stopAsync().catch(() => {});
-        await prevSound.unloadAsync().catch(() => {});
       }
 
       const uri = await resolveTrackPlaybackUri({
@@ -241,8 +250,25 @@ export const useAudioPlaybackCore = ({
         signal: abortController.signal,
       });
 
-      if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) return;
-      if (!uri) throw new Error('Audio URI could not be resolved');
+      if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) {
+        if (prevSound) {
+          prevSound.stopAsync().catch(() => {});
+          prevSound.unloadAsync().catch(() => {});
+        }
+        return;
+      }
+      if (!uri) {
+        if (prevSound) {
+          prevSound.stopAsync().catch(() => {});
+          prevSound.unloadAsync().catch(() => {});
+        }
+        throw new Error('Audio URI could not be resolved');
+      }
+
+      track.resolvedAudioUrl = uri;
+      if (currentTrackRef.current && String(currentTrackRef.current._id || currentTrackRef.current.id) === String(track._id || track.id)) {
+        currentTrackRef.current.resolvedAudioUrl = uri;
+      }
 
       const { sound, status } = await createAudioSound({
         uri,
@@ -257,12 +283,25 @@ export const useAudioPlaybackCore = ({
 
       if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) {
         await sound?.unloadAsync().catch(() => {});
+        if (prevSound) {
+          prevSound.stopAsync().catch(() => {});
+          prevSound.unloadAsync().catch(() => {});
+        }
         return;
+      }
+
+      if (prevSound) {
+        prevSound.stopAsync().catch(() => {});
+        prevSound.unloadAsync().catch(() => {});
       }
 
       soundRef.current = sound;
       loadedTrackIdRef.current = String(track._id || track.id);
       sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+
+      if (playbackRateRef.current && playbackRateRef.current !== 1.0) {
+        await sound.setRateAsync(playbackRateRef.current, true).catch(() => {});
+      }
 
       if (status && status.durationMillis > 1000) {
         const durSec = Math.floor(status.durationMillis / 1000);
@@ -398,7 +437,31 @@ export const useAudioPlaybackCore = ({
     }
   }, [canControlJam, jamSyncRef, setIsPlaying]);
 
+  const [playbackRate, setPlaybackRateState] = useState(1.0);
+  const playbackRateRef = useRef(1.0);
+
+  const setPlaybackRate = useCallback(async (rate) => {
+    const r = Number(rate) || 1.0;
+    playbackRateRef.current = r;
+    setPlaybackRateState(r);
+    if (soundRef.current) {
+      try {
+        await soundRef.current.setRateAsync(r, true);
+      } catch {}
+    }
+  }, []);
+
+  const jumpBy = useCallback(async (deltaSecs) => {
+    const cur = playbackStatusRef.current?.currentTime || progressRef.current?.currentTime || 0;
+    const dur = playbackStatusRef.current?.duration || progressRef.current?.duration || currentTrackRef.current?.duration || 0;
+    const target = dur > 0 ? Math.max(0, Math.min(dur, cur + deltaSecs)) : Math.max(0, cur + deltaSecs);
+    await seekTo(target);
+  }, [seekTo]);
+
   return {
+    playbackRate,
+    setPlaybackRate,
+    jumpBy,
     soundRef,
     currentTrack,
     currentTrackRef,

@@ -219,7 +219,16 @@ const importTrackHandler = async (req, res) => {
       }
     }
 
-    const classification = classifyGenre({ title, artist, album });
+    const inputGenre = req.body?.genre || '';
+    const inputTags = req.body?.tags || [];
+    const classification = classifyGenre({
+      title,
+      artist,
+      album,
+      genre: inputGenre,
+      tags: inputTags,
+      description: req.body?.description || ''
+    });
     const finalGenre = classification.genre;
     const finalIsQuran = Boolean(classification.isQuran || isQuranContent(title, artist, album, finalGenre));
 

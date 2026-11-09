@@ -11,6 +11,7 @@ import profile from './translations/en/profile.js';
 import modals from './translations/en/modals.js';
 import admin from './translations/en/admin.js';
 import home from './translations/en/home.js';
+import podcast from './translations/en/podcast.js';
 
 export default {
   home,
@@ -22,6 +23,11 @@ export default {
   library,
   jam,
   quran,
+  podcast,
+  queue: {
+    clearAll: 'CLEAR ALL',
+    upNext: 'UP NEXT',
+  },
   offline,
   profile,
   modals,

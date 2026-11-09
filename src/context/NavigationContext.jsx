@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { buildUrl, parseLocation } from '../utils/router';
 import { isQuranContent } from '../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
 
 const NavigationContext = createContext(null);
 
@@ -59,7 +60,9 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     return null;
   });
 
-  const [libraryMode, setLibraryMode] = useState(initialNav.screen === 'quran' ? 'quran' : 'music');
+  const [libraryMode, setLibraryMode] = useState(
+    initialNav.screen === 'quran' ? 'quran' : initialNav.screen === 'podcasts' ? 'podcasts' : 'music'
+  );
   const [viewingProfileUserId, setViewingProfileUserId] = useState(initialNav.params?.userId || null);
 
   const getLikedSongsPlaylist = useCallback(() => ({
@@ -110,6 +113,11 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
       setSelectedArtist(null);
       setSelectedPlaylist(null);
       setViewingProfileUserId(null);
+    } else if (screen === 'podcasts') {
+      setLibraryMode('podcasts');
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      setViewingProfileUserId(null);
     } else if (screen === 'stats' || screen === 'admin' || screen === 'download') {
       setSelectedArtist(null);
       setSelectedPlaylist(null);
@@ -139,18 +147,33 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     } else if (screen === 'playlist') {
       if (params.playlist) {
         setSelectedPlaylist(params.playlist);
+        const isP = Boolean(params.playlist?.isPodcast || isPodcastContent(params.playlist));
         const isQ = Boolean(params.playlist?.isQuran || isQuranContent(params.playlist));
-        setLibraryMode(isQ ? 'quran' : 'music');
+        if (isP) {
+          setLibraryMode('podcasts');
+        } else if (isQ) {
+          setLibraryMode('quran');
+        } else {
+          setLibraryMode(prev => prev === 'podcasts' ? 'podcasts' : 'music');
+        }
       } else if (params.id) {
         const idStr = String(params.id);
         if (idStr === 'liked') {
           setSelectedPlaylist(getLikedSongsPlaylist());
-          setLibraryMode('music');
+          setLibraryMode(prev => (prev === 'quran' || prev === 'podcasts') ? prev : 'music');
         } else {
           const found = playlistsRef.current.find(p => String(p.id || p._id) === idStr);
           if (found) {
             setSelectedPlaylist(found);
-            setLibraryMode(found.isQuran ? 'quran' : 'music');
+            const isP = Boolean(found.isPodcast || isPodcastContent(found));
+            const isQ = Boolean(found.isQuran || isQuranContent(found));
+            if (isP) {
+              setLibraryMode('podcasts');
+            } else if (isQ) {
+              setLibraryMode('quran');
+            } else {
+              setLibraryMode(prev => prev === 'podcasts' ? 'podcasts' : 'music');
+            }
           } else {
             const alb = albumsRef.current.find(a => String(a.id || a._id) === idStr);
             if (alb) {
@@ -214,8 +237,15 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
       goToScreen('liked');
       return;
     }
+    const isP = Boolean(pl.isPodcast || isPodcastContent(pl));
     const isQ = Boolean(pl.isQuran || isQuranContent(pl));
-    setLibraryMode(isQ ? 'quran' : 'music');
+    if (isP) {
+      setLibraryMode('podcasts');
+    } else if (isQ) {
+      setLibraryMode('quran');
+    } else {
+      setLibraryMode(prev => prev === 'podcasts' ? 'podcasts' : 'music');
+    }
     setSelectedPlaylist(pl);
     navigateTo('playlist', { id: pl.id || pl._id, playlist: pl, albumName: pl.isAlbum ? pl.name : undefined });
   }, [goToScreen, navigateTo]);
@@ -250,6 +280,11 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
         setSelectedArtist(null);
         setSelectedPlaylist(null);
         setViewingProfileUserId(null);
+      } else if (screen === 'podcasts') {
+        setLibraryMode('podcasts');
+        setSelectedArtist(null);
+        setSelectedPlaylist(null);
+        setViewingProfileUserId(null);
       } else if (screen === 'profile') {
         setViewingProfileUserId(params.userId || null);
         setSelectedArtist(null);
@@ -273,12 +308,20 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
           const selId = String(params.id);
           if (selId === 'liked') {
             setSelectedPlaylist(getLikedSongsPlaylist());
-            setLibraryMode('music');
+            setLibraryMode(prev => (prev === 'quran' || prev === 'podcasts') ? prev : 'music');
           } else {
             const foundPl = playlistsRef.current.find(p => String(p.id || p._id) === selId);
             if (foundPl) {
               setSelectedPlaylist(foundPl);
-              setLibraryMode(foundPl.isQuran ? 'quran' : 'music');
+              const isP = Boolean(foundPl.isPodcast || isPodcastContent(foundPl));
+              const isQ = Boolean(foundPl.isQuran || isQuranContent(foundPl));
+              if (isP) {
+                setLibraryMode('podcasts');
+              } else if (isQ) {
+                setLibraryMode('quran');
+              } else {
+                setLibraryMode(prev => prev === 'podcasts' ? 'podcasts' : 'music');
+              }
             } else {
               const foundAlb = albumsRef.current.find(a => String(a.id || a._id) === selId);
               if (foundAlb) {

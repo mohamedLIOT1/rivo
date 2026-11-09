@@ -116,6 +116,11 @@ function ActivityListItemComponent({
                 {friend.name || 'Friend'}
               </span>
               {friend.isVerified && <VerifiedBadge userOrName={friend} size={13} className="shrink-0" />}
+              {friend.unreadCount > 0 && (
+                <span className="min-w-4 h-4 px-1 rounded-full bg-red-600 text-white font-mono font-black text-[9px] flex items-center justify-center animate-pulse shrink-0">
+                  {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
+                </span>
+              )}
             </div>
 
             {/* Subtitle Under Name (Only shown when live or online; offline time is in the right badge) */}
@@ -248,7 +253,7 @@ function ActivityListItemComponent({
                   e.stopPropagation();
                   openChatModal(friend);
                 }}
-                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
+                className={`relative w-7 h-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                   isDark
                     ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
                     : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
@@ -256,6 +261,11 @@ function ActivityListItemComponent({
                 title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
               >
                 <MessageSquare size={11} strokeWidth={2} />
+                {friend.unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -end-1.5 min-w-4 h-4 px-1 rounded-full bg-red-600 text-white font-mono font-black text-[8.5px] flex items-center justify-center border border-black animate-pulse">
+                    {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
+                  </span>
+                )}
               </button>
             )}
 
@@ -299,7 +309,7 @@ function ActivityListItemComponent({
                   e.stopPropagation();
                   openChatModal(friend);
                 }}
-                className={`w-6 h-6 rounded-md border flex items-center justify-center transition cursor-pointer ${
+                className={`relative w-6 h-6 rounded-md border flex items-center justify-center transition cursor-pointer ${
                   isDark
                     ? 'bg-zinc-800/80 border-zinc-700/60 hover:bg-zinc-700 text-zinc-300'
                     : 'bg-white border-zinc-300 hover:bg-zinc-100 text-[#0b1110]'
@@ -307,6 +317,11 @@ function ActivityListItemComponent({
                 title={isRTL ? `مراسلة ${friend.name || ''}` : `Message ${friend.name || 'friend'}`}
               >
                 <MessageSquare size={10} strokeWidth={2} />
+                {friend.unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -end-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-red-600 text-white font-mono font-black text-[8px] flex items-center justify-center border border-black animate-pulse">
+                    {friend.unreadCount > 9 ? '9+' : friend.unreadCount}
+                  </span>
+                )}
               </button>
             )}
 

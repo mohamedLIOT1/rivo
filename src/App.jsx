@@ -62,6 +62,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     setIsShortcutsOpen,
     setIsJamOpen,
     setIsChatOpen,
+    setChatTargetUser,
     unreadChatCount,
     showToast,
   } = useUI();
@@ -334,10 +335,6 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
       if (!allowDuplicate && ids.includes(cleanTrackId)) return prev;
       return { ...prev, trackIds: [...ids, cleanTrackId] };
     });
-    const newTrack = (tracks || []).find(t => String(t.id || t._id) === cleanTrackId);
-    if (newTrack && addToQueue) {
-      addToQueue(newTrack);
-    }
     try {
       await dataService.addTrackToPlaylist(cleanPlId, cleanTrackId, allowDuplicate);
     } catch {}
@@ -441,7 +438,10 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
             openAddSongModal={() => setIsAddSongOpen(true)}
             openAuthModal={handleUserAvatarClick}
             currentUser={currentUser}
-            openChatModal={() => setIsChatOpen(true)}
+            openChatModal={(target) => {
+              setChatTargetUser(target || null);
+              setIsChatOpen(true);
+            }}
             openShortcutsModal={() => setIsShortcutsOpen(true)}
             unreadChatCount={unreadChatCount}
             isActivityPanelOpen={isActivityPanelOpen}
@@ -504,7 +504,14 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
             socket={socket}
             onPlayTrack={playTrack}
             onStartJamWithUser={startJamWithTargetUser}
-            onOpenChat={() => setIsChatOpen(true)}
+            openChatModal={(friend) => {
+              if (friend) setChatTargetUser(friend);
+              setIsChatOpen(true);
+            }}
+            onOpenChat={(friend) => {
+              if (friend) setChatTargetUser(friend);
+              setIsChatOpen(true);
+            }}
             onJoinJam={joinJam}
             onViewProfile={(u) => {
               const uId = u?.id || u?._id || (typeof u === 'string' ? u : null);
@@ -589,7 +596,10 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
           onNavigate={goToScreen}
           onOpenAuth={() => setIsAuthOpen(true)}
           onOpenJam={() => setIsJamOpen(true)}
-          onOpenChat={() => setIsChatOpen(true)}
+          onOpenChat={(target) => {
+            setChatTargetUser(target || null);
+            setIsChatOpen(true);
+          }}
           onOpenAddSong={() => setIsAddSongOpen(true)}
         />
 
@@ -599,7 +609,10 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
         <Toast
           currentTrack={currentTrack}
           onJoinJam={joinJam}
-          onOpenChat={() => setIsChatOpen(true)}
+          onOpenChat={(sender) => {
+            if (sender) setChatTargetUser(sender);
+            setIsChatOpen(true);
+          }}
         />
       </div>
     </DownloadProvider>

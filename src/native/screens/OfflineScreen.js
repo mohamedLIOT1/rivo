@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { isQuranContent } from '../../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
 import OfflineTrackItem from '../components/offline/OfflineTrackItem';
 import OfflineHeroHeader from '../components/offline/OfflineHeroHeader';
 import { useOfflineOperations } from '../hooks/useOfflineOperations';
@@ -37,7 +38,7 @@ function OfflineScreen() {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [folderTab, setFolderTab] = useState('all'); // 'all' | 'music' | 'quran'
+  const [folderTab, setFolderTab] = useState('all'); // 'all' | 'music' | 'quran' | 'podcasts'
 
   const {
     offlineTracks,
@@ -74,18 +75,43 @@ function OfflineScreen() {
     });
   }, [offlineTracks, searchQuery]);
 
-  const quranCount = useMemo(() => (offlineTracks || []).filter(isQuranContent).length, [offlineTracks]);
-  const musicCount = useMemo(() => (offlineTracks || []).filter((t) => !isQuranContent(t)).length, [offlineTracks]);
+  const isOfflineQuranTrack = useCallback((t) => {
+    if (!t) return false;
+    return Boolean(
+      t.isQuran === true ||
+      t.isQuran === 'true' ||
+      t.category === 'quran' ||
+      t.contentType === 'quran' ||
+      isQuranContent(t)
+    );
+  }, []);
+
+  const isOfflinePodcastTrack = useCallback((t) => {
+    if (!t) return false;
+    if (isOfflineQuranTrack(t)) return false;
+    return Boolean(
+      t.isPodcast === true ||
+      t.isPodcast === 'true' ||
+      t.contentType === 'podcast' ||
+      isPodcastContent(t)
+    );
+  }, [isOfflineQuranTrack]);
+
+  const quranCount = useMemo(() => (offlineTracks || []).filter(isOfflineQuranTrack).length, [offlineTracks, isOfflineQuranTrack]);
+  const podcastCount = useMemo(() => (offlineTracks || []).filter(isOfflinePodcastTrack).length, [offlineTracks, isOfflinePodcastTrack]);
+  const musicCount = useMemo(() => (offlineTracks || []).filter((t) => !isOfflineQuranTrack(t) && !isOfflinePodcastTrack(t)).length, [offlineTracks, isOfflineQuranTrack, isOfflinePodcastTrack]);
 
   const displayedTracks = useMemo(() => {
     return (filteredOfflineTracks || []).filter((t) => {
       if (!t) return false;
-      const isQ = isQuranContent(t);
-      if (folderTab === 'music') return !isQ;
+      const isQ = isOfflineQuranTrack(t);
+      const isP = !isQ && isOfflinePodcastTrack(t);
+      if (folderTab === 'music') return !isQ && !isP;
       if (folderTab === 'quran') return isQ;
+      if (folderTab === 'podcasts') return isP;
       return true;
     });
-  }, [filteredOfflineTracks, folderTab]);
+  }, [filteredOfflineTracks, folderTab, isOfflineQuranTrack, isOfflinePodcastTrack]);
 
   const toggleSelectTrack = useCallback((trackId) => {
     const sId = String(trackId);
@@ -198,6 +224,7 @@ function OfflineScreen() {
         setFolderTab={setFolderTab}
         musicCount={musicCount}
         quranCount={quranCount}
+        podcastCount={podcastCount}
         handleImportAudio={handleImportAudio}
         handleImportFolder={handleImportFolder}
         handleScanVault={handleScanVault}
@@ -217,6 +244,7 @@ function OfflineScreen() {
     folderTab,
     musicCount,
     quranCount,
+    podcastCount,
     handleImportAudio,
     handleImportFolder,
     handleScanVault,
@@ -259,17 +287,24 @@ function OfflineScreen() {
       );
     }
     if (displayedTracks.length === 0) {
+      let emptyTitle = t('offline.noMusicTracks') || (isRTL ? 'لا توجد مقاطع موسيقية محملة' : 'No Music Tracks');
+      let emptySub = t('offline.noMusicSub') || (isRTL ? 'لم يتم العثور على ملفات موسيقية في الذاكرة المحلية.' : 'No music audio files found in offline storage.');
+
+      if (folderTab === 'quran') {
+        emptyTitle = t('offline.noQuranRecitations') || (isRTL ? 'لا توجد تلاوات قرآنية محملة' : 'No Quran Recitations');
+        emptySub = t('offline.noQuranSub') || (isRTL ? 'لم يتم العثور على ملفات قرآن في الذاكرة المحلية.' : 'No Quran audio files found in offline storage.');
+      } else if (folderTab === 'podcasts') {
+        emptyTitle = t('offline.noPodcasts') || (isRTL ? 'لا توجد حلقات بودكاست محملة' : 'No Downloaded Podcasts');
+        emptySub = t('offline.noPodcastsSub') || (isRTL ? 'لم يتم العثور على حلقات بودكاست في الذاكرة المحلية.' : 'No podcast episodes found in offline storage.');
+      }
+
       return (
         <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 28 }]}>
           <Text style={[styles.emptyTitle, !isDark && styles.emptyTitleLight, rtlTextStyle]}>
-            {folderTab === 'quran'
-              ? (isRTL ? 'لا توجد تلاوات قرآنية محملة' : 'No Quran Recitations')
-              : (isRTL ? 'لا توجد مقاطع موسيقية محملة' : 'No Music Tracks')}
+            {emptyTitle}
           </Text>
           <Text style={[styles.emptySub, !isDark && styles.emptySubLight]}>
-            {folderTab === 'quran'
-              ? (isRTL ? 'لم يتم العثور على ملفات قرآن في الذاكرة المحلية.' : 'No Quran audio files found in offline storage.')
-              : (isRTL ? 'لم يتم العثور على ملفات موسيقية في الذاكرة المحلية.' : 'No music audio files found in offline storage.')}
+            {emptySub}
           </Text>
         </View>
       );

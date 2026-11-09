@@ -12,11 +12,15 @@ DOWNLOADS_DIR = os.path.join(ROOT_DIR, 'public', 'downloads')
 JS_BUNDLE_RAW = os.path.join(DIST_DIR, 'main.jsbundle')
 JS_BUNDLE_HBC = os.path.join(DIST_DIR, 'main.jsbundle.hbc')
 BASE_IPA = os.path.join(DOWNLOADS_DIR, 'Rivo-v2.3.9.ipa')
+if not os.path.exists(BASE_IPA):
+    BASE_IPA = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
+if not os.path.exists(BASE_IPA):
+    BASE_IPA = os.path.join(DOWNLOADS_DIR, 'Rivo-v2.4.2.ipa')
 HERMESC = os.path.join(ROOT_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 USER_DOWNLOADS = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-VERSION = '2.4.1'
-BUILD_NUM = '132'
+VERSION = '2.4.2'
+BUILD_NUM = '133'
 NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
 NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
 

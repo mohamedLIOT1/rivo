@@ -119,6 +119,14 @@ export function UIProvider({ children }) {
     setToastMessage(null);
   }, []);
 
+  useEffect(() => {
+    const handleRivoToast = (e) => {
+      if (e?.detail) showToast(e.detail);
+    };
+    window.addEventListener('rivo:toast', handleRivoToast);
+    return () => window.removeEventListener('rivo:toast', handleRivoToast);
+  }, [showToast]);
+
   // ── Action Handlers ───────────────────────────────────────────────────
   const openFullPlayer = useCallback(() => {
     setIsFullPlayerOpen(true);

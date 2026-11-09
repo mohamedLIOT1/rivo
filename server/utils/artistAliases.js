@@ -171,7 +171,7 @@ function normalizeString(str) {
     .toLowerCase()
     .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '')
     .replace(/[\-_|–—:]/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]/gu, '')
+    .replace(/[^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

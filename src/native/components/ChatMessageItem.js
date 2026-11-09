@@ -1,7 +1,8 @@
-import React, { memo } from 'react';
+import React, { useState, memo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform } from 'react-native';
-import { CheckCheck, Check, Radio, Headphones } from 'lucide-react-native';
+import { CheckCheck, Check, Radio, Headphones, Smile } from 'lucide-react-native';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import MessageReactionsNative from './MessageReactionsNative';
 
 function ChatMessageItemComponent({
   item,
@@ -11,18 +12,40 @@ function ChatMessageItemComponent({
   onOpenJam,
   joinJam,
   onViewProfile,
+  onToggleReaction,
+  currentUserId,
 }) {
+  const [showPicker, setShowPicker] = useState(false);
+
   const timeStr = item.createdAt
     ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : '';
 
   const isBot = Boolean(activeUser?.isBot || activeUser?.name === 'Rivo Bot' || item.isBot);
 
-  const handleProfilePress = () => {
+  const handleProfilePress = useCallback(() => {
     if (onViewProfile && activeUser) {
       onViewProfile(activeUser);
     }
-  };
+  }, [onViewProfile, activeUser]);
+
+  const handleLongPress = useCallback(() => {
+    setShowPicker((prev) => !prev);
+  }, []);
+
+  const handleTogglePicker = useCallback(() => {
+    setShowPicker((prev) => !prev);
+  }, []);
+
+  const handleClosePicker = useCallback(() => {
+    setShowPicker(false);
+  }, []);
+
+  const handleBubblePress = useCallback(() => {
+    if (showPicker) {
+      setShowPicker(false);
+    }
+  }, [showPicker]);
 
   return (
     <View style={[styles.msgRow, isMe ? styles.myMsgRow : styles.otherMsgRow]}>
@@ -49,7 +72,11 @@ function ChatMessageItemComponent({
       )}
 
       <View style={{ alignItems: isMe ? 'flex-end' : 'flex-start', maxWidth: isMe ? '85%' : '80%' }}>
-        <View
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={handleBubblePress}
+          onLongPress={handleLongPress}
+          delayLongPress={280}
           style={[
             styles.bubble,
             isMe ? styles.myBubble : [styles.otherBubble, !isDark && styles.otherBubbleLight],
@@ -98,22 +125,60 @@ function ChatMessageItemComponent({
               {item.text}
             </Text>
           )}
-        </View>
+        </TouchableOpacity>
 
+        {/* Message Reactions Display & Quick React Bar */}
+        <MessageReactionsNative
+          message={item}
+          currentUserId={currentUserId}
+          onToggleReaction={onToggleReaction}
+          isDark={isDark}
+          isMe={isMe}
+          showPicker={showPicker}
+          onClosePicker={handleClosePicker}
+          onTogglePicker={handleTogglePicker}
+          onOpenPicker={handleTogglePicker}
+        />
+
+        {/* Message Meta Row with direct 1-tap reaction button */}
         <View style={[styles.msgMetaRow, isMe ? styles.myMetaRow : styles.otherMetaRow]}>
+          {!isMe && (
+            <TouchableOpacity
+              style={[styles.reactTriggerBtn, !isDark && styles.reactTriggerBtnLight]}
+              onPress={handleTogglePicker}
+              activeOpacity={0.7}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Add reaction"
+            >
+              <Smile size={11} color={!isDark ? '#64748b' : '#94a3b8'} strokeWidth={2.2} />
+            </TouchableOpacity>
+          )}
+
           {timeStr ? <Text style={styles.msgTimeText}>{timeStr}</Text> : null}
+
           {isMe && (
-            item.read ? (
-              <View style={styles.seenBadge}>
-                <CheckCheck size={12} color="#26c4b7" strokeWidth={2.4} />
-                <Text style={styles.seenText}>Seen</Text>
-              </View>
-            ) : (
-              <View style={styles.sentBadge}>
-                <Check size={11} color="#64748b" strokeWidth={2.0} />
-                <Text style={styles.sentText}>Sent</Text>
-              </View>
-            )
+            <>
+              {item.read ? (
+                <View style={styles.seenBadge}>
+                  <CheckCheck size={12} color="#26c4b7" strokeWidth={2.4} />
+                  <Text style={styles.seenText}>Seen</Text>
+                </View>
+              ) : (
+                <View style={styles.sentBadge}>
+                  <Check size={11} color="#64748b" strokeWidth={2.0} />
+                  <Text style={styles.sentText}>Sent</Text>
+                </View>
+              )}
+              <TouchableOpacity
+                style={[styles.reactTriggerBtn, !isDark && styles.reactTriggerBtnLight]}
+                onPress={handleTogglePicker}
+                activeOpacity={0.7}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Add reaction"
+              >
+                <Smile size={11} color={!isDark ? '#64748b' : '#94a3b8'} strokeWidth={2.2} />
+              </TouchableOpacity>
+            </>
           )}
         </View>
       </View>
@@ -302,5 +367,19 @@ const styles = StyleSheet.create({
   sentText: {
     fontSize: 10,
     color: '#64748b',
+  },
+  reactTriggerBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 8,
+    backgroundColor: 'rgba(23, 163, 152, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(23, 163, 152, 0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reactTriggerBtnLight: {
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+    borderColor: 'rgba(0, 0, 0, 0.12)',
   },
 });

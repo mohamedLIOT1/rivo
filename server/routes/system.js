@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.1',
+      version: '2.4.2',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
+      notes: 'تحديث v2.4.2 • إطلاق قسم البودكاست المتكامل مع تصنيفات دينية وعلمية ورياضية، عزل ذكي لقائمة الانتظار (AI Queue)، أزرار التخطي ±15 ثانية، والتحكم في سرعة التشغيل.'
     },
     windows: {
-      version: '2.2.5',
-      displayVersion: '2.4.1',
+      version: '2.4.2',
+      displayVersion: '2.4.2',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.1.exe',
+      directFile: 'Rivo-v2.4.2.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • إصلاح التحميل المباشر وتحديث واجهة مشغل سطح المكتب واستقرار البث.'
+      notes: 'تحديث v2.4.2 • قسم بودكاست مستقل، ألبومات صناع المحتوى، استقرار البث الفوري وعزل كيو البودكاست عن الأغاني.'
     },
     android: {
-      version: '2.4.1',
-      build: 132,
+      version: '2.4.2',
+      build: 133,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.1.apk',
+      directFile: 'Rivo-v2.4.2.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • تشغيل تلقائي لقائمة الانتظار وحل التعليق الصوتي ودعم كامل للغة العربية.',
-      notesEn: 'Update v2.4.1 • Instant queue auto-play, zero-stall stream watchdog, and authentic Arabic localization.',
+      notes: 'تحديث v2.4.2 • إضافة خانة البودكاست الكاملة، ألبومات الحلقات، أزرار تخطي 15 ثانية، سرعات تشغيل متعددة وعزل تام لكيو البودكاست.',
+      notesEn: 'Update v2.4.2 • Dedicated Podcast section, show collections, ±15s jump, variable speed, and isolated AI podcast queue.',
       ota: {
         enabled: true,
-        version: '2.4.1',
+        version: '2.4.2',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
-        notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
-        bundleSize: 4889888,
-        sizeMb: '4.66 MB'
+        notes: 'تحديث هوائي فوري v2.4.2 • ميزات البودكاست وقوائم الانتظار الذكية وسرعة التشغيل',
+        notesEn: 'Instant OTA update v2.4.2 • Full podcast ecosystem and queue isolation.',
+        bundleSize: 4950000,
+        sizeMb: '4.72 MB'
       }
     },
     ios: {
-      version: '2.4.1',
-      build: 132,
+      version: '2.4.2',
+      build: 133,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.1.ipa',
+      directFile: 'Rivo-v2.4.2.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • تحسين أداء تشغيل الصوت وتحديث واجهة رادار الأصدقاء ودعم Hermes v96.'
+      notes: 'تحديث v2.4.2 • إضافة خانة البودكاست، دعم كيو البودكاست الحصري، سرعات التشغيل ومحرك Hermes v96 فائق السرعة.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.1',
+      version: '2.4.2',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.1 • إصلاح صفحة الملف الشخصي، تحسين رادار الأصدقاء، استجابة وتشغيل فوري للكيو والمكسات ودعم كامل للعربية.'
+      notes: 'تحديث v2.4.2 • إطلاق قسم البودكاست وعزل ذكي للكيو وسرعات التشغيل.'
     },
     windows: {
-      version: '2.2.5',
-      displayVersion: '2.4.1',
+      version: '2.4.2',
+      displayVersion: '2.4.2',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.1.exe',
+      directFile: 'Rivo-v2.4.2.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • إصلاح التحميل المباشر وتحديث واجهة مشغل سطح المكتب واستقرار البث.'
+      notes: 'تحديث v2.4.2 • قسم بودكاست مستقل وألبومات صناع المحتوى.'
     },
     android: {
-      version: '2.4.1',
-      build: 132,
+      version: '2.4.2',
+      build: 133,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.1.apk',
+      directFile: 'Rivo-v2.4.2.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • تشغيل تلقائي لقائمة الانتظار وحل التعليق الصوتي ودعم كامل للغة العربية.',
-      notesEn: 'Update v2.4.1 • Instant queue auto-play, zero-stall stream watchdog, and authentic Arabic localization.',
+      notes: 'تحديث v2.4.2 • خانة البودكاست الكاملة، تحكم السرعة وتخطي 15 ثانية.',
+      notesEn: 'Update v2.4.2 • Dedicated Podcast section and queue isolation.',
       ota: {
         enabled: true,
-        version: '2.4.1',
+        version: '2.4.2',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.1 • تحسينات الاستقرار وسرعة تشغيل الصوت',
-        notesEn: 'Instant OTA update v2.4.1 • Audio stability and faster playback.',
-        bundleSize: 4889888,
-        sizeMb: '4.66 MB'
+        notes: 'تحديث هوائي فوري v2.4.2 • ميزات البودكاست',
+        notesEn: 'Instant OTA update v2.4.2 • Full podcast ecosystem.',
+        bundleSize: 4950000,
+        sizeMb: '4.72 MB'
       }
     },
     ios: {
-      version: '2.4.1',
-      build: 132,
+      version: '2.4.2',
+      build: 133,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.1.ipa',
+      directFile: 'Rivo-v2.4.2.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.1 • تحسين أداء تشغيل الصوت وتحديث واجهة رادار الأصدقاء ودعم Hermes v96.'
+      notes: 'تحديث v2.4.2 • خانة البودكاست وكيو البودكاست المستقل.'
     }
   }
 };

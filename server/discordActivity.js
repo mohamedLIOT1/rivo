@@ -207,7 +207,13 @@ async function applyTrackPresence(client, track, currentTime = 0) {
     }
     if (assetKey) {
       try {
-        r.setAssetsLargeImage(assetKey).setAssetsLargeText(track.album || track.title || 'Rivo');
+        const cleanAlbum = (track.album || '').trim();
+        const isRealAlbum = cleanAlbum && !/youtube|single|none|unknown|rivo|sound\s*cloud/i.test(cleanAlbum) && cleanAlbum.toLowerCase() !== (track.title || '').trim().toLowerCase();
+
+        r.setAssetsLargeImage(assetKey);
+        if (isRealAlbum) {
+          r.setAssetsLargeText(cleanAlbum);
+        }
       } catch (e) {}
     }
 

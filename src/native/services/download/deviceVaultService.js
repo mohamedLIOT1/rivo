@@ -8,6 +8,8 @@ import {
   reanchorDocumentUri,
 } from './storageManifestService';
 import { extractId3Metadata, parseAudioMetadataFromFilename } from './id3TagService';
+import { isQuranContent } from '../../../utils/quranUtils';
+import { isPodcastContent, getPodcastCategory } from '../../utils/podcastUtils';
 
 export const TRACKS_DIR = `${FileSystem.documentDirectory}rivo_tracks/`;
 export const COVERS_DIR = `${FileSystem.documentDirectory}rivo_covers/`;
@@ -178,6 +180,18 @@ export const scanOfflineVault = async () => {
       const coverInfo = await FileSystem.getInfoAsync(coverUri).catch(() => ({ exists: false }));
       const coverUrl = id3Meta.coverUrl || (coverInfo.exists ? coverUri : null);
 
+      const isQ = Boolean(
+        id3Meta.genre === 'Quran' ||
+        id3Meta.isQuran === true ||
+        isQuranContent({ title, artist, album, genre: id3Meta.genre })
+      );
+      const isP = !isQ && Boolean(
+        id3Meta.genre === 'Podcast' ||
+        id3Meta.isPodcast === true ||
+        isPodcastContent({ title, artist, album, genre: id3Meta.genre })
+      );
+      const detectedCategory = isQ ? 'quran' : (isP ? getPodcastCategory({ title, artist, album, genre: id3Meta.genre }) : 'music');
+
       const newTrack = {
         id: baseId,
         _id: baseId,
@@ -194,6 +208,10 @@ export const scanOfflineVault = async () => {
         isDownloaded: true,
         downloaded: true,
         isLocalImport: true,
+        isQuran: isQ,
+        isPodcast: isP,
+        category: detectedCategory,
+        contentType: isQ ? 'quran' : (isP ? 'podcast' : 'music'),
         downloadedAt: new Date().toISOString(),
         fileSize: info.size,
       };

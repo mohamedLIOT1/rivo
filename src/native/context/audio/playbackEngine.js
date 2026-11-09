@@ -1,6 +1,8 @@
 import { updateAudioProgress } from '../AudioProgressContext';
 import { clearStreamCache } from '../../services/youtubeResolver';
 import { isQuranContent } from '../../../utils/quranUtils';
+import { calculateCrossfadeGains } from '../../utils/musicAnalysis';
+import { recordListeningTick, flushListeningStats } from './audioApiHelpers';
 
 export const handlePlaybackStatusUpdate = ({
   status,
@@ -35,6 +37,7 @@ export const handlePlaybackStatusUpdate = ({
   isShuffleRef,
   setIsPlaying,
   isPlayingRef,
+  trackCompletionHandledRef,
 }) => {
   if (!status.isLoaded) {
     if (status.error) {
@@ -122,13 +125,18 @@ export const handlePlaybackStatusUpdate = ({
 
   const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
   const newDuration = (knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : 240);
+  const clampedCurrentTime = (newDuration > 0 && newCurrentTime > newDuration) ? newDuration : newCurrentTime;
 
-  if (playbackStatusRef.current.currentTime !== newCurrentTime) {
-    playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: newCurrentTime, duration: newDuration };
-    progressRef.current = { currentTime: newCurrentTime, duration: newDuration };
+  if (playbackStatusRef.current.currentTime !== clampedCurrentTime) {
+    playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: clampedCurrentTime, duration: newDuration };
+    progressRef.current = { currentTime: clampedCurrentTime, duration: newDuration };
 
     // High-frequency isolation: Dispatches directly to AudioProgressContext listeners
-    updateAudioProgress({ currentTime: newCurrentTime, duration: newDuration });
+    updateAudioProgress({ currentTime: clampedCurrentTime, duration: newDuration });
+
+    if (status.isPlaying && currentTrackRef.current) {
+      recordListeningTick(currentTrackRef.current, 1);
+    }
 
     // RIVO DJ ENGINE: Dual-Player Lookahead Crossfade with Smooth Volume Ramping
     if (isMixModeRef?.current && status.isPlaying && statusDurSec > 10) {
@@ -147,8 +155,16 @@ export const handlePlaybackStatusUpdate = ({
           const mixInPoint = Number(transConf.mixInPoint) || 0;
           const speedB = Number(transConf.speedB) || 1.0;
           const masterVol = volumeRef?.current !== undefined ? volumeRef.current : 0.8;
+          const multA = (transConf.volA !== undefined ? Number(transConf.volA) : 100) / 100;
+          const multB = (transConf.volB !== undefined ? Number(transConf.volB) : 100) / 100;
+          const style = transConf.style || 'fade';
+          const bias = transConf.crossoverBias !== undefined ? Number(transConf.crossoverBias) : 0.5;
 
-          const remTime = newDuration - newCurrentTime;
+          const effectiveOut = (transConf.mixOutPoint && Number(transConf.mixOutPoint) > 0)
+            ? Math.min(newDuration, Number(transConf.mixOutPoint))
+            : newDuration;
+          const remTime = effectiveOut - newCurrentTime;
+
           if (remTime <= Math.max(12, transDur + 6) && !nextSoundRef?.current && preloadNextTrackForDjMix) {
             preloadNextTrackForDjMix(mixInPoint, speedB);
           }
@@ -159,13 +175,12 @@ export const handlePlaybackStatusUpdate = ({
               nextSoundRef.current.playAsync().catch(() => {});
             }
             const p = Math.min(1.0, Math.max(0.0, 1 - (remTime / transDur)));
-            const gainA = Math.cos((p * Math.PI) / 2);
-            const gainB = Math.sin((p * Math.PI) / 2);
+            const { gainA, gainB } = calculateCrossfadeGains(p, style, bias);
             if (soundRef?.current) {
-              soundRef.current.setVolumeAsync(Math.max(0.01, masterVol * gainA)).catch(() => {});
+              soundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1.0, masterVol * gainA * multA))).catch(() => {});
             }
             if (nextSoundRef.current) {
-              nextSoundRef.current.setVolumeAsync(Math.max(0.01, masterVol * gainB)).catch(() => {});
+              nextSoundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1.0, masterVol * gainB * multB))).catch(() => {});
             }
           }
           if (remTime <= 1 && nextSoundRef?.current && !isMixTransitioningRef?.current && completeSeamlessHandoff) {
@@ -177,20 +192,65 @@ export const handlePlaybackStatusUpdate = ({
     }
   }
 
-  if (status.didJustFinish) {
-    const finishedTrack = currentTrackRef.current;
+  const curActiveId = String(
+    currentTrackRef.current?._id ||
+    currentTrackRef.current?.id ||
+    currentTrackRef.current?.youtubeId ||
+    (currentTrackRef.current?.title && currentTrackRef.current?.artist ? `${currentTrackRef.current.title}___${currentTrackRef.current.artist}` : '')
+  );
+
+  // If track restarts or is early in playback, clear completion handled flag so loops/repeats work
+  if (newCurrentTime < 2 && trackCompletionHandledRef?.current === curActiveId && !status.didJustFinish) {
+    trackCompletionHandledRef.current = null;
+  }
+
+  const isFinished = Boolean(
+    status.didJustFinish ||
+    (statusDurSec > 5 && newCurrentTime >= statusDurSec - 1) ||
+    (newDuration > 5 && newCurrentTime >= Math.max(1, newDuration - 1))
+  );
+
+  if (isFinished) {
+    const cur = currentTrackRef.current;
+    if (curActiveId && trackCompletionHandledRef?.current === curActiveId) {
+      return;
+    }
+    if (trackCompletionHandledRef && curActiveId) {
+      trackCompletionHandledRef.current = curActiveId;
+    }
+    if (isMixTransitioningRef?.current) {
+      return;
+    }
+    const finishedTrack = cur ? {
+      ...cur,
+      resolvedAudioUrl: cur.resolvedAudioUrl || soundRef?.current?._uri || null,
+      duration: newDuration || cur.duration,
+    } : null;
     if (finishedTrack) {
       autoPersistFinishedTrack?.(finishedTrack);
-      if (autoDownloadFinishedRef?.current && handleDownloadTrack) {
+      flushListeningStats(null, true);
+      const isAutoDownload = autoDownloadFinishedRef?.current ?? true;
+      if (isAutoDownload && handleDownloadTrack) {
         handleDownloadTrack(finishedTrack, true);
       }
     }
 
     if (repeatModeRef?.current === 'one') {
+      if (trackCompletionHandledRef) {
+        setTimeout(() => {
+          if (trackCompletionHandledRef.current === curActiveId) {
+            trackCompletionHandledRef.current = null;
+          }
+        }, 1200);
+      }
       if (soundRef?.current) {
         soundRef.current.replayAsync().catch(() => {});
       }
       return;
+    }
+
+    if (soundRef?.current) {
+      soundRef.current.stopAsync().catch(() => {});
     }
 
     if (playNextTrack) {

@@ -1,9 +1,11 @@
 import React, { memo } from 'react';
-import { Play, Pause, Heart, MoreVertical } from 'lucide-react';
+import { Play, Pause, Heart, MoreVertical, Loader2 } from 'lucide-react';
+import { useAudioPlayer } from '../context/AudioContext';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 import { ArtistLinks } from '../utils/artistUtils';
 
 const HomeTrackCard = memo(function HomeTrackCard({
+
   track,
   index,
   isActive,
@@ -16,6 +18,7 @@ const HomeTrackCard = memo(function HomeTrackCard({
   onSelectArtist,
   t,
 }) {
+  const { isLoadingTrack } = useAudioPlayer();
   const durationFormatted = track.duration 
     ? `${Math.floor(track.duration / 60)}:${(track.duration % 60).toString().padStart(2, '0')}`
     : '3:45';
@@ -105,7 +108,12 @@ const HomeTrackCard = memo(function HomeTrackCard({
           }}
           className="flex-1 bg-[#ded2bb] hover:bg-[#17a398] text-[#0b1110] font-display font-black text-[11px] py-1.5 rounded-lg brutal-border brutal-shadow-sm brutal-btn flex items-center justify-center gap-1.5 cursor-pointer"
         >
-          {isActive && isPlaying ? (
+          {isActive && isLoadingTrack ? (
+            <>
+              <Loader2 size={12} className="animate-spin text-[#0b1110]" />
+              <span>{t('home.loading') || 'Loading...'}</span>
+            </>
+          ) : isActive && isPlaying ? (
             <>
               <Pause size={12} fill="currentColor" />
               <span>{t('home.pause')}</span>

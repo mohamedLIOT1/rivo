@@ -12,12 +12,20 @@ const {
   isQuranContent,
   resolveOfficialYouTubeAudioStream,
   isAudioFileValid,
-  invalidateAudioCache
+  invalidateAudioCache,
+  clearStreamMemoryCache
 } = require('../utils/helpers');
+const { checkMemoryCache, cacheStreamUrl } = require('../utils/streamFallbackProvider');
+
+// URL alias map for renewed stream URLs upon 403 token renewal
+const urlAliasMap = new Map();
 
 // Helper to invalidate stream cache upon failure
 function clearStreamCache(videoId) {
   if (videoId) {
+    if (typeof clearStreamMemoryCache === 'function') {
+      clearStreamMemoryCache(videoId);
+    }
     invalidateAudioCache(videoId, false);
   }
 }
@@ -34,14 +42,7 @@ const vocalsRouter = require('./tracks/vocalsRouter');
 const { getCachedTracks, setCachedTracks } = require('./tracks/tracksCache');
 
 // Mount sub-routers
-router.use(tracksPersistenceRouter);
-router.use(tracksImportRouter);
-router.use(tracksCrudRouter);
-router.use(tracksStreamRouter);
-router.use(tracksDownloadRouter);
-router.use(tracksResolutionRouter.router);
-router.use(lyricsRouter);
-router.use(vocalsRouter);
+router.use(tracksPersistenceRouter, tracksImportRouter, tracksCrudRouter, tracksStreamRouter, tracksDownloadRouter, tracksResolutionRouter.router, lyricsRouter, vocalsRouter);
 
 // Get all tracks with pagination, limit cap, and ETag / Cache-Control support
 router.get('/', async (req, res) => {
@@ -139,8 +140,18 @@ router.get('/', async (req, res) => {
 
 // Stream Proxy with Range support, upstream timeout recovery, and strict CORS
 router.get('/stream-proxy', async (req, res) => {
-  const targetUrl = req.query.url;
+  let targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('URL required');
+
+  // Check URL alias mapping for renewed stream URLs upon previous 403 recovery
+  if (urlAliasMap.has(targetUrl)) {
+    const alias = urlAliasMap.get(targetUrl);
+    if (alias && alias.expiresAt > Date.now()) {
+      targetUrl = alias.renewedUrl;
+    } else {
+      urlAliasMap.delete(targetUrl);
+    }
+  }
 
   if (targetUrl.startsWith('/uploads/') || targetUrl.startsWith('uploads/')) {
     const resolvedPath = safeResolveUpload(targetUrl, uploadsDir);
@@ -151,11 +162,26 @@ router.get('/stream-proxy', async (req, res) => {
   }
 
   let videoId = req.query.videoId || null;
-  const title = req.query.title || '';
-  const artist = req.query.artist || '';
+  let title = req.query.title || '';
+  let artist = req.query.artist || '';
   if (!videoId && targetUrl) {
     const m = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (m) videoId = m[1];
+  }
+
+  if ((!title || !artist) && (videoId || req.query.id)) {
+    try {
+      const qCond = [];
+      if (req.query.id && mongoose.isValidObjectId(req.query.id)) qCond.push({ _id: req.query.id });
+      if (videoId) qCond.push({ audioUrl: new RegExp(videoId, 'i') });
+      if (qCond.length > 0) {
+        const found = await Track.findOne({ $or: qCond }).select('title artist').lean();
+        if (found) {
+          if (!title) title = found.title || '';
+          if (!artist) artist = found.artist || '';
+        }
+      }
+    } catch {}
   }
 
   if (videoId) {
@@ -166,6 +192,15 @@ router.get('/stream-proxy', async (req, res) => {
     const cachedMp3 = path.join(uploadsDir, 'audio-cache', `${videoId}.mp3`);
     if (fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) {
       return res.sendFile(cachedMp3);
+    }
+
+    // Check in-memory stream cache
+    const memCached = checkMemoryCache(videoId);
+    if (memCached && memCached.url) {
+      const expMatch = targetUrl.match(/[?&]expire=([0-9]+)/);
+      if (expMatch && Number(expMatch[1]) * 1000 <= Date.now()) {
+        targetUrl = memCached.url;
+      }
     }
   }
 
@@ -195,9 +230,11 @@ router.get('/stream-proxy', async (req, res) => {
   res.on('error', cleanupStream);
 
   const getMatchingUserAgent = (url) => {
-    if (req.headers['user-agent']) return req.headers['user-agent'];
+    if (url.includes('c=ANDROID_VR')) return 'Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36';
+    if (url.includes('c=VISIONOS')) return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
     if (url.includes('c=ANDROID')) return 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip';
     if (url.includes('c=IOS')) return 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)';
+    if (req.headers['user-agent']) return req.headers['user-agent'];
     return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   };
 
@@ -205,17 +242,10 @@ router.get('/stream-proxy', async (req, res) => {
   const applyStrictCors = () => {
     const clientOrigin = req.headers.origin;
     if (clientOrigin) {
-      const allowedOrigins = [
-        'http://localhost:3000',
-        'http://localhost:5173',
-        'http://localhost:8080',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:8080',
-        'tauri://localhost',
-        'https://tauri.localhost'
-      ];
-      if (allowedOrigins.includes(clientOrigin) || clientOrigin.endsWith('.rivo.app') || clientOrigin.endsWith('.pages.dev') || clientOrigin.endsWith('.railway.app') || clientOrigin.includes('duckdns.org')) {
+      const isAllowed = clientOrigin.startsWith('http://localhost:') || clientOrigin.startsWith('http://127.0.0.1:') ||
+        clientOrigin === 'tauri://localhost' || clientOrigin === 'https://tauri.localhost' ||
+        clientOrigin.endsWith('.rivo.app') || clientOrigin.endsWith('.pages.dev') || clientOrigin.endsWith('.railway.app') || clientOrigin.includes('duckdns.org');
+      if (isAllowed) {
         res.setHeader('Access-Control-Allow-Origin', clientOrigin);
         res.setHeader('Vary', 'Origin');
         res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -265,8 +295,6 @@ router.get('/stream-proxy', async (req, res) => {
     const headers = { 'User-Agent': getMatchingUserAgent(targetUrl) };
     if (req.headers.range && !targetUrl.includes('sndcdn.com') && !targetUrl.includes('soundcloud.')) {
       headers['Range'] = req.headers.range;
-    } else if (isGoogleVideo) {
-      headers['Range'] = 'bytes=0-';
     }
 
     const response = await axios({
@@ -290,7 +318,7 @@ router.get('/stream-proxy', async (req, res) => {
       return res.status(504).json({ error: 'GATEWAY_TIMEOUT', message: 'Upstream stream request timed out' });
     }
 
-    // Auto-recovery: If stream proxy failed (403 Forbidden / expired token), attempt fresh resolution
+    // Auto-recovery: If stream proxy failed (403 Forbidden / expired token / stream failure), attempt fresh resolution
     const isForbidden = err.response?.status === 403 || (err.message && err.message.includes('403'));
     if (!res.headersSent && !res.writableEnded && (isForbidden || videoId || title || artist)) {
       try {
@@ -298,44 +326,69 @@ router.get('/stream-proxy', async (req, res) => {
           clearStreamCache(videoId);
           invalidateAudioCache(videoId, false);
         }
-        const freshDirect = await resolveOfficialYouTubeAudioStream(videoId || '', title, artist);
-        if (freshDirect) {
-          const freshResolved = freshDirect.url || String(freshDirect);
-          if (freshResolved) {
-            if (freshResolved.startsWith('/uploads/') || freshResolved.startsWith('uploads/')) {
-              const localFile = safeResolveUpload(freshResolved, uploadsDir);
-              if (localFile && fs.existsSync(localFile)) {
-                return res.sendFile(localFile);
+        // 1. First attempt: refresh stream URL for same videoId without in-memory cache
+        let freshDirect = null;
+        if (videoId) {
+          freshDirect = await resolveOfficialYouTubeAudioStream(videoId, title, artist, { bypassCache: true, bypassInnertube: isForbidden });
+        }
+        let freshResolved = freshDirect ? (freshDirect.url || String(freshDirect)) : null;
+
+        // 2. If that failed, returned null, or returned the same 403 URL, search for an alternative video
+        if (!freshResolved || freshResolved === targetUrl) {
+          if (title || artist) {
+            freshDirect = await resolveOfficialYouTubeAudioStream('', title, artist, {
+              retryAlt: true,
+              excludeVideoId: videoId,
+              bypassCache: true,
+              bypassInnertube: isForbidden
+            });
+            freshResolved = freshDirect ? (freshDirect.url || String(freshDirect)) : null;
+          }
+        }
+
+        if (freshResolved) {
+          const aliasExp = Date.now() + 3 * 3600 * 1000;
+          urlAliasMap.set(targetUrl, { renewedUrl: freshResolved, expiresAt: aliasExp });
+          if (req.query.url && req.query.url !== targetUrl) {
+            urlAliasMap.set(req.query.url, { renewedUrl: freshResolved, expiresAt: aliasExp });
+          }
+          if (urlAliasMap.size > 2000) urlAliasMap.clear();
+          if (videoId) cacheStreamUrl(videoId, freshResolved);
+
+          if (freshResolved.startsWith('/uploads/') || freshResolved.startsWith('uploads/')) {
+            const localFile = safeResolveUpload(freshResolved, uploadsDir);
+            if (localFile && fs.existsSync(localFile)) {
+              return res.sendFile(localFile);
+            }
+          } else if ((freshResolved.startsWith('http://') || freshResolved.startsWith('https://')) && freshResolved !== targetUrl) {
+            const { valid: freshValid } = await validateSafeUrl(freshResolved);
+            if (freshValid && !res.headersSent && !res.writableEnded) {
+              activeAbortController = new AbortController();
+              const freshHeaders = { 'User-Agent': getMatchingUserAgent(freshResolved) };
+              if (req.headers.range && !freshResolved.includes('sndcdn.com') && !freshResolved.includes('soundcloud.')) {
+                freshHeaders['Range'] = req.headers.range;
               }
-            } else if ((freshResolved.startsWith('http://') || freshResolved.startsWith('https://')) && freshResolved !== targetUrl) {
-              const { valid: freshValid } = await validateSafeUrl(freshResolved);
-              if (freshValid && !res.headersSent && !res.writableEnded) {
-                activeAbortController = new AbortController();
-                const freshHeaders = { 'User-Agent': getMatchingUserAgent(freshResolved) };
-                if (req.headers.range && !freshResolved.includes('sndcdn.com') && !freshResolved.includes('soundcloud.')) {
-                  freshHeaders['Range'] = req.headers.range;
-                } else if (freshResolved.includes('googlevideo.com')) {
-                  freshHeaders['Range'] = 'bytes=0-';
-                }
-                const freshResponse = await axios({
-                  method: 'get',
-                  url: freshResolved,
-                  responseType: 'stream',
-                  headers: freshHeaders,
-                  signal: activeAbortController.signal,
-                  timeout: 180000,
-                  maxRedirects: 5,
-                  validateStatus: (status) => status < 400 || status === 416
-                });
-                return forwardStreamResponse(freshResponse, freshResolved);
-              }
+              const freshResponse = await axios({
+                method: 'get',
+                url: freshResolved,
+                responseType: 'stream',
+                headers: freshHeaders,
+                signal: activeAbortController.signal,
+                timeout: 180000,
+                maxRedirects: 5,
+                validateStatus: (status) => status < 400 || status === 416
+              });
+              return forwardStreamResponse(freshResponse, freshResolved);
             }
           }
         }
       } catch (recErr) {}
     }
+    applyStrictCors();
     if (!res.headersSent) res.status(500).send('Proxy streaming failed');
   }
 });
+
+router.urlAliasMap = urlAliasMap;
 
 module.exports = router;

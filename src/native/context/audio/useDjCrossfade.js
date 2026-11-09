@@ -4,6 +4,7 @@ import { Audio } from 'expo-av';
 import { API_BASE_URL } from '../../config';
 import { resolveAudioStream } from '../../services/youtubeResolver';
 import { isQuranContent } from '../../../utils/quranUtils';
+import { flushListeningStats } from './audioApiHelpers';
 
 export const useDjCrossfade = ({
   currentTrackRef,
@@ -26,6 +27,9 @@ export const useDjCrossfade = ({
   likedTrackIds = [],
   repeatModeRef,
   isShuffleRef,
+  autoPersistFinishedTrack,
+  handleDownloadTrack,
+  autoDownloadFinishedRef,
 }) => {
   const [isMixMode, setIsMixModeState] = useState(false);
   const isMixModeRef = useRef(false);
@@ -205,9 +209,23 @@ export const useDjCrossfade = ({
     try {
       if (nextSoundRef.current && nextTrackRef.current) {
         const prevSound = soundRef.current;
+        const prevTrack = currentTrackRef.current;
         const newActiveSound = nextSoundRef.current;
         const newActiveTrack = nextTrackRef.current;
         const newActiveId = String(newActiveTrack._id || newActiveTrack.id || '');
+
+        if (prevTrack) {
+          const finishedTrack = {
+            ...prevTrack,
+            resolvedAudioUrl: prevTrack.resolvedAudioUrl || prevSound?._uri || null,
+          };
+          autoPersistFinishedTrack?.(finishedTrack);
+          flushListeningStats?.(null, true);
+          const isAutoDownload = autoDownloadFinishedRef?.current ?? true;
+          if (isAutoDownload && handleDownloadTrack) {
+            handleDownloadTrack(finishedTrack, true);
+          }
+        }
 
         if (prevSound) {
           try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
@@ -260,7 +278,8 @@ export const useDjCrossfade = ({
     soundRef, loadedTrackIdRef, currentTrackRef, setCurrentTrack,
     shouldBePlayingRef, isPlayingRef, setIsPlaying, isLoadingRef, setIsLoading,
     onPlaybackStatusUpdate, volumeRef, likedTrackIds, updateMediaNotificationCallback,
-    repeatModeRef, isShuffleRef, playNextTrackCallbackRef
+    repeatModeRef, isShuffleRef, playNextTrackCallbackRef,
+    autoPersistFinishedTrack, handleDownloadTrack, autoDownloadFinishedRef
   ]);
 
   const triggerManualMix = useCallback(async () => {

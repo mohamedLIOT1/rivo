@@ -1,6 +1,8 @@
 import { InteractionManager, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
+import { isQuranContent } from '../../../utils/quranUtils';
+import { isPodcastContent } from '../../utils/podcastUtils';
 
 export const STORAGE_KEY = '@rivo_downloaded_tracks_v3';
 export const LEGACY_STORAGE_KEYS = [
@@ -83,9 +85,18 @@ export const commitToStorageAndManifest = async (list) => {
   try {
     const jsonStr = JSON.stringify(list || []);
     await AsyncStorage.setItem(STORAGE_KEY, jsonStr).catch(() => {});
-    await FileSystem.writeAsStringAsync(MANIFEST_FILE, jsonStr).catch(() => {});
+
+    try {
+      const parentDir = `${FileSystem.documentDirectory}rivo_tracks/`;
+      await FileSystem.makeDirectoryAsync(parentDir, { intermediates: true }).catch(() => {});
+      await FileSystem.writeAsStringAsync(MANIFEST_FILE, jsonStr).catch(() => {});
+    } catch {}
+
     if (PERSISTENT_DIR && PERSISTENT_MANIFEST) {
-      await FileSystem.writeAsStringAsync(PERSISTENT_MANIFEST, jsonStr).catch(() => {});
+      try {
+        await FileSystem.makeDirectoryAsync(PERSISTENT_DIR, { intermediates: true }).catch(() => {});
+        await FileSystem.writeAsStringAsync(PERSISTENT_MANIFEST, jsonStr).catch(() => {});
+      } catch {}
     }
   } catch (e) {
     console.warn('[downloadManager] commitToStorageAndManifest error:', e.message);
@@ -246,20 +257,73 @@ export const getDownloadedTracks = async (forceRefresh = false) => {
     list = [];
   }
 
-  const cleaned = deduplicateTrackList(list).map(t => ({
-    ...t,
-    localAudioUri: reanchorDocumentUri(t.localAudioUri),
-    nativeAudioUri: reanchorDocumentUri(t.nativeAudioUri),
-    audioUrl: reanchorDocumentUri(t.audioUrl),
-  }));
+  let hasClassificationUpdates = false;
+  const cleaned = deduplicateTrackList(list).map(t => {
+    if (!t) return t;
+    const isQ = Boolean(
+      t.isQuran === true ||
+      t.isQuran === 'true' ||
+      t.category === 'quran' ||
+      t.contentType === 'quran' ||
+      isQuranContent(t)
+    );
+    const isP = !isQ && Boolean(
+      t.isPodcast === true ||
+      t.isPodcast === 'true' ||
+      t.contentType === 'podcast' ||
+      isPodcastContent(t)
+    );
+
+    let updated = t;
+    if (isQ && (!t.isQuran || t.category !== 'quran' || t.contentType !== 'quran')) {
+      updated = {
+        ...updated,
+        isQuran: true,
+        category: 'quran',
+        contentType: 'quran',
+      };
+      hasClassificationUpdates = true;
+    } else if (isP && (!t.isPodcast || t.contentType !== 'podcast')) {
+      updated = {
+        ...updated,
+        isPodcast: true,
+        category: t.category && t.category !== 'music' ? t.category : 'podcast',
+        contentType: 'podcast',
+      };
+      hasClassificationUpdates = true;
+    }
+
+    return {
+      ...updated,
+      localAudioUri: reanchorDocumentUri(updated.localAudioUri),
+      nativeAudioUri: reanchorDocumentUri(updated.nativeAudioUri),
+      audioUrl: reanchorDocumentUri(updated.audioUrl),
+    };
+  });
+
+  if (hasClassificationUpdates) {
+    saveDownloadedTracks(cleaned);
+  }
 
   inMemoryDownloadedTracks = cleaned;
   return cleaned;
 };
 
-export const isTrackDownloaded = async (trackId) => {
-  if (!trackId) return false;
-  const sId = String(trackId);
+export const isTrackDownloaded = async (trackIdOrObj) => {
+  if (!trackIdOrObj) return false;
   const list = await getDownloadedTracks();
-  return list.some(t => String(t._id || t.id) === sId);
+  if (typeof trackIdOrObj === 'object') {
+    const tid = String(trackIdOrObj._id || trackIdOrObj.id || '');
+    const ytId = String(trackIdOrObj.youtubeId || '');
+    const key = getTrackDedupeKey(trackIdOrObj);
+    return list.some(t => {
+      const did = String(t._id || t.id || '');
+      if (tid && did && did === tid) return true;
+      if (ytId && t.youtubeId && t.youtubeId === ytId) return true;
+      if (key && getTrackDedupeKey(t) === key) return true;
+      return false;
+    });
+  }
+  const sId = String(trackIdOrObj);
+  return list.some(t => String(t._id || t.id) === sId || t.youtubeId === sId || getTrackDedupeKey(t) === sId);
 };

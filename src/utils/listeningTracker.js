@@ -4,10 +4,10 @@
  * weekly listening leaderboards, and top streamed tracks.
  */
 
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL } from '../config.js';
 
 const STORAGE_KEY = 'rivo_listening_stats_v2';
-const SYNC_INTERVAL_MS = 25000;
+const SYNC_INTERVAL_MS = 15000;
 
 function getISOWeekString(d = new Date()) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -60,14 +60,12 @@ export function getListeningStats() {
   return cachedStats;
 }
 
-export function saveListeningStats(stats) {
+export function saveListeningStats(stats, immediate = false) {
   cachedStats = stats;
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
+  const persist = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedStats));
       localStorage.setItem('liofy_listening_stats_v2', JSON.stringify(cachedStats));
-      // Notify components about stats update
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('rivo:listening_stats_updated', { detail: cachedStats }));
         window.dispatchEvent(new CustomEvent('liofy:listening_stats_updated', { detail: cachedStats }));
@@ -75,7 +73,15 @@ export function saveListeningStats(stats) {
     } catch (e) {
       console.warn('[ListeningTracker] Error saving stats:', e);
     }
-  }, 1000);
+  };
+
+  if (immediate) {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    persist();
+  } else {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(persist, 1000);
+  }
 }
 
 function getTrackKey(track) {
@@ -90,12 +96,11 @@ export function onTrackStarted(track) {
   if (!track) return;
   const key = getTrackKey(track);
   if (activeSessionTrack && getTrackKey(activeSessionTrack) === key) {
-    // Already active track
     return;
   }
 
-  // End previous track session if any
-  flushSessionToServer();
+  // End previous track session and flush accrued seconds to server
+  flushSessionToServer(false);
 
   activeSessionTrack = {
     id: key,
@@ -109,7 +114,8 @@ export function onTrackStarted(track) {
 }
 
 /**
- * Called every second that audio is actively advancing and playing
+ * Called whenever audio actively plays and advances
+ * elapsedSeconds accounts for wall-clock delta (immune to browser tab throttling)
  */
 export function recordListeningTick(track, elapsedSeconds = 1) {
   if (!track || elapsedSeconds <= 0) return;
@@ -125,7 +131,8 @@ export function recordListeningTick(track, elapsedSeconds = 1) {
     stats.weeklySeconds = 0;
   }
 
-  const sec = Math.min(5, Math.max(1, Math.round(elapsedSeconds)));
+  // Allow up to 60 seconds in a single tick to accurately capture background tab intervals
+  const sec = Math.max(1, Math.min(60, Math.round(Number(elapsedSeconds) || 1)));
   stats.totalSeconds = (Number(stats.totalSeconds) || 0) + sec;
   stats.weeklySeconds = (Number(stats.weeklySeconds) || 0) + sec;
   activeSessionSeconds += sec;
@@ -175,7 +182,7 @@ export function recordListeningTick(track, elapsedSeconds = 1) {
   // Periodic server sync
   const now = Date.now();
   if (now - lastServerSync > SYNC_INTERVAL_MS) {
-    flushSessionToServer();
+    flushSessionToServer(false);
   }
 }
 
@@ -191,14 +198,14 @@ export function onTrackEnded(track) {
   if (!activeSessionPlayCounted && tStat) {
     activeSessionPlayCounted = true;
     tStat.plays = (Number(tStat.plays) || 0) + 1;
-    saveListeningStats(stats);
+    saveListeningStats(stats, true);
   }
 
   flushSessionToServer(true);
 }
 
 /**
- * Flush accumulated seconds to server
+ * Flush accumulated seconds to server with keepalive support
  */
 export async function flushSessionToServer(isEnd = false) {
   if (!activeSessionTrack || pendingServerSeconds <= 0) return;
@@ -210,11 +217,13 @@ export async function flushSessionToServer(isEnd = false) {
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token');
     const res = await fetch(`${API_BASE_URL}/api/stats/listen`, {
       method: 'POST',
+      keepalive: true,
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       },
       body: JSON.stringify({
+        token: token || undefined,
         trackId: activeSessionTrack.id,
         title: activeSessionTrack.title,
         artist: activeSessionTrack.artist,
@@ -243,12 +252,11 @@ export async function flushSessionToServer(isEnd = false) {
 /**
  * Returns the real top listened track for the current user
  */
-export function getRealTopTrack(tracks = []) {
+export function getRealTopTrack() {
   const stats = getListeningStats();
   const trackEntries = Object.values(stats.trackStats || {});
 
   if (trackEntries.length > 0) {
-    // Sort by seconds listened, then by verified plays
     trackEntries.sort((a, b) => {
       const secDiff = (Number(b.seconds) || 0) - (Number(a.seconds) || 0);
       if (secDiff !== 0) return secDiff;
@@ -266,13 +274,6 @@ export function getRealTopTrack(tracks = []) {
         seconds: top.seconds || 0
       };
     }
-  }
-
-  // Fallback to tracks prop if any track has recorded plays
-  const played = (tracks || []).filter(t => (Number(t.plays) || 0) > 0);
-  if (played.length > 0) {
-    played.sort((a, b) => (Number(b.plays) || 0) - (Number(a.plays) || 0));
-    return played[0];
   }
 
   return null;
@@ -299,4 +300,20 @@ export function formatListeningMinutes(totalSeconds, isRTL = false) {
   const hours = Math.floor(mins / 60);
   const remMins = mins % 60;
   return remMins > 0 ? `${hours}H ${remMins}M` : `${hours}H`;
+}
+
+// Auto-flush pending seconds when window/tab is closed or hidden
+if (typeof window !== 'undefined') {
+  const handleLifecycleFlush = () => {
+    flushSessionToServer(false);
+  };
+  window.addEventListener('beforeunload', handleLifecycleFlush);
+  window.addEventListener('pagehide', handleLifecycleFlush);
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        handleLifecycleFlush();
+      }
+    });
+  }
 }

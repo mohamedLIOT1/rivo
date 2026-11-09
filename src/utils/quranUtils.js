@@ -1,6 +1,6 @@
 // Utility to accurately identify, separate, and format Quranic content and reciters
 
-export const QURAN_REGEX = /(سورة|سوره|قرآن|قران|المصحف|مصحف|تلاوة|تلاوه|ترتيل|تجويد|المنشاوي|عبد\s*الباسط|الحصري|البناء|الطبلاوي|العفاسي|ماهر\s*المعيقلي|السديس|الشريم|ياسر\s*الدوسري|مشاري\s*العفاسي|أحمد\s*العجمي|سعد\s*الغامدي|\bsurah\b|\bquran\b|\bkoran\b|\brecitation\b|\btajweed\b|\btartil\b|\bmushaf\b)/i;
+export const QURAN_REGEX = /(سورة|سوره|قرآن|قران|المصحف|مصحف|تلاوة|تلاوه|ترتيل|تجويد|المنشاوي|عبد\s*الباسط|الحصري|(?:الشيخ\s+)?البنا(?![ء-ي])|الطبلاوي|العفاسي|ماهر\s*المعيقلي|السديس|الشريم|ياسر\s*الدوسري|مشاري\s*العفاسي|أحمد\s*العجمي|سعد\s*الغامدي|اللحيدان|قل\s*لمن\s*الأرض|قل\s*لمن\s*الارض|قل\s*لمن|تلاوات|القارئ|القارى|مقطع\s*خاشع|تلاوة\s*خاشعة|تلاوه\s*خاشعه|تلاوة\s*عطرة|تلاوه\s*عطره|مصحف\s*مرتل|المصحف\s*المرتل|مصحف\s*معلم|المصحف\s*المعلم|ختمة\s*قرآنية|ختمه\s*قرانيه|الرقية\s*الشرعية|الرقيه\s*الشرعيه|آيات\s*بينات|ايات\s*بينات|\bsurah\b|\bquran\b|\bkoran\b|\brecitation\b|\btajweed\b|\btartil\b|\bmushaf\b)/i;
 
 export const FAMOUS_RECITERS = [
   {
@@ -69,16 +69,16 @@ export const FAMOUS_RECITERS = [
       'abdulrahman musad', 'abdulrahman mosad', 'abdulrhman musad', 'abdel rhman musad', 'abdel rhman mosad',
       'mosad', 'mossad', 'musad', 'mosaad'
     ],
-    cover: 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=600'
   },
   {
     name: 'إسلام صبحي',
     aliases: ['اسلام صبحي', 'اسلام صبحى', 'إسلام صبحى', 'صبحي', 'صبحى', 'islam sobhi', 'islam sobhy', 'sobhi', 'sobhy'],
-    cover: 'https://images.unsplash.com/photo-1585036156171-384164a8c675?w=600'
+    cover: 'https://upload.wikimedia.org/wikipedia/commons/e/e8/Islam_Sobhi.jpg'
   },
   {
     name: 'هزاع البلوشي',
     aliases: ['هزاع البلوشى', 'البلوشي', 'البلوشى', 'hazza al balushi', 'hazza al-balushi', 'al balushi'],
+    cover: 'https://upload.wikimedia.org/wikipedia/commons/5/50/%D9%87%D8%B2%D8%A7%D8%B9_%D8%A7%D9%84%D8%A8%D9%84%D9%88%D8%B4%D9%8A.jpg'
   },
   {
     name: 'منصور السالمي',
@@ -87,6 +87,7 @@ export const FAMOUS_RECITERS = [
   {
     name: 'رعد الكردي',
     aliases: ['رعد الكردى', 'الكردي', 'الكردى', 'raad al kurdi', 'raad al-kurdi', 'al kurdi'],
+    cover: 'https://upload.wikimedia.org/wikipedia/commons/d/d7/Raad_Mohammad_Al_Kurdi.png'
   },
   {
     name: 'أحمد النفيس',
@@ -217,6 +218,30 @@ export const FAMOUS_RECITERS = [
   {
     name: 'شريف مصطفى',
     aliases: ['شريف مصطفى', 'sherif mostafa', 'sherif mustafa'],
+  },
+  {
+    name: 'محمد اللحيدان',
+    aliases: ['محمد اللحيدان', 'اللحيدان', 'muhammad al-luhaidan', 'al-luhaidan', 'luhaidan'],
+  },
+  {
+    name: 'عبد العزيز سحيم',
+    aliases: ['عبد العزيز سحيم', 'عبدالعزيز سحيم', 'سحيم', 'abdelaziz sehim', 'abdulaziz sehim'],
+  },
+  {
+    name: 'عبد الله كامل',
+    aliases: ['عبد الله كامل', 'عبدالله كامل', 'الشيخ عبدالله كامل', 'abdullah kamel'],
+  },
+  {
+    name: 'حسن صالح',
+    aliases: ['حسن صالح', 'الشيخ حسن صالح', 'hassan saleh'],
+  },
+  {
+    name: 'بيشة وا القادري',
+    aliases: ['بيشة وا', 'بيشوا', 'بيشةوا', 'peshawa kurdi', 'peshawa qadr'],
+  },
+  {
+    name: 'ياسين الجزائري',
+    aliases: ['ياسين الجزائري', 'الجزائري', 'yassin al jazairi'],
   }
 ];
 
@@ -248,15 +273,181 @@ export function isRadioTrack(item) {
   );
 }
 
+export const SECULAR_ARTISTS = [
+  'cairokee', 'كايروكي', 'امير عيد', 'أمير عيد', 'amir eid',
+  'lege-cy', 'lege cy', 'ليجي', 'ليجي سي', 'legecy',
+  'wegz', 'ويجز',
+  'marwan pablo', 'مروان بابلو', 'بابلو',
+  'marwan moussa', 'مروان موسى', 'مروان موسي',
+  'amr diab', 'عمرو دياب', 'الهضبة',
+  'tamer hosny', 'تامر حسني', 'تامر حسنى',
+  'mohamed hamaki', 'hamaki', 'محمد حماقي', 'حماقي', 'حماقى',
+  'sharmoofers', 'شارموفرز',
+  'massar egbari', 'مسار إجباري', 'مسار اجباري',
+  'hamza namira', 'حمزة نمرة', 'حمزه نمره',
+  'abyusif', 'ابيوسف', 'أبيوسف',
+  'afroto', 'عفروتو',
+  'essam sasa', 'عصام صاصا',
+  'hassan shakosh', 'حسن شاكوش',
+  'omar kamal', 'عمر كمال',
+  'hamo bika', 'حمو بيكا',
+  'ahmed saad', 'أحمد سعد', 'احمد سعد',
+  'muslim', 'مسلم',
+  'mohamed mounir', 'محمد منير', 'الكينج',
+  'mohamed ramadan', 'محمد رمضان',
+  'sherine', 'شيرين', 'شيرين عبد الوهاب',
+  'angham', 'أنغام', 'انغام',
+  'asala', 'أصالة', 'اصالة', 'اصاله',
+  'nancy ajram', 'نانسي عجرم',
+  'elissa', 'إليسا', 'اليسا',
+  'fairuz', 'فيروز',
+  'umm kulthum', 'أم كلثوم', 'ام كلثوم',
+  'abdel halim hafez', 'عبد الحليم حافظ', 'عبد الحليم',
+  'farid al-atrash', 'فريد الأطرش', 'فريد الاطرش',
+  'snoop dogg', 'eminem', 'drake', 'travis scott', 'the weeknd',
+  'taylor swift', 'coldplay', 'imagine dragons', 'linkin park',
+  'billie eilish', 'kendrick lamar', 'post malone', 'ed sheeran',
+  'dua lipa', 'queen', 'the beatles', 'beatles', 'michael jackson',
+  'metallica', 'nirvana', 'radiohead', 'pink floyd', 'green day',
+  'red hot chili peppers', 'kanye west', 'jay-z', 'rihanna', 'beyonce',
+  'justin bieber', 'adele', 'bruno mars', 'katy perry', 'shakira'
+];
+
+export const SECULAR_GENRES = [
+  'rap', 'hip hop', 'hip-hop', 'pop', 'rock', 'metal', 'indie',
+  'mahraganat', 'مهرجانات', 'shaabi', 'شعبي', 'شعبى', 'r&b',
+  'jazz', 'blues', 'electronic', 'edm', 'dance', 'techno',
+  'house', 'trap', 'drill', 'podcast', 'بودكاست'
+];
+
+export function isSecularArtist(artistName = '') {
+  if (!artistName || typeof artistName !== 'string') return false;
+  const rawLower = artistName.toLowerCase().trim();
+  const norm = normalizeArabicText(artistName).toLowerCase();
+  for (const secular of SECULAR_ARTISTS) {
+    const normSec = normalizeArabicText(secular).toLowerCase();
+    if (rawLower === secular.toLowerCase() || norm === normSec) return true;
+    if (rawLower.includes(secular.toLowerCase()) || norm.includes(normSec)) return true;
+  }
+  return false;
+}
+
 export function isQuranContent(item, artist = '', album = '') {
   if (!item) return false;
+
+  // 1. Check artist parameter if passed
+  const artistParam = typeof artist === 'string' ? artist : '';
+  if (artistParam && isSecularArtist(artistParam)) return false;
+
   if (typeof item === 'object') {
-    if (item.isQuran === true || item.genre === 'quran-radio') return true;
-    const str = `${item.title || item.name || ''} ${item.artist || ''} ${item.album || ''} ${item.genre || ''} ${item.description || ''}`;
-    return QURAN_REGEX.test(str);
+    // 2. Reject secular artists in track object
+    if (isSecularArtist(item.artist) || isSecularArtist(item.creator) || isSecularArtist(item.author)) {
+      return false;
+    }
+    // Also check if title mentions a secular artist
+    if (item.title && isSecularArtist(item.title)) {
+      return false;
+    }
+
+    // 3. Reject explicit podcast content
+    if (item.contentType === 'podcast' || item.isPodcast === true) {
+      return false;
+    }
+
+    // 4. Reject secular genres
+    const genreStr = String(item.genre || item.arabicGenre || '').toLowerCase();
+    if (genreStr) {
+      for (const g of SECULAR_GENRES) {
+        if (genreStr.includes(g)) return false;
+      }
+    }
+
+    // 5. Explicit Quran flags (validated against secular checks above)
+    if (
+      item.isQuran === true ||
+      item.isQuran === 'true' ||
+      item.contentType === 'quran' ||
+      item.category === 'quran' ||
+      item.category === 'Quran' ||
+      item.category === 'Holy Quran' ||
+      item.genre === 'Quran' ||
+      item.genre === 'quran' ||
+      item.genre === 'quran-radio' ||
+      item.genre === 'Quran Radio' ||
+      item.genre === 'Holy Quran' ||
+      (typeof item.genre === 'string' && /quran/i.test(item.genre)) ||
+      (typeof item.category === 'string' && /quran/i.test(item.category))
+    ) {
+      return true;
+    }
+
+    // 6. Check famous authentic reciters from FAMOUS_RECITERS
+    const rawArtist = (item.artist || '').trim();
+    if (rawArtist) {
+      const normArtist = normalizeArabicText(rawArtist);
+      for (const reciter of FAMOUS_RECITERS) {
+        for (const alias of reciter.aliases) {
+          const normAlias = normalizeArabicText(alias);
+          if (
+            normArtist === normAlias ||
+            rawArtist.toLowerCase() === alias.toLowerCase() ||
+            (normAlias.length >= 4 && normArtist.includes(normAlias)) ||
+            (alias.length >= 4 && rawArtist.toLowerCase().includes(alias.toLowerCase()))
+          ) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // 7. Test core fields (title, artist, album, genre) with QURAN_REGEX (both raw and normalized)
+    const coreStr = `${item.title || item.name || ''} ${item.artist || ''} ${item.album || ''} ${item.genre || ''}`;
+    if (QURAN_REGEX.test(coreStr) || QURAN_REGEX.test(normalizeArabicText(coreStr))) return true;
+
+    // 8. Check canonical surah names in title
+    const rawTitle = (item.title || item.name || '').trim();
+    if (rawTitle && typeof CANONICAL_SURAHS !== 'undefined') {
+      const normTitle = normalizeArabicText(rawTitle);
+      for (const surah of CANONICAL_SURAHS) {
+        if (normTitle === normalizeArabicText(surah.name) || rawTitle.toLowerCase() === surah.english.toLowerCase()) {
+          return true;
+        }
+        for (const alias of surah.aliases) {
+          if (alias.length >= 4 && (normTitle === normalizeArabicText(alias) || rawTitle.toLowerCase() === alias.toLowerCase())) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // 9. Check description only if not empty
+    if (item.description && QURAN_REGEX.test(item.description)) {
+      return true;
+    }
+
+    return false;
   }
-  const str = `${item} ${artist} ${album}`;
-  return QURAN_REGEX.test(str);
+
+  // String overload (item is title string)
+  if (typeof item === 'string') {
+    if (isSecularArtist(item) || isSecularArtist(artistParam)) return false;
+    const str = `${item} ${artistParam} ${typeof album === 'string' ? album : ''}`;
+    if (QURAN_REGEX.test(str) || QURAN_REGEX.test(normalizeArabicText(str))) return true;
+    if (artistParam) {
+      const normArtist = normalizeArabicText(artistParam);
+      for (const reciter of FAMOUS_RECITERS) {
+        for (const alias of reciter.aliases) {
+          const normAlias = normalizeArabicText(alias);
+          if (normArtist === normAlias || artistParam.toLowerCase() === alias.toLowerCase()) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  return false;
 }
 
 export function cleanQuranTrackTitle(title) {
@@ -355,7 +546,7 @@ export function getQuranReciterName(trackOrItem, playlists = []) {
 
 export const CANONICAL_SURAHS = [
   { number: 1, name: 'الفاتحة', english: 'Al-Fatiha', aliases: ['فاتحة', 'أم الكتاب', 'السبع المثاني', 'fatiha', 'al-fatiha', 'fatihah'] },
-  { number: 2, name: 'البقرة', english: 'Al-Baqarah', aliases: ['بقرة', 'baqarah', 'al-baqarah', 'baqara'] },
+  { number: 2, name: 'البقرة', english: 'Al-Baqarah', aliases: ['بقرة', 'baqarah', 'al-baqarah', 'baqara', 'اية الكرسي', 'آية الكرسي', 'الكرسي', 'ayatul kursi', 'ayat al-kursi'] },
   { number: 3, name: 'آل عمران', english: 'Aal-Imran', aliases: ['ال عمران', 'عمران', 'aal-imran', 'al-imran', 'imran'] },
   { number: 4, name: 'النساء', english: 'An-Nisa', aliases: ['نساء', 'an-nisa', 'nisa'] },
   { number: 5, name: 'المائدة', english: 'Al-Maidah', aliases: ['مائدة', 'al-maidah', 'al-maida', 'maidah', 'maida'] },
@@ -572,12 +763,45 @@ export function getSurahName(trackOrNumber) {
   return found ? found.name : '';
 }
 
+export const AYAH_CLIP_REGEX = /(?:آية|اية|آيات|ايات|أواخر|اواخر|خواتيم|أوائل|اوائل|مقطع|مقاطع|مقتطف|مقتطفات|من\s+سورة|من\s+سوره|ربع|أرباع|ارباح|حزب|احزاب|ثمن|أثمان|اثمان|ayatul\s*kursi|ayah|ayat|verse|verses|clip|excerpt|last\s*verses)/i;
+
+/**
+ * Checks whether a track, title, or item represents a specific Ayah, clip, or excerpt
+ * rather than a full continuous Surah recitation.
+ * @param {Object|string} item Track object or title string
+ * @returns {boolean}
+ */
+export function isAyahOrClip(item) {
+  if (!item) return false;
+  if (typeof item === 'object' && item !== null && item.isAyah !== undefined) {
+    return Boolean(item.isAyah);
+  }
+  const rawTitle = typeof item === 'string' ? item : (item.title || item.name || '');
+  if (!rawTitle) return false;
+
+  // Recognized special excerpts, du'as, and ayahs
+  if (/كرسي|kursi/i.test(rawTitle)) return true;
+  if (/رقية|رقيه|ruqyah/i.test(rawTitle)) return true;
+  if (/دعاء|dua/i.test(rawTitle)) return true;
+
+  return AYAH_CLIP_REGEX.test(rawTitle);
+}
+
 export function sortQuranTracks(tracks = []) {
   if (!Array.isArray(tracks) || tracks.length === 0) return [];
-  // Schwartzian transform to call getSurahNumber once per track (O(N) instead of O(N log N * 570 regexes))
-  const decorated = tracks.map((t, idx) => ({ t, num: getSurahNumber(t), idx }));
+  // Schwartzian transform to call getSurahNumber & isAyahOrClip once per track (O(N) instead of O(N log N * regexes))
+  const decorated = tracks.map((t, idx) => ({
+    t,
+    num: getSurahNumber(t),
+    isClip: isAyahOrClip(t),
+    idx
+  }));
   decorated.sort((a, b) => {
+    // 1. Group by Surah number (1 to 114 first, then 999 at the end)
     if (a.num !== b.num) return a.num - b.num;
+    // 2. Full surahs before specific ayahs/clips of that surah
+    if (a.isClip !== b.isClip) return a.isClip ? 1 : -1;
+    // 3. Preserve original order
     return a.idx - b.idx;
   });
   return decorated.map(d => d.t);

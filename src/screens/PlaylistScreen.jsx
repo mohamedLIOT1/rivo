@@ -44,6 +44,7 @@ export default function PlaylistScreen({
   openEditAlbumModal,
   openAddToPlaylist,
   onViewProfile,
+  libraryMode = 'music',
   globalTheme = 'dark',
   onToast = () => {},
 }) {
@@ -116,7 +117,7 @@ export default function PlaylistScreen({
         .catch(() => {});
     }
   }, [initialPlaylist?.id, initialPlaylist?._id, initialPlaylist?.name]);
-  const { currentTrack, isPlaying, isLoadingTrack, togglePlay, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoadingTrack, togglePlay, togglePlayPause, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
   const {
     downloadTrack,
@@ -216,6 +217,19 @@ export default function PlaylistScreen({
     if (alreadyInPlaylist) {
       setDuplicateConfirmTrack(trackToAdd);
     } else {
+      // Optimistically remove from recommendations so UI updates instantly
+      setAiRecommendations(prev => prev.filter(r => String(r.id || r._id) !== trackIdStr));
+      // Optimistically update playlist tracks in remotePlaylist
+      setRemotePlaylist(prev => {
+        const base = prev || playlist || {};
+        const baseTrackIds = Array.isArray(base.trackIds) ? base.trackIds.map(String) : [];
+        const baseTracks = Array.isArray(base.tracks) ? [...base.tracks] : [];
+        return {
+          ...base,
+          trackIds: [...baseTrackIds, trackIdStr],
+          tracks: [...baseTracks, trackToAdd]
+        };
+      });
       onAddTrackToPlaylist(trackIdStr, playlist.id || playlist._id, false);
     }
   };
@@ -362,13 +376,14 @@ export default function PlaylistScreen({
       }
     });
 
-    return result;
-  }, [isLikedPlaylist, playlistTrackIds, likedTrackIds, trackMap, allAvailable]);
+    // Filter liked tracks by active libraryMode (music vs quran) to match sidebar count
+    return result.filter(t => libraryMode === 'quran' ? isQuranContent(t) : !isQuranContent(t));
+  }, [isLikedPlaylist, playlistTrackIds, likedTrackIds, trackMap, allAvailable, libraryMode]);
 
   const isQuran = Boolean(
-    playlist?.isQuran ||
-    isQuranContent(playlist) ||
-    (playlistTracks.length > 0 && playlistTracks.some(isQuranContent))
+    !isLikedPlaylist
+      ? (playlist?.isQuran || isQuranContent(playlist) || (playlistTracks.length > 0 && playlistTracks.every(isQuranContent)))
+      : (libraryMode === 'quran' || (playlistTracks.length > 0 && playlistTracks.every(isQuranContent)))
   );
 
   const isAlbum = Boolean(playlist?.isAlbum || String(playlist?.id || '').startsWith('album-'));
@@ -684,12 +699,22 @@ export default function PlaylistScreen({
     if (isLoadingRecs) return;
     setIsLoadingRecs(true);
     try {
+      const currentTrackIds = (playlist?.trackIds || []).map(String);
+      const currentRecIds = (aiRecommendations || []).map(r => String(r.id || r._id));
+      const seeds = playlistTracks.length > 6
+        ? [...playlistTracks].sort(() => 0.5 - Math.random()).slice(0, 6)
+        : playlistTracks.slice(0, 6);
+
       const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           playlistName: playlist?.name || 'Playlist',
-          seedTracks: playlistTracks.slice(0, 6)
+          seedTracks: seeds,
+          trackIds: currentTrackIds,
+          excludeTrackIds: currentRecIds,
+          isQuran: Boolean(isQuran || playlist?.isQuran),
+          refresh: true
         })
       });
       const data = await res.json();
@@ -699,15 +724,6 @@ export default function PlaylistScreen({
           isAiSuggestion: true
         }));
         setAiRecommendations(markedRecs);
-        // Automatically add the recommendations to active playback queue
-        if (setCurrentQueue) {
-          setCurrentQueue(prev => {
-            const currentList = Array.isArray(prev) ? prev : [];
-            const existingIds = new Set(currentList.map(t => String(t.id || t._id)));
-            const newRecs = markedRecs.filter(t => !existingIds.has(String(t.id || t._id)));
-            return [...currentList, ...newRecs];
-          });
-        }
       }
     } catch (err) {
       console.warn('AI recommendations error:', err);
@@ -769,9 +785,7 @@ export default function PlaylistScreen({
 
   const handlePlayPlaylistTrack = (track) => {
     const baseQueue = filteredPlaylistTracks;
-    const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
-    const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
-    const fullQueue = [...baseQueue, ...extraRecs];
+    const fullQueue = [...baseQueue];
 
     if (isPlaylistMixActive) {
       setIsMixMode?.(true);
@@ -808,9 +822,7 @@ export default function PlaylistScreen({
     const trackToPlay = pendingMixTrack || filteredPlaylistTracks[0];
     if (trackToPlay) {
       const baseQueue = filteredPlaylistTracks;
-      const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
-      const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
-      const fullQueue = [...baseQueue, ...extraRecs];
+      const fullQueue = [...baseQueue];
       fullQueue._isMix = true;
       fullQueue._transitions = transitions;
       fullQueue._playlistName = playlist?.name;
@@ -830,9 +842,7 @@ export default function PlaylistScreen({
     const trackToPlay = pendingMixTrack || filteredPlaylistTracks[0];
     if (trackToPlay) {
       const baseQueue = filteredPlaylistTracks;
-      const existingIds = new Set(baseQueue.map(t => String(t.id || t._id)));
-      const extraRecs = aiRecommendations.filter(r => !existingIds.has(String(r.id || r._id)));
-      const fullQueue = [...baseQueue, ...extraRecs];
+      const fullQueue = [...baseQueue];
       onSelectTrack(trackToPlay, fullQueue);
     }
     setPendingMixTrack(null);
@@ -1053,7 +1063,7 @@ export default function PlaylistScreen({
                 isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] border-black'
               }`}>{isSiteAlbum ? (isQuran ? (t?.('library.surahCollection') || 'COLLECTION') : (t?.('library.officialAlbum') || 'ALBUM')) : (isQuran ? (t?.('library.quranPlaylist') || 'QURAN') : (t?.('library.playlist') || 'PLAYLIST'))}</span>
               <span>•</span>
-              <span>{playlistTracks.length} {isQuran ? (playlistTracks.length === 1 ? (t?.('library.surahSingle') || 'سورة') : (t?.('library.surahPlural') || 'سور')) : (playlistTracks.length === 1 ? (t?.('library.trackSingle') || 'مقطع') : (t?.('library.trackPlural') || 'مقاطع'))}</span>
+              <span>{playlistTracks.length} {isQuran ? (playlistTracks.length === 1 ? (t?.('library.surahSingle') || 'سورة') : (t?.('library.surahPlural') || 'سور')) : (playlistTracks.length === 1 ? (t?.('library.songSingle') || t?.('library.trackSingle') || 'أغنية') : (t?.('library.songPlural') || t?.('library.trackPlural') || 'أغانٍ'))}</span>
               <span>•</span>
               <span>{formatDurationSum()}</span>
             </div>
@@ -1181,14 +1191,15 @@ export default function PlaylistScreen({
       }`}>
         <div className="flex items-center flex-wrap gap-2.5 sm:gap-3">
           {(() => {
-            const isThisPlaylistPlaying = currentTrack && filteredPlaylistTracks.some(t => String(t.id || t._id) === String(currentTrack.id || currentTrack._id));
+            const isCurPlPlaying = currentTrack && filteredPlaylistTracks.some(t => String(t.id || t._id) === String(currentTrack.id || currentTrack._id));
             return (
               <button
                 disabled={filteredPlaylistTracks.length === 0}
                 onClick={() => {
                   if (filteredPlaylistTracks.length === 0) return;
-                  if (isThisPlaylistPlaying) {
-                    togglePlay?.();
+                  if (isCurPlPlaying) {
+                    if (typeof togglePlay === "function") togglePlay();
+                    else togglePlayPause?.();
                   } else {
                     handlePlayPlaylistTrack(filteredPlaylistTracks[0]);
                   }
@@ -1198,11 +1209,11 @@ export default function PlaylistScreen({
                     ? 'bg-[#10b981] hover:bg-emerald-400 text-[#0b1110] cursor-pointer'
                     : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
                 }`}
-                title={isThisPlaylistPlaying && isLoadingTrack ? 'Loading...' : isThisPlaylistPlaying && isPlaying ? 'Pause playlist' : 'Play playlist'}
+                title={isCurPlPlaying && isLoadingTrack ? "Loading..." : isCurPlPlaying && isPlaying ? "Pause playlist" : "Play playlist"}
               >
-                {isThisPlaylistPlaying && isLoadingTrack ? (
+                {isCurPlPlaying && isLoadingTrack ? (
                   <Loader2 size={18} className="animate-spin text-[#0b1110]" />
-                ) : isThisPlaylistPlaying && isPlaying ? (
+                ) : isCurPlPlaying && isPlaying ? (
                   <Pause size={18} fill="currentColor" className="text-[#0b1110] sm:w-5 sm:h-5" />
                 ) : (
                   <Play size={18} fill="currentColor" className="ml-0.5 text-[#0b1110] sm:w-5 sm:h-5" />

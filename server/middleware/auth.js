@@ -57,13 +57,24 @@ function makeToken(u) {
 // Extract token strictly from Authorization: Bearer <token>
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization || req.headers.Authorization;
-  if (!authHeader || typeof authHeader !== 'string') return null;
-  const parts = authHeader.split(' ');
-  if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
-    return parts[1].trim();
+  if (authHeader && typeof authHeader === 'string') {
+    const parts = authHeader.split(' ');
+    if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
+      return parts[1].trim();
+    }
+    if (parts.length === 1 && parts[0].trim()) {
+      return parts[0].trim();
+    }
+  }
+  if (req.query?.token && typeof req.query.token === 'string') {
+    return req.query.token.trim();
+  }
+  if (req.body?.token && typeof req.body.token === 'string') {
+    return req.body.token.trim();
   }
   return null;
 }
+
 
 async function auth(req, res, next) {
   const t = extractBearerToken(req);

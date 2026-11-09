@@ -2,36 +2,28 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const mongoose = require('mongoose');
-const { execFile, execFileSync } = require('child_process');
+const { execFile } = require('child_process');
 
-const EMBEDDED_YOUTUBE_COOKIES = `# Netscape HTTP Cookie File
-# https://curl.haxx.se/rfc/cookie_spec.html
-# This is a generated file! Do not edit.
+const EMBEDDED_YOUTUBE_COOKIES = '';
+let cookiePromptListener = null;
 
-.youtube.com	TRUE	/	FALSE	1827141845	HSID	AQbU9Tf375bT4QpZs
-.youtube.com	TRUE	/	TRUE	1827141845	SSID	AclKQ8_TaNTLqZD3K
-.youtube.com	TRUE	/	FALSE	1827141845	APISID	3zneGuIfvKtozDjN/AXOz5H_n5FGLInD6k
-.youtube.com	TRUE	/	TRUE	1827141845	SAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com	TRUE	/	TRUE	1827141845	__Secure-1PAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com	TRUE	/	TRUE	1827141845	__Secure-3PAPISID	zaADyK14sfPJt3MY/A8mozLAyeplCY2a3o
-.youtube.com	TRUE	/	TRUE	1806394086	__Secure-BUCKET	CNwH
-.youtube.com	TRUE	/	TRUE	1828279814	PREF	f6=40000000&f7=100&tz=Africa.Cairo
-.youtube.com	TRUE	/	FALSE	1827141845	SID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkFk3GtoMcaISajUtaI2z2sQACgYKASASARISFQHGX2Mihh8rHmNr7-9nMkhuI0W56xoVAUF8yKoOfUkWGe4ikoU9i0vnsdws0076
-.youtube.com	TRUE	/	TRUE	1827141845	__Secure-1PSID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkZcR7ZicwZ5nK8Reny4qfsAACgYKAS4SARISFQHGX2MiTI5rRe-BIYBIoHKenMhSihoVAUF8yKpetsu8nrg9c9LolLnHcSGf0076
-.youtube.com	TRUE	/	TRUE	1827141845	__Secure-3PSID	g.a000Dwn7uN5mThPtCUM-3wae_zpIHD5Cl7Sb2cor18o1x4ESW1ZkRoeRVdjXRxsiP4X_OSkwZgACgYKAX4SARISFQHGX2MiMBeLd5mC9jclOeOiPyFVCRoVAUF8yKoQScwucgwCtlMFvX_MiBsT0076
-.youtube.com	TRUE	/	TRUE	1827152434	LOGIN_INFO	AFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79:QUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
-.youtube.com	TRUE	/	FALSE	1793719824	ST-3opvp5	session_logininfo=AFmmF2swRAIgLxwOUj2Afdq2fj95ZDcqoBYWUm2ghtMiZTwvM3UbMA8CIA79yuKwJqRTTNZeoPvrKwDDgTziIbNeL9tpBwzzId79%3AQUQ3MjNmdzFqOWNUZUtSVGxsemxqTXByQmJFbnl6YXZfLXBRZ2JxeEF6ZkpEQ2RYZ3l1NDRScHBreGRHYTVZd2wzQlFjQ0NZLWtpdjhOWldHdml3cnJTNHg2V0VLODV4OWJadmFXWWZhSUhRS0JGMG9lbU1BMmNEMUNQTzI1bGduUmRtNElZMmQyYXhRVXhyZjRQeDhWaVlJV3B1eHlzRmlR
-.youtube.com	TRUE	/	TRUE	1825255819	__Secure-1PSIDTS	sidts-CjUBnJZzavLeNlASkEmGSRgadHNZopszfBf9pNbG-5Ef2fU92JH-mWey8fTVym7GPxzeheJVXxAA
-.youtube.com	TRUE	/	TRUE	1825255819	__Secure-3PSIDTS	sidts-CjUBnJZzavLeNlASkEmGSRgadHNZopszfBf9pNbG-5Ef2fU92JH-mWey8fTVym7GPxzeheJVXxAA
-.youtube.com	TRUE	/	FALSE	1825255819	SIDCC	APD_SKGI_O6jlZFFlAan6LPxE5VNJGq6aLuyVKL1PmyD-Gy-tfbdsVwfuJQ0qJlJ-WomOA7gTQ
-.youtube.com	TRUE	/	TRUE	1825255819	__Secure-1PSIDCC	APD_SKHXsrasaDrzcKr8M2PPp6yWlMTyVzFkyLBEB927A9NlEVvxZRqkZ5FDAjG-7JlduZbNwA
-.youtube.com	TRUE	/	TRUE	1825255819	__Secure-3PSIDCC	APD_SKGlXnv1RZGUxZPs__-1zz9qtKzPtVxY6KY9f-egS_zQwkyW8p5CrUqKKvLDicultHDnhg
-.youtube.com	TRUE	/	TRUE	1809271819	VISITOR_INFO1_LIVE	Jf8osUMeS10
-.youtube.com	TRUE	/	TRUE	1809271819	VISITOR_PRIVACY_METADATA	CgJFRxIEGgAgSw%3D%3D
-.youtube.com	TRUE	/	TRUE	1809271806	__Secure-YNID	CuwBCAUSngEBDB6PDFBLQsGxauIBU3Om6GKjlq9oYTnVlIoFwQ35p-vLrd8gA03apibVuPr87Bj3qIEOyfm6Lne_Qz6ptmVVM4cNDP1Do9fbEaN7MzMtjrrMMZv9BXiz-bLGb_SbBcspck-LryEjlvQcDN46h2OFTveNetT2juCAaTknJpXMsbKbhq9I-f2hz06hz3sIsVSn6Wc4hDF0qSuFQAwMPigFMkUBHFj1as5Emyy0il60s8VtbAYV2xC7qDVG7pPDHiQB1PKoqMhwAvd9FZdFe1r7bdkZ-zKAMI7qdx-24zXOrRmnzKD4DQU
-.youtube.com	TRUE	/	TRUE	0	YSC	9ilY0f8en9k
-.youtube.com	TRUE	/	TRUE	1809271806	__Secure-ROLLOUT_TOKEN	CPXGhauU6_yKbRC204iuxJ6WAxiS4bn-juyXAw%3D%3D
-`;
+function setCookiePromptHandler(handler) {
+  cookiePromptListener = handler;
+}
+
+async function promptUserForCookies(reason = 'External stream access requires authentication') {
+  console.warn(`[YouTubeStream] ${reason}`);
+  console.warn('[YouTubeStream] Please provide a fresh, genuine cookies.txt file in the application root directory.');
+  if (typeof cookiePromptListener === 'function') {
+    return await cookiePromptListener(reason);
+  }
+  return null;
+}
+
+function isCookiesRequiredError(err) {
+  const msg = `${err?.message || ''} ${err?.stderr || ''} ${err || ''}`.toLowerCase();
+  return msg.includes('sign in to confirm') || msg.includes('bot verification') || msg.includes('cookies required');
+}
 
 function getCookiesPath() {
   const possibleCookiePaths = [
@@ -43,13 +35,17 @@ function getCookiesPath() {
     path.join(process.cwd(), 'server/cookies.txt')
   ];
   for (const cp of possibleCookiePaths) {
-    if (fs.existsSync(cp) && fs.statSync(cp).size > 100) return cp;
+    if (fs.existsSync(cp) && fs.statSync(cp).size > 100) {
+      try {
+        const sample = fs.readFileSync(cp, 'utf8').slice(0, 1024);
+        // Never return fake/mock credentials file that sabotages signature solving
+        if (sample.includes('session_logininfo=FAKE')) {
+          continue;
+        }
+        return cp;
+      } catch {}
+    }
   }
-  try {
-    const targetFile = fs.existsSync('/home/ubuntu/rivo') ? '/home/ubuntu/rivo/cookies.txt' : path.join(__dirname, '../../cookies.txt');
-    fs.writeFileSync(targetFile, EMBEDDED_YOUTUBE_COOKIES, 'utf8');
-    return targetFile;
-  } catch {}
   return null;
 }
 
@@ -60,12 +56,30 @@ function isAudioFileValid(filePath) {
   try {
     const stats = fs.statSync(filePath);
     if (stats.size < 30000) return false;
-    const probe = execFileSync(
-      'ffprobe',
-      ['-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=codec_type', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
-      { timeout: 6000 }
-    );
-    const valid = probe.toString().trim() === 'audio';
+
+    // Fast non-blocking header check (< 0.05ms) avoiding event loop freeze
+    const fd = fs.openSync(filePath, 'r');
+    const buffer = Buffer.alloc(64);
+    const bytesRead = fs.readSync(fd, buffer, 0, 64, 0);
+    fs.closeSync(fd);
+
+    if (bytesRead < 16) return false;
+
+    // Check M4A / MP4: 'ftyp' at offset 4
+    const isM4A = buffer.toString('latin1', 4, 8) === 'ftyp';
+    // Check MP3: 'ID3' or MPEG sync word (0xFF 0xFB, 0xFF 0xF3, 0xFF 0xF2)
+    const isMp3Id3 = buffer.toString('latin1', 0, 3) === 'ID3';
+    const isMp3Sync = buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0;
+    // Check OGG / OPUS: 'OggS'
+    const isOgg = buffer.toString('latin1', 0, 4) === 'OggS';
+    // Check FLAC: 'fLaC'
+    const isFlac = buffer.toString('latin1', 0, 4) === 'fLaC';
+    // Check WAV: 'RIFF'
+    const isWav = buffer.toString('latin1', 0, 4) === 'RIFF';
+    // Check WebM: 0x1A 0x45 0xDF 0xA3
+    const isWebm = buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3;
+
+    const valid = isM4A || isMp3Id3 || isMp3Sync || isOgg || isFlac || isWav || isWebm;
     if (valid) {
       if (verifiedAudioFiles.size > 5000) verifiedAudioFiles.clear();
       verifiedAudioFiles.add(filePath);
@@ -78,22 +92,26 @@ function isAudioFileValid(filePath) {
 
 const localFileDurationCache = new Map();
 function getLocalAudioFileDuration(filePath) {
-  if (!filePath || !fs.existsSync(filePath)) return null;
-  if (localFileDurationCache.has(filePath)) return localFileDurationCache.get(filePath);
-  try {
-    const probe = execFileSync(
+  if (!filePath || !fs.existsSync(filePath)) return Promise.resolve(null);
+  if (localFileDurationCache.has(filePath)) return Promise.resolve(localFileDurationCache.get(filePath));
+  return new Promise((resolve) => {
+    execFile(
       'ffprobe',
       ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filePath],
-      { timeout: 4000 }
+      { timeout: 4000 },
+      (err, stdout) => {
+        if (!err && stdout) {
+          const durSec = Math.round(Number(stdout.toString().trim()));
+          if (durSec > 0 && durSec < 86400) {
+            if (localFileDurationCache.size > 2000) localFileDurationCache.clear();
+            localFileDurationCache.set(filePath, durSec);
+            return resolve(durSec);
+          }
+        }
+        resolve(null);
+      }
     );
-    const durSec = Math.round(Number(probe.toString().trim()));
-    if (durSec > 0 && durSec < 86400) {
-      if (localFileDurationCache.size > 2000) localFileDurationCache.clear();
-      localFileDurationCache.set(filePath, durSec);
-      return durSec;
-    }
-  } catch {}
-  return null;
+  });
 }
 
 const INNERTUBE_API_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
@@ -104,70 +122,23 @@ async function extractInnertubeDirectStream(videoId) {
   const clientProfiles = [
     {
       name: 'ANDROID',
-      context: {
-        client: {
-          clientName: 'ANDROID',
-          clientVersion: '20.01.35',
-          androidSdkVersion: 30,
-          hl: 'en',
-          gl: 'US'
-        }
-      },
-      headers: {
-        'User-Agent': 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip'
-      }
+      context: { client: { clientName: 'ANDROID', clientVersion: '20.01.35', androidSdkVersion: 30, hl: 'en', gl: 'US' } },
+      headers: { 'User-Agent': 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip' }
     },
     {
       name: 'IOS',
-      context: {
-        client: {
-          clientName: 'IOS',
-          clientVersion: '20.01.35',
-          deviceMake: 'Apple',
-          deviceModel: 'iPhone15,2',
-          hl: 'en',
-          gl: 'US'
-        }
-      },
-      headers: {
-        'User-Agent': 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)'
-      }
+      context: { client: { clientName: 'IOS', clientVersion: '20.01.35', deviceMake: 'Apple', deviceModel: 'iPhone15,2', hl: 'en', gl: 'US' } },
+      headers: { 'User-Agent': 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)' }
     },
     {
       name: 'ANDROID_VR',
-      context: {
-        client: {
-          clientName: 'ANDROID_VR',
-          clientVersion: '1.56.21',
-          deviceMake: 'Oculus',
-          deviceModel: 'Quest 3',
-          osName: 'Android',
-          osVersion: '12',
-          hl: 'en',
-          gl: 'US'
-        }
-      },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36'
-      }
+      context: { client: { clientName: 'ANDROID_VR', clientVersion: '1.56.21', deviceMake: 'Oculus', deviceModel: 'Quest 3', osName: 'Android', osVersion: '12', hl: 'en', gl: 'US' } },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 12; Quest 3) AppleWebKit/537.36' }
     },
     {
       name: 'WEB_EMBEDDED_PLAYER',
-      context: {
-        client: {
-          clientName: 'WEB_EMBEDDED_PLAYER',
-          clientVersion: '2.20260708.00.00',
-          hl: 'en',
-          gl: 'US'
-        },
-        thirdParty: {
-          embedUrl: `https://www.youtube.com/embed/${videoId}`
-        }
-      },
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://www.youtube.com/'
-      }
+      context: { client: { clientName: 'WEB_EMBEDDED_PLAYER', clientVersion: '2.20260708.00.00', hl: 'en', gl: 'US' }, thirdParty: { embedUrl: `https://www.youtube.com/embed/${videoId}` } },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.youtube.com/' }
     }
   ];
 
@@ -180,7 +151,7 @@ async function extractInnertubeDirectStream(videoId) {
       },
       {
         headers: Object.assign({ 'Content-Type': 'application/json' }, p.headers),
-        timeout: 2400
+        timeout: 3800
       }
     );
 
@@ -225,7 +196,7 @@ async function extractInnertubeDirectStream(videoId) {
   };
 
   try {
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 1200));
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000));
     return await Promise.race([
       Promise.any(clientProfiles.map(p => fetchProfile(p))),
       timeoutPromise
@@ -257,7 +228,15 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
     }
     if (streamUrl && streamUrl.startsWith('http')) {
       const fastTarget = path.join(cacheDir, `${videoId}_stream_${Date.now()}.m4a`);
-      execFileSync('ffmpeg', ['-v', 'error', '-y', '-i', streamUrl, '-c', 'copy', '-movflags', '+faststart', fastTarget], { timeout: 35000, env: execEnv });
+      let streamUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+      if (streamUrl.includes('c=ANDROID')) streamUa = 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip';
+      else if (streamUrl.includes('c=IOS')) streamUa = 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)';
+      else if (streamUrl.includes('c=VISIONOS')) streamUa = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15';
+      await new Promise((resolve) => {
+        execFile('ffmpeg', ['-v', 'error', '-y', '-user_agent', streamUa, '-i', streamUrl, '-c', 'copy', '-movflags', '+faststart', fastTarget], { timeout: 35000, env: execEnv }, (err) => {
+          resolve(!err);
+        });
+      });
       if (fs.existsSync(fastTarget) && isAudioFileValid(fastTarget)) {
         try { fs.renameSync(fastTarget, targetFile); } catch {
           fs.copyFileSync(fastTarget, targetFile);
@@ -279,7 +258,7 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
     '--no-check-certificates',
     '--no-playlist',
     '--no-warnings',
-    '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
+    '--js-runtimes', 'node',
     '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b',
     '-x',
     '--audio-format', 'm4a',
@@ -287,21 +266,27 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
   ];
   if (cp) {
     ytdlpArgs.splice(1, 0, '--cookies', cp);
-    ytdlpArgs.splice(3, 0, '--extractor-args', 'youtube:player_client=web');
-  } else {
-    ytdlpArgs.splice(1, 0, '--extractor-args', 'youtube:player_client=web,mweb');
   }
   ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
 
   await new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, () => resolve());
+    execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, async (err, stdout, stderr) => {
+      if (err && isCookiesRequiredError(`${err?.message || ''} ${stderr || ''}`)) {
+        await promptUserForCookies('yt-dlp download blocked by YouTube bot verification');
+      }
+      resolve();
+    });
   });
 
   const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
   if (fs.existsSync(actualDownloaded) && isAudioFileValid(actualDownloaded)) {
     const faststartTarget = tempTarget.replace('.%(ext)s', '_fs.m4a');
     try {
-      execFileSync('ffmpeg', ['-v', 'error', '-i', actualDownloaded, '-c', 'copy', '-movflags', '+faststart', faststartTarget, '-y'], { timeout: 20000, env: execEnv });
+      await new Promise((resolve) => {
+        execFile('ffmpeg', ['-v', 'error', '-i', actualDownloaded, '-c', 'copy', '-movflags', '+faststart', faststartTarget, '-y'], { timeout: 20000, env: execEnv }, (err) => {
+          resolve(!err);
+        });
+      });
       if (fs.existsSync(faststartTarget) && isAudioFileValid(faststartTarget)) {
         try { fs.unlinkSync(actualDownloaded); } catch {}
         fs.renameSync(faststartTarget, targetFile);
@@ -374,5 +359,8 @@ module.exports = {
   extractInnertubeDirectStream,
   downloadYouTubeAudioToCache,
   invalidateAudioCache,
-  cleanupAudioCache
+  cleanupAudioCache,
+  promptUserForCookies,
+  setCookiePromptHandler,
+  isCookiesRequiredError
 };

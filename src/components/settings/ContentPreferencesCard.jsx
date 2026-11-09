@@ -1,5 +1,5 @@
 import React from 'react';
-import { Music, BookOpen } from 'lucide-react';
+import { Music, BookOpen, Podcast } from 'lucide-react';
 import { usePreferences } from '../../context/PreferencesContext';
 
 export default function ContentPreferencesCard({ isDark = true }) {
@@ -75,6 +75,37 @@ export default function ContentPreferencesCard({ isDark = true }) {
             }`}
           >
             {contentModes.quran !== false ? t('settings.enabled') : t('settings.hidden')}
+          </button>
+        </div>
+
+        {/* Podcasts Toggle */}
+        <div className={`flex items-center justify-between p-2.5 rounded-xl border ${
+          isDark ? 'bg-zinc-900/80 border-zinc-700/80' : 'bg-[#ede5d3] border-zinc-300'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            <Podcast size={16} className={contentModes.podcasts !== false ? 'text-emerald-400' : 'text-zinc-500'} />
+            <div>
+              <span className={`text-xs font-bold block ${isDark ? 'text-white' : 'text-black'}`}>
+                {t('settings.podcasts') || 'Podcasts'}
+              </span>
+              <span className={`text-[10px] block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
+                {contentModes.podcasts !== false
+                  ? (t('settings.podcastsEnabledDesc') || 'Enabled (Shows podcasts in navigation)')
+                  : (t('settings.podcastsHiddenDesc') || 'Hidden (Podcasts section disabled)')}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            data-testid="toggle-podcasts"
+            onClick={() => toggleContentMode('podcasts', contentModes.podcasts === false)}
+            className={`px-3 py-1 text-[11px] font-mono font-black rounded-lg border transition-all cursor-pointer ${
+              contentModes.podcasts !== false
+                ? 'bg-emerald-500 text-black border-emerald-400 shadow-sm'
+                : 'bg-zinc-800 text-zinc-400 border-zinc-600 hover:text-white'
+            }`}
+          >
+            {contentModes.podcasts !== false ? t('settings.enabled') : t('settings.hidden')}
           </button>
         </div>
       </div>

@@ -5,7 +5,7 @@
  */
 
 const mongoose = require('mongoose');
-const { User, Track } = require('../../models');
+const { User } = require('../../models');
 const { isVerifiedUser } = require('../../middleware/auth');
 
 async function fetchListeningActivities(currentUserId, userSocketMap) {
@@ -40,7 +40,7 @@ async function fetchListeningActivities(currentUserId, userSocketMap) {
 
       const followedUsers = orConditions.length > 0
         ? await User.find({ $or: orConditions })
-            .select('_id name avatar bio currentListening lastActiveAt updatedAt createdAt isVerified likedTrackIds topTrack playlists')
+            .select('_id name avatar bio currentListening lastActiveAt updatedAt createdAt isVerified')
             .lean()
         : [];
 
@@ -57,64 +57,31 @@ async function fetchListeningActivities(currentUserId, userSocketMap) {
       const candidateFriends = Array.from(uniqueUsersMap.values())
         .filter(u => String(u._id || u.id) !== currentIdStr);
 
-      // Collect IDs of tracks needed for users without currentListening
-      const neededTrackIds = [];
-      const userTrackTargetMap = new Map();
-
-      candidateFriends.forEach(u => {
-        const uId = String(u._id || u.id);
-        const hasTrack = Boolean(u.currentListening && (u.currentListening.title || u.currentListening.name));
-        if (!hasTrack && (!u.topTrack || !u.topTrack.title)) {
-          let tid = null;
-          if (Array.isArray(u.likedTrackIds) && u.likedTrackIds.length > 0) {
-            tid = String(u.likedTrackIds[u.likedTrackIds.length - 1]);
-          } else if (Array.isArray(u.playlists)) {
-            for (const pl of u.playlists) {
-              if (Array.isArray(pl.trackIds) && pl.trackIds.length > 0) {
-                tid = String(pl.trackIds[pl.trackIds.length - 1]);
-                break;
-              }
+      // Calculate unread counts from each friend
+      const unreadMap = new Map();
+      try {
+        const { Message } = require('../../models');
+        let myObjId = null;
+        if (mongoose.isValidObjectId(currentUserId)) {
+          myObjId = new mongoose.Types.ObjectId(String(currentUserId));
+        }
+        const unreadCounts = await Message.aggregate([
+          {
+            $match: {
+              recipient: { $in: [myObjId, String(currentUserId)].filter(Boolean) },
+              read: false
+            }
+          },
+          {
+            $group: {
+              _id: '$sender',
+              count: { $sum: 1 }
             }
           }
-          if (tid) {
-            userTrackTargetMap.set(uId, tid);
-            if (!neededTrackIds.includes(tid)) neededTrackIds.push(tid);
-          }
-        }
-      });
-
-      // Batch load missing tracks
-      const resolvedTrackMap = new Map();
-      if (neededTrackIds.length > 0) {
-        const validObjIds = neededTrackIds.filter(id => mongoose.isValidObjectId(id));
-        const dbTracks = await Track.find({
-          $or: [
-            ...(validObjIds.length > 0 ? [{ _id: { $in: validObjIds } }] : []),
-            { id: { $in: neededTrackIds } }
-          ]
-        }).select('_id id title artist cover audioUrl duration').lean();
-
-        dbTracks.forEach(t => {
-          const tId = String(t._id || t.id);
-          resolvedTrackMap.set(tId, t);
-          if (t.id) resolvedTrackMap.set(String(t.id), t);
-        });
-      }
-
-      // Fallback track for users completely without history
-      let globalFallbackTrack = null;
-      const needsGlobalFallback = candidateFriends.some(u => {
-        const hasTrack = Boolean(u.currentListening && (u.currentListening.title || u.currentListening.name));
-        const hasTop = Boolean(u.topTrack && (u.topTrack.title || u.topTrack.name));
-        const hasTarget = userTrackTargetMap.has(String(u._id || u.id));
-        return !hasTrack && !hasTop && !hasTarget;
-      });
-
-      if (needsGlobalFallback) {
-        globalFallbackTrack = await Track.findOne({})
-          .sort({ plays: -1, createdAt: -1 })
-          .select('_id id title artist cover audioUrl duration')
-          .lean();
+        ]);
+        (unreadCounts || []).forEach(u => unreadMap.set(String(u._id), u.count));
+      } catch (err) {
+        console.warn('Failed to aggregate unread in listening activity:', err.message);
       }
 
       friends = candidateFriends.map(u => {
@@ -132,42 +99,6 @@ async function fetchListeningActivities(currentUserId, userSocketMap) {
             title: u.currentListening.title || u.currentListening.name,
             isPlaying: Boolean(isOnline && u.currentListening.isPlaying)
           };
-        } else if (u.topTrack && (u.topTrack.title || u.topTrack.name)) {
-          finalListening = {
-            id: u.topTrack.id || `track_${uId}`,
-            title: u.topTrack.title || u.topTrack.name,
-            artist: u.topTrack.artist || '',
-            cover: u.topTrack.cover || '',
-            isPlaying: false,
-            updatedAt: fallbackLastActive
-          };
-        } else if (userTrackTargetMap.has(uId)) {
-          const t = resolvedTrackMap.get(userTrackTargetMap.get(uId));
-          if (t) {
-            finalListening = {
-              id: String(t._id || t.id),
-              title: t.title,
-              artist: t.artist || '',
-              cover: t.cover || '',
-              audioUrl: t.audioUrl || '',
-              duration: t.duration || 0,
-              isPlaying: false,
-              updatedAt: fallbackLastActive
-            };
-          }
-        }
-
-        if (!finalListening && globalFallbackTrack) {
-          finalListening = {
-            id: String(globalFallbackTrack._id || globalFallbackTrack.id),
-            title: globalFallbackTrack.title,
-            artist: globalFallbackTrack.artist || '',
-            cover: globalFallbackTrack.cover || '',
-            audioUrl: globalFallbackTrack.audioUrl || '',
-            duration: globalFallbackTrack.duration || 0,
-            isPlaying: false,
-            updatedAt: fallbackLastActive
-          };
         }
 
         return {
@@ -180,7 +111,8 @@ async function fetchListeningActivities(currentUserId, userSocketMap) {
           currentListening: finalListening,
           lastActiveAt: fallbackLastActive,
           isOnline,
-          isLive
+          isLive,
+          unreadCount: unreadMap.get(uId) || 0
         };
       });
 

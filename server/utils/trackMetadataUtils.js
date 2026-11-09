@@ -43,7 +43,7 @@ function getTrackKey(title, artist) {
     .toLowerCase()
     .replace(/[\[\(].*?[\]\)]/g, '')
     .replace(/feat\..*|ft\..*/gi, '')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/[^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]+/g, ' ')
     .trim();
   const t = norm(title);
   const a = norm(artist);

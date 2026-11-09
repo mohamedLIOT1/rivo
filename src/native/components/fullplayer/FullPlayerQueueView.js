@@ -271,7 +271,7 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
       {queue.length > 0 && (
         <View style={styles.queueHeaderRow}>
           <Text style={[styles.queueHeaderTitle, { color: isDark ? colors.mint : colors.ink }, rtlTextStyle]}>
-            UP NEXT ({queue.length})
+            {isRTL ? `التالي (${queue.length})` : `UP NEXT (${queue.length})`}
           </Text>
           <TouchableOpacity
             style={styles.clearQueueBtn}
@@ -287,7 +287,7 @@ export const FullPlayerQueueView = React.memo(function FullPlayerQueueView({
             }}
             activeOpacity={0.7}
           >
-            <Text style={[styles.clearQueueBtnText, rtlTextStyle]}>{t('queue.clearAll') || 'CLEAR ALL'}</Text>
+            <Text style={[styles.clearQueueBtnText, rtlTextStyle]}>{isRTL ? 'مسح الكل' : 'CLEAR ALL'}</Text>
           </TouchableOpacity>
         </View>
       )}

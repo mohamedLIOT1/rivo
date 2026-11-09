@@ -2,6 +2,8 @@ import * as FileSystem from 'expo-file-system';
 import { API_BASE_URL } from '../config';
 import { resolveAudioStream } from './youtubeResolver';
 import { parseLrcLyrics } from '../../utils/lrcParser';
+import { isQuranContent } from '../../utils/quranUtils';
+import { isPodcastContent, getPodcastCategory } from '../utils/podcastUtils';
 
 export {
   getTrackDedupeKey,
@@ -60,21 +62,22 @@ export const downloadTrack = async (track, onProgress) => {
 
   emitProgress(5);
 
-  const trackId = String(track._id || track.id);
-  const audioFileUriMp3 = `${TRACKS_DIR}${trackId}.mp3`;
-  const audioFileUriM4a = `${TRACKS_DIR}${trackId}.m4a`;
-  const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
   const cleanTitle = (track.title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim();
   const cleanArtist = (track.artist || 'Artist').replace(/[/\\?%*:|"<>]/g, '').trim();
   const cleanAlbum = (track.album || cleanTitle || 'Single').replace(/[/\\?%*:|"<>]/g, '').trim();
+  const trackId = String(track._id || track.id || track.youtubeId || `tr_${cleanTitle}_${cleanArtist}`.replace(/\s+/g, '_'));
+
+  const audioFileUriMp3 = `${TRACKS_DIR}${trackId}.mp3`;
+  const audioFileUriM4a = `${TRACKS_DIR}${trackId}.m4a`;
+  const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
 
   let existingLocalUri = null;
   try {
     const infoM4a = await FileSystem.getInfoAsync(audioFileUriM4a);
-    if (infoM4a.exists && infoM4a.size > 1000) existingLocalUri = audioFileUriM4a;
+    if (infoM4a.exists && infoM4a.size > 8000) existingLocalUri = audioFileUriM4a;
     if (!existingLocalUri) {
       const infoMp3 = await FileSystem.getInfoAsync(audioFileUriMp3);
-      if (infoMp3.exists && infoMp3.size > 1000) existingLocalUri = audioFileUriMp3;
+      if (infoMp3.exists && infoMp3.size > 8000) existingLocalUri = audioFileUriMp3;
     }
   } catch {}
 
@@ -83,6 +86,20 @@ export const downloadTrack = async (track, onProgress) => {
   if (existingLocalUri) {
     if (onProgress) onProgress(100);
     const existing = await getDownloadedTracks();
+    const isQ = Boolean(
+      track.isQuran === true ||
+      track.isQuran === 'true' ||
+      track.category === 'quran' ||
+      track.contentType === 'quran' ||
+      isQuranContent(track)
+    );
+    const isP = !isQ && Boolean(
+      track.isPodcast === true ||
+      track.isPodcast === 'true' ||
+      track.contentType === 'podcast' ||
+      isPodcastContent(track)
+    );
+    const detectedCategory = isQ ? 'quran' : (isP ? getPodcastCategory(track) : (track.category === 'quran' ? 'quran' : (track.category || 'music')));
     const record = {
       ...track,
       id: trackId,
@@ -96,46 +113,107 @@ export const downloadTrack = async (track, onProgress) => {
       audioUrl: existingLocalUri,
       isDownloaded: true,
       downloaded: true,
+      isQuran: isQ,
+      isPodcast: isP,
+      category: detectedCategory,
+      contentType: isQ ? 'quran' : (isP ? 'podcast' : 'music'),
       downloadedAt: new Date().toISOString(),
     };
     const cleaned = deduplicateTrackList([record, ...existing]);
-    await saveDownloadedTracks(cleaned);
+    await saveDownloadedTracks(cleaned, { immediate: true });
     return record;
   }
 
-  // Resolve audio stream
+  // Multi-tier audio stream resolution & download with status validation
   emitProgress(15);
-  let streamUrl = track.resolvedAudioUrl || track.audioUrl || track.nativeAudioUri;
-  if (!streamUrl || (!streamUrl.startsWith('http') && !streamUrl.startsWith('/'))) {
-    streamUrl = await resolveAudioStream(track);
+
+  const downloadHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+    'Accept': '*/*',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+
+  const tryDownloadCandidate = async (url) => {
+    if (!url || typeof url !== 'string') return null;
+    let targetUrl = url.trim();
+    if (targetUrl.startsWith('/')) {
+      targetUrl = `${API_BASE_URL}${targetUrl}`;
+    }
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) return null;
+
+    const isM4a = targetUrl.includes('.m4a') || targetUrl.includes('mime=audio%2Fmp4') || targetUrl.includes('audio/mp4');
+    const destUri = isM4a ? audioFileUriM4a : audioFileUriMp3;
+
+    try {
+      const dlRes = await FileSystem.downloadAsync(targetUrl, destUri, {
+        headers: downloadHeaders,
+      });
+      if (dlRes && dlRes.status && (dlRes.status < 200 || dlRes.status >= 300)) {
+        await FileSystem.deleteAsync(destUri, { idempotent: true }).catch(() => {});
+        return null;
+      }
+      const checkInfo = await FileSystem.getInfoAsync(destUri);
+      if (checkInfo.exists && checkInfo.size >= 8000) {
+        return { uri: destUri, size: checkInfo.size };
+      }
+      await FileSystem.deleteAsync(destUri, { idempotent: true }).catch(() => {});
+    } catch {
+      await FileSystem.deleteAsync(destUri, { idempotent: true }).catch(() => {});
+    }
+    return null;
+  };
+
+  let downloadedResult = null;
+
+  // 1. If resolvedAudioUrl exists, try it first
+  if (track.resolvedAudioUrl && typeof track.resolvedAudioUrl === 'string' && track.resolvedAudioUrl.startsWith('http')) {
+    emitProgress(20);
+    downloadedResult = await tryDownloadCandidate(track.resolvedAudioUrl);
   }
 
-  if (streamUrl && streamUrl.startsWith('/')) {
-    streamUrl = `${API_BASE_URL}${streamUrl}`;
+  // 2. If initial resolved URL failed or was missing, try fresh stream resolution (bypassing stale cache)
+  if (!downloadedResult) {
+    emitProgress(30);
+    try {
+      const freshUrl = await resolveAudioStream({ ...track, isRetry: true, _clearCache: true });
+      if (freshUrl && freshUrl !== track.resolvedAudioUrl) {
+        downloadedResult = await tryDownloadCandidate(freshUrl);
+      }
+    } catch {}
   }
 
-  if (!streamUrl) {
-    throw new Error('Could not resolve audio stream for download');
+  // 3. Fallback to server download endpoint (which resolves via server yt-dlp & cache)
+  if (!downloadedResult && API_BASE_URL) {
+    emitProgress(45);
+    const srvDlUrl = `${API_BASE_URL}/api/tracks/download?id=${encodeURIComponent(trackId)}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}&duration=${encodeURIComponent(track.duration || '')}&url=${encodeURIComponent(track.audioUrl || '')}`;
+    downloadedResult = await tryDownloadCandidate(srvDlUrl);
   }
 
-  audioFileUri = (streamUrl.includes('.m4a') || streamUrl.includes('mime=audio%2Fmp4'))
-    ? audioFileUriM4a
-    : audioFileUriMp3;
-
-  emitProgress(30);
-
-  // Download audio binary
-  const dlRes = await FileSystem.downloadAsync(
-    streamUrl,
-    audioFileUri
-  );
-
-  // Crucial boundary check: validate downloaded file size > 0
-  const check = await FileSystem.getInfoAsync(audioFileUri);
-  if (!check.exists || check.size <= 0 || check.size < 1000) {
-    await FileSystem.deleteAsync(audioFileUri, { idempotent: true }).catch(() => {});
-    throw new Error('Downloaded audio file is empty or corrupt (size <= 0)');
+  // 4. Fallback to server stream proxy if any stream URL was available
+  if (!downloadedResult && API_BASE_URL) {
+    emitProgress(60);
+    const streamSource = track.resolvedAudioUrl || track.audioUrl || '';
+    if (streamSource && streamSource.startsWith('http') && !streamSource.includes(API_BASE_URL)) {
+      const proxyUrl = `${API_BASE_URL}/api/tracks/stream-proxy?url=${encodeURIComponent(streamSource)}&title=${encodeURIComponent(cleanTitle)}&artist=${encodeURIComponent(cleanArtist)}`;
+      downloadedResult = await tryDownloadCandidate(proxyUrl);
+    }
   }
+
+  // 5. Final fallback: standard audioUrl / nativeAudioUri
+  if (!downloadedResult) {
+    emitProgress(70);
+    const fallbackUrl = track.audioUrl || track.nativeAudioUri;
+    if (fallbackUrl && fallbackUrl !== track.resolvedAudioUrl) {
+      downloadedResult = await tryDownloadCandidate(fallbackUrl);
+    }
+  }
+
+  if (!downloadedResult) {
+    throw new Error('Could not download audio stream from any available source');
+  }
+
+  audioFileUri = downloadedResult.uri;
+  const fileSize = downloadedResult.size;
 
   emitProgress(85);
 
@@ -168,6 +246,20 @@ export const downloadTrack = async (track, onProgress) => {
   emitProgress(100);
 
   const existing = await getDownloadedTracks();
+  const isQ = Boolean(
+    track.isQuran === true ||
+    track.isQuran === 'true' ||
+    track.category === 'quran' ||
+    track.contentType === 'quran' ||
+    isQuranContent(track)
+  );
+  const isP = !isQ && Boolean(
+    track.isPodcast === true ||
+    track.isPodcast === 'true' ||
+    track.contentType === 'podcast' ||
+    isPodcastContent(track)
+  );
+  const detectedCategory = isQ ? 'quran' : (isP ? getPodcastCategory(track) : (track.category === 'quran' ? 'quran' : (track.category || 'music')));
   const record = {
     ...track,
     id: trackId,
@@ -183,12 +275,16 @@ export const downloadTrack = async (track, onProgress) => {
     cover: localCover || track.coverUrl || track.cover,
     isDownloaded: true,
     downloaded: true,
-    fileSize: check.size,
+    isQuran: isQ,
+    isPodcast: isP,
+    category: detectedCategory,
+    contentType: isQ ? 'quran' : (isP ? 'podcast' : 'music'),
+    fileSize: fileSize || 0,
     downloadedAt: new Date().toISOString(),
   };
 
   const updated = deduplicateTrackList([record, ...existing]);
-  await saveDownloadedTracks(updated);
+  await saveDownloadedTracks(updated, { immediate: true });
   return record;
 };
 

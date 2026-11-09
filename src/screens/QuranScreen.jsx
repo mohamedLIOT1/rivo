@@ -7,6 +7,7 @@ import QuranRadioModal from '../components/QuranRadioModal';
 import QuranSurahsTab from '../components/quran/QuranSurahsTab';
 import QuranPlaylistsTab from '../components/quran/QuranPlaylistsTab';
 import QuranHeroBanner from '../components/quran/QuranHeroBanner';
+import QuranReciterAvatar from '../components/quran/QuranReciterAvatar';
 import { useTranslation } from '../context/PreferencesContext';
 import { 
   isQuranContent, 
@@ -307,14 +308,11 @@ export default function QuranScreen({
                   : 'bg-[#fdfbf7] border-[#082621] hover:bg-white shadow-sm'
               }`}
             >
-              <div className="w-16 h-16 rounded-full mx-auto mb-2.5 brutal-border overflow-hidden bg-[#041d1a] ring-2 ring-[#26c4b7]/30 group-hover:scale-105 transition-transform">
-                <img 
-                  src={reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'} 
-                  alt={reciter.name} 
-                  className="w-full h-full object-cover" 
-                  onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'; }}
-                />
-              </div>
+              <QuranReciterAvatar
+                src={reciter.cover}
+                name={reciter.name}
+                className="w-16 h-16 mx-auto mb-2.5 group-hover:scale-105 transition-transform"
+              />
               <h4 className={`text-xs sm:text-sm font-display font-black truncate px-1 ${
                 isDark 
                   ? 'text-white group-hover:text-[#26c4b7]' 

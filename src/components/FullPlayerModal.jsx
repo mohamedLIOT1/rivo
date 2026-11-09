@@ -17,6 +17,8 @@ import TrackActionMenuModal from './TrackActionMenuModal';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName, isRadioTrack } from '../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
+import PodcastPlayerControls, { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
 import { parseLrcLyrics } from '../utils/lrcParser';
 import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
@@ -190,6 +192,8 @@ function FullPlayerModal({
 
   // Strictly isolate queue: Quran only displays Quran; Music only displays Music
   const isCurQuran = isQuranContent(currentTrack);
+  const isCurPodcast = isPodcastContent(currentTrack);
+  usePodcastResumeProgress(isCurPodcast ? currentTrack : null, seekTo, isPlaying);
   const isCurRadio = isRadioTrack(currentTrack);
 
   const isMixPlayerActive = !isCurQuran && Boolean(
@@ -199,13 +203,13 @@ function FullPlayerModal({
   );
   const mixPlaylistName = currentQueue?._playlistName || currentQueue?.name || selectedPlaylist?.name || currentTrack?.mixName || (isMixPlayerActive ? 'Mix' : '');
 
-  // When playing live radio, automatically reset away from lyrics/Ayat tab
+  // When playing live radio or podcast, automatically reset away from lyrics/Ayat tab
   useEffect(() => {
-    if (isCurRadio) {
+    if (isCurRadio || isCurPodcast) {
       if (activeTab === 'lyrics') setActiveTab('player');
       if (desktopSideTab === 'lyrics') setDesktopSideTab('queue');
     }
-  }, [isCurRadio, activeTab, desktopSideTab]);
+  }, [isCurRadio, isCurPodcast, activeTab, desktopSideTab]);
   const displayQueue = useMemo(() => {
     const raw = (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
     if (!currentTrack) return raw;
@@ -1046,9 +1050,14 @@ function FullPlayerModal({
   );
 
   const renderQueueItem = (track, queueIdx, isAiItem) => {
-    const isActive = (currentQueueIndex >= 0)
-      ? queueIdx === currentQueueIndex
-      : String(track.id || track._id) === String(currentTrack?.id || currentTrack?._id);
+    const curId = String(currentTrack?.id || currentTrack?._id || '');
+    const trackId = String(track?.id || track?._id || '');
+    const isSameTrack = Boolean(curId && trackId && curId === trackId);
+    const isActive = isSameTrack && (
+      currentQueueIndex < 0 ||
+      queueIdx === currentQueueIndex ||
+      !displayQueue.some((t, i) => i === currentQueueIndex && String(t?.id || t?._id) === curId)
+    );
     const isTrackQuran = isQuranContent(track);
     const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
     const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
@@ -1453,7 +1462,7 @@ function FullPlayerModal({
       <div className="relative z-10 flex lg:hidden justify-center gap-1 px-4 py-2">
         {[
           { id: 'player', label: t('player.nowPlaying') || 'Now Playing' },
-          ...(!isCurRadio ? [{ id: 'lyrics', label: isCurQuran ? (t('player.ayatTab') || 'Ayat') : (t('player.lyrics') || 'Lyrics') }] : []),
+          ...(!isCurRadio && !isCurPodcast ? [{ id: 'lyrics', label: isCurQuran ? (t('player.ayatTab') || 'Ayat') : (t('player.lyrics') || 'Lyrics') }] : []),
           { id: 'queue', label: isCurRadio ? (t('player.radioStationsTab', { count: displayQueue.length }) || `Radio Stations (${displayQueue.length})`) : (t('player.queueTab', { count: displayQueue.length }) || `Queue (${displayQueue.length})`) },
         ].map((tab) => (
           <button
@@ -1729,23 +1738,37 @@ function FullPlayerModal({
             </div>
           )}
 
+          {isCurPodcast && (
+            <PodcastPlayerControls
+              audioRef={audioRef}
+              currentTrack={currentTrack}
+              currentTime={currentTime}
+              duration={duration}
+              seekTo={seekTo}
+              compact={false}
+              isDark={isDark}
+            />
+          )}
+
           {/* Mechanical Transport Controls */}
           <div className="flex items-center justify-between mb-2 shrink-0">
-            <button 
-              onClick={toggleShuffle} 
-              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
-                isShuffle 
-                  ? isDark
-                    ? 'bg-[#17a398] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
-                    : 'bg-[#17a398] text-[#0b1110] font-bold brutal-border' 
-                  : isDark 
-                    ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
-                    : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
-              }`}
-              title="Shuffle"
-            >
-              <Shuffle size={15} strokeWidth={2.5} />
-            </button>
+            {!isCurPodcast ? (
+              <button 
+                onClick={toggleShuffle} 
+                className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer ${
+                  isShuffle 
+                    ? isDark
+                      ? 'bg-[#17a398] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807]'
+                      : 'bg-[#17a398] text-[#0b1110] font-bold brutal-border' 
+                    : isDark 
+                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
+                      : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
+                }`}
+                title="Shuffle"
+              >
+                <Shuffle size={15} strokeWidth={2.5} />
+              </button>
+            ) : <div className="w-8 h-8" />}
 
             <button 
               onClick={playPrev} 
@@ -1789,35 +1812,37 @@ function FullPlayerModal({
               <SkipForward size={17} fill="currentColor" />
             </button>
 
-            <button 
-              onClick={toggleRepeat} 
-              className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-all ${
-                repeatMode === 'one'
-                  ? isDark
-                    ? 'bg-[#26c4b7] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(38,196,183,0.5),2px_2px_0px_#050807]'
-                    : 'bg-[#26c4b7] text-[#0b1110] font-bold brutal-border'
-                  : repeatMode === 'all'
+            {!isCurPodcast ? (
+              <button 
+                onClick={toggleRepeat} 
+                className={`p-1.5 sm:p-2 rounded-xl brutal-btn cursor-pointer transition-all ${
+                  repeatMode === 'one'
                     ? isDark
-                      ? 'bg-[#10b981] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(16,185,129,0.5),2px_2px_0px_#050807]'
-                      : 'bg-[#10b981] text-[#0b1110] font-bold brutal-border'
-                    : isDark 
-                      ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
-                      : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
-              }`}
-              title={
-                repeatMode === 'one' 
-                  ? "Repeat: Current Track (Looping)" 
-                  : repeatMode === 'all' 
-                    ? "Repeat: All (Queue / Playlist)" 
-                    : "Repeat: Off"
-              }
-            >
-              {repeatMode === 'one' ? (
-                <Repeat1 size={15} strokeWidth={2.5} />
-              ) : (
-                <Repeat size={15} strokeWidth={2.5} />
-              )}
-            </button>
+                      ? 'bg-[#26c4b7] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(38,196,183,0.5),2px_2px_0px_#050807]'
+                      : 'bg-[#26c4b7] text-[#0b1110] font-bold brutal-border'
+                    : repeatMode === 'all'
+                      ? isDark
+                        ? 'bg-[#10b981] text-[#0b1110] font-bold border-2 border-[#090e0c] shadow-[0_0_10px_rgba(16,185,129,0.5),2px_2px_0px_#050807]'
+                        : 'bg-[#10b981] text-[#0b1110] font-bold brutal-border'
+                      : isDark 
+                        ? 'bg-[#182421] hover:bg-[#20302c] text-zinc-400 hover:text-white border-2 border-[#090e0c] shadow-[2px_2px_0px_#050807,inset_0_1px_0_rgba(255,255,255,0.1)]' 
+                        : 'bg-white text-zinc-600 hover:bg-[#ede5d3] brutal-border'
+                }`}
+                title={
+                  repeatMode === 'one' 
+                    ? "Repeat: Current Track (Looping)" 
+                    : repeatMode === 'all' 
+                      ? "Repeat: All (Queue / Playlist)" 
+                      : "Repeat: Off"
+                }
+              >
+                {repeatMode === 'one' ? (
+                  <Repeat1 size={15} strokeWidth={2.5} />
+                ) : (
+                  <Repeat size={15} strokeWidth={2.5} />
+                )}
+              </button>
+            ) : <div className="w-8 h-8" />}
           </div>
 
           {/* ── DJ Mix Mode: Coming Up Next Widget (Strictly Hidden for Holy Quran) ── */}
@@ -1942,8 +1967,8 @@ function FullPlayerModal({
                 <Disc size={15} strokeWidth={2.5} />
               </button>
 
-              {/* Quick Lyrics View Toggle (Hidden on Radio) */}
-              {!isCurRadio && (
+              {/* Quick Lyrics View Toggle (Hidden on Radio and Podcast) */}
+              {!isCurRadio && !isCurPodcast && (
               <button 
                 onClick={() => {
                   if (window.innerWidth < 1024) {
@@ -2071,7 +2096,7 @@ function FullPlayerModal({
             isDark ? 'border-zinc-800' : 'border-black'
           } mb-3 shrink-0`}>
             <div className="flex items-center gap-2">
-              {!isCurRadio && (
+              {!isCurRadio && !isCurPodcast && (
               <button
                 onClick={() => setDesktopSideTab('lyrics')}
                 className={`px-4 py-1.5 rounded-lg text-xs font-display font-black transition-all ${
@@ -2137,7 +2162,7 @@ function FullPlayerModal({
           </div>
 
           <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            {(desktopSideTab === 'lyrics' && !isCurRadio) ? (
+            {(desktopSideTab === 'lyrics' && !isCurRadio && !isCurPodcast) ? (
               isCurQuran ? (
                 <QuranMushafViewer track={currentTrack} globalTheme={globalTheme} />
               ) : (

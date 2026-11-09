@@ -20,8 +20,11 @@ const fetchTrackCover = (title, artist) => {
   return trackMetadataUtils.fetchTrackCover(title, artist, youtubeSearch.searchYouTubeId);
 };
 
-// Bind invalidateAudioCache with directStreamCache
+// Bind invalidateAudioCache with directStreamCache and streamFallbackProvider memory cache
 const invalidateAudioCache = (videoIdOrUrl, deleteDiskFile = false) => {
+  if (videoIdOrUrl) {
+    youtubeStreamResolver.clearStreamMemoryCache(videoIdOrUrl);
+  }
   return audioCacheUtils.invalidateAudioCache(videoIdOrUrl, deleteDiskFile, youtubeStreamResolver.directStreamCache);
 };
 
@@ -86,6 +89,7 @@ module.exports = {
   // Stream Resolution
   extractDirectStreamUrl: youtubeStreamResolver.extractDirectStreamUrl,
   resolveOfficialYouTubeAudioStream: youtubeStreamResolver.resolveOfficialYouTubeAudioStream,
+  clearStreamMemoryCache: youtubeStreamResolver.clearStreamMemoryCache,
 
   // Lyrics Service
   parseLrc: lyricsService.parseLrc,

@@ -6,7 +6,14 @@ const MessageSchema = new mongoose.Schema({
   text: { type: String, default: '' },
   track: { type: Object, default: null },
   jamInvite: { type: Object, default: null },
-  read: { type: Boolean, default: false }
+  read: { type: Boolean, default: false },
+  reactions: {
+    type: [{
+      emoji: { type: String, required: true },
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
+    }],
+    default: []
+  }
 }, { timestamps: true });
 
 MessageSchema.index({ sender: 1, recipient: 1, createdAt: -1 });

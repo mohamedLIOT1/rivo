@@ -472,14 +472,14 @@ export const styles = StyleSheet.create({
   folderTabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     marginVertical: 14,
     paddingHorizontal: 2,
   },
   folderTabBtn: {
     flex: 1,
-    paddingVertical: 9,
-    paddingHorizontal: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
     borderRadius: 8,
     borderWidth: 1.5,
     borderColor: '#1e332f',
@@ -502,10 +502,10 @@ export const styles = StyleSheet.create({
   },
   folderTabText: {
     color: '#8da8a3',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
     fontFamily: 'monospace',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   folderTabTextLight: {
     color: '#475569',

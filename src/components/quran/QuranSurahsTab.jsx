@@ -1,10 +1,12 @@
-import React from 'react';
-import { Play, Volume2, Heart, BookOpen, ArrowRight } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { Play, Volume2, Heart, BookOpen } from 'lucide-react';
+import QuranReciterAvatar from './QuranReciterAvatar';
 import {
   cleanQuranTrackTitle,
   getQuranReciterName,
   getSurahNumber,
   getSurahName,
+  isAyahOrClip,
 } from '../../utils/quranUtils';
 
 export const QuranSurahsTab = React.memo(function QuranSurahsTab({
@@ -26,6 +28,11 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
   isDark,
   t,
 }) {
+  const selectedReciterObj = useMemo(() => {
+    if (!selectedReciter) return null;
+    return (reciters || []).find((r) => r.name === selectedReciter) || null;
+  }, [reciters, selectedReciter]);
+
   return (
     <div>
       {/* If a reciter is selected, show their header & clear button */}
@@ -40,18 +47,24 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                 setActiveTab('reciters');
               }}
               className="px-3 py-1.5 rounded-lg bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
-              title="Back to all reciters"
+              title={t('quran.backToReciters') || 'العودة للقراء'}
             >
-              <ArrowRight size={14} />
-              <span>← {t('quran.backToReciters')}</span>
+              <span>{t('quran.backToReciters') || '← العودة إلى القراء'}</span>
             </button>
-            <div>
-              <h3 className="font-display font-black text-sm sm:text-base text-white">
-                {t('quran.sheikhName', { name: selectedReciter })}
-              </h3>
-              <p className="text-[11px] text-emerald-300 font-mono font-medium">
-                {t('quran.surahsOrdered', { count: filteredTracks.length })}
-              </p>
+            <div className="flex items-center gap-2.5">
+              <QuranReciterAvatar
+                src={selectedReciterObj?.cover}
+                name={selectedReciter}
+                className="w-10 h-10 ring-2 ring-[#26c4b7]/50"
+              />
+              <div>
+                <h3 className="font-display font-black text-sm sm:text-base text-white">
+                  {t('quran.sheikhName', { name: selectedReciter }) || t('quran.sheikh', { name: selectedReciter }) || `الشيخ ${selectedReciter}`}
+                </h3>
+                <p className="text-[11px] text-emerald-300 font-mono font-medium">
+                  {t('quran.surahsOrdered', { count: filteredTracks.length }) || t('quran.surahsAvailableCount', { count: filteredTracks.length }) || `${filteredTracks.length} سورة متاحة`}
+                </p>
+              </div>
             </div>
           </div>
 
@@ -61,68 +74,108 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
               className="px-3.5 py-1.5 rounded-lg bg-[#fdfbf7] hover:bg-white text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
             >
               <Play size={13} fill="currentColor" />
-              <span>{t('quran.playFromSurah', { surah: getSurahName(filteredTracks[0]) || 'Start' })}</span>
+              <span>{t('quran.playFromSurah', { surah: getSurahName(filteredTracks[0]) || 'الفاتحة', name: getSurahName(filteredTracks[0]) || 'الفاتحة' }) || t('quran.playAllFromSurah', { name: getSurahName(filteredTracks[0]) || 'الفاتحة' }) || 'تشغيل الكل'}</span>
             </button>
           )}
         </div>
       )}
 
-      {/* If no reciter is selected and no search: show reciters selection */}
-      {!selectedReciter && !searchQuery.trim() ? (
-        <div className={`p-6 rounded-2xl brutal-border text-center ${
+      {/* If no reciter is selected and no search: show top reciter selector bar */}
+      {!selectedReciter && !searchQuery.trim() && (
+        <div className={`p-4 sm:p-5 mb-5 rounded-2xl brutal-border ${
           isDark ? 'bg-[#0a231f] border-emerald-900' : 'bg-[#fdfbf7] border-[#082621]'
         }`}>
-          <BookOpen size={42} className="mx-auto mb-3 text-[#26c4b7] opacity-80" />
-          <h3 className="text-base sm:text-lg font-display font-black mb-1.5 text-white">
-            {t('quran.selectReciterTitle')}
-          </h3>
-          <p className="text-xs text-emerald-200/80 mb-5 max-w-md mx-auto">
-            {t('quran.selectReciterSub')}
-          </p>
-
-          {/* Reciters Quick Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 max-w-4xl mx-auto">
-            {reciters.map((reciter, idx) => (
-              <div
-                key={idx}
-                onClick={() => {
-                  setSelectedReciter(reciter.name);
-                }}
-                className={`p-3 rounded-xl brutal-border text-center cursor-pointer transition-all hover:scale-[1.03] group ${
-                  isDark ? 'bg-[#0e2c26] border-emerald-800 hover:bg-[#143d35]' : 'bg-white border-[#082621]'
-                }`}
-              >
-                <div className="w-14 h-14 rounded-full mx-auto mb-2 brutal-border overflow-hidden bg-[#041d1a] ring-2 ring-[#26c4b7]/40 group-hover:scale-105 transition-transform">
-                  <img 
-                    src={reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'} 
-                    alt={reciter.name} 
-                    className="w-full h-full object-cover" 
-                    onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'; }}
-                  />
-                </div>
-                <h4 className="text-xs font-display font-black truncate text-white group-hover:text-[#26c4b7]">
-                  {reciter.name}
-                </h4>
-                <p className="text-[10px] font-mono font-bold mt-0.5 text-[#26c4b7]">
-                  {t('quran.surahCount', { count: reciter.count })}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <BookOpen size={20} className="text-[#26c4b7]" />
+              <div>
+                <h3 className={`text-sm sm:text-base font-display font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+                  {t('quran.selectReciterTitle') || 'اختر القارئ للاستماع للمصحف كاملاً'}
+                </h3>
+                <p className="text-[11px] text-emerald-400/80 font-medium">
+                  {t('quran.selectReciterSub') || 'أو تصفح كافة التلاوات والآيات المسجلة أدناه مباشرة'}
                 </p>
               </div>
+            </div>
+            {setActiveTab && (
+              <button
+                onClick={() => setActiveTab('reciters')}
+                className="text-xs text-[#26c4b7] hover:underline font-bold font-mono cursor-pointer shrink-0"
+              >
+                {t('quran.allReciters') || 'كافة القراء'} ({reciters.length}) →
+              </button>
+            )}
+          </div>
+
+          {/* Reciters Pills / Horizontal Scroll */}
+          <div className="flex items-center gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+            {reciters.slice(0, 16).map((reciter, idx) => (
+              <button
+                key={idx}
+                onClick={() => setSelectedReciter(reciter.name)}
+                className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl brutal-border shrink-0 cursor-pointer transition-transform hover:scale-105 ${
+                  isDark ? 'bg-[#0e2c26] hover:bg-[#143d35] text-white border-emerald-800' : 'bg-white hover:bg-[#e0f4f0] text-[#082621] border-[#082621]'
+                }`}
+              >
+                <QuranReciterAvatar
+                  src={reciter.cover}
+                  name={reciter.name}
+                  className="w-7 h-7 shrink-0"
+                  showRing={false}
+                />
+                <span className="text-xs font-display font-bold group-hover:text-[#26c4b7]">{reciter.name}</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/50 text-[#26c4b7] font-bold">
+                  {reciter.count}
+                </span>
+              </button>
             ))}
           </div>
         </div>
-      ) : filteredTracks.length === 0 ? (
+      )}
+
+      {/* Library Section Header when no reciter is selected */}
+      {!selectedReciter && (
+        <div className="flex items-center justify-between mb-3 px-1">
+          <div className="flex items-center gap-2">
+            <span className="font-display font-black text-xs sm:text-sm text-white">
+              {searchQuery.trim() 
+                ? (t('quran.searchResults') || 'نتائج البحث') 
+                : (t('quran.allTracksTitle') || 'جميع التلاوات والآيات المسجلة')}
+            </span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 font-mono text-[11px] font-bold border border-emerald-800/60">
+              {filteredTracks.length}
+            </span>
+          </div>
+          {filteredTracks.length > 0 && (
+            <button
+              onClick={() => onSelectTrack(filteredTracks[0], filteredTracks)}
+              className="px-3 py-1 rounded-lg bg-[#26c4b7] hover:bg-[#17a398] text-[#041d1a] font-display font-black text-xs brutal-border flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+            >
+              <Play size={12} fill="currentColor" />
+              <span>{t('quran.playAllRecitations', { count: filteredTracks.length }) || 'تشغيل الكل'}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Main Track List or Empty State */}
+      {filteredTracks.length === 0 ? (
         <div className={`p-8 text-center rounded-xl brutal-border ${
           isDark ? 'bg-[#0f2421] border-emerald-900 text-white' : 'bg-[#fdfbf7] border-black text-[#0b1110]'
         }`}>
           <BookOpen size={40} className="mx-auto mb-3 text-[#26c4b7] opacity-60" />
-          <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{t('quran.noSurahsFound')}</h3>
-          <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>{t('quran.importSurahHint')}</p>
+          <h3 className={`text-base font-bold mb-1 ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+            {t('quran.noSurahsFound') || 'لم يتم العثور على تلاوات'}
+          </h3>
+          <p className={`text-xs mb-4 ${isDark ? 'text-emerald-300/70' : 'text-zinc-600'}`}>
+            {t('quran.importSurahHint') || 'يمكنك استيراد مصحف أو إضافة سور وآيات برابط مباشر'}
+          </p>
           {openImportPlaylistModal && (
             <button
               onClick={openImportPlaylistModal}
               className="px-4 py-2 bg-[#26c4b7] text-black font-black text-xs rounded-lg brutal-border brutal-shadow-sm cursor-pointer"
             >
-              {t('quran.importNow')}
+              {t('quran.importNow') || 'استيراد الآن'}
             </button>
           )}
         </div>
@@ -133,7 +186,10 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
             const reciterName = getQuranReciterName(track, quranPlaylists);
             const cleanTitle = cleanQuranTrackTitle(track.title);
             const surahNum = getSurahNumber(track);
-            const displayNum = (surahNum >= 1 && surahNum <= 114) ? surahNum : (idx + 1);
+            const isAyah = track.isAyah || isAyahOrClip(track);
+            const displayNum = isAyah 
+              ? 'آية' 
+              : (surahNum >= 1 && surahNum <= 114 ? surahNum : (idx + 1));
 
             return (
               <div
@@ -148,7 +204,7 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                 }`}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className={`w-8 text-center font-mono text-xs font-bold shrink-0 ${
+                  <div className={`w-9 text-center font-mono text-xs font-bold shrink-0 ${
                     active 
                       ? 'text-[#041d1a]' 
                       : isDark 
@@ -157,6 +213,10 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                   }`}>
                     {active && isPlaying ? (
                       <Volume2 size={16} className="animate-pulse text-[#041d1a] mx-auto" />
+                    ) : isAyah ? (
+                      <span className="inline-block px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px] border border-amber-500/40">
+                        آية
+                      </span>
                     ) : (
                       <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 font-mono text-[11px] border border-emerald-800/50">
                         {displayNum}
@@ -165,12 +225,13 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                   </div>
 
                   {/* Cover */}
-                  <div className="w-10 h-10 rounded-lg brutal-border overflow-hidden shrink-0 bg-[#041d1a] relative">
-                    <img 
-                      src={track.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'} 
-                      alt={track.title} 
-                      className="w-full h-full object-cover" 
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=300'; }}
+                  <div className="w-10 h-10 rounded-lg brutal-border overflow-hidden shrink-0 bg-[#041d1a] relative group/cover">
+                    <QuranReciterAvatar
+                      src={track.cover}
+                      name={reciterName || track.title}
+                      shape="rounded"
+                      className="w-full h-full"
+                      showRing={false}
                     />
                     <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                       <Play size={14} fill="currentColor" />
@@ -179,15 +240,22 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
 
                   {/* Info */}
                   <div className="min-w-0 flex-1">
-                    <h4 className={`text-xs sm:text-sm font-bold truncate leading-tight transition-colors ${
-                      active 
-                        ? 'text-[#041d1a]' 
-                        : isDark 
-                          ? 'text-white group-hover:text-[#26c4b7]' 
-                          : 'text-[#0b1110] group-hover:text-[#0f756d]'
-                    }`}>
-                      {cleanTitle}
-                    </h4>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h4 className={`text-xs sm:text-sm font-bold truncate leading-tight transition-colors ${
+                        active 
+                          ? 'text-[#041d1a]' 
+                          : isDark 
+                            ? 'text-white group-hover:text-[#26c4b7]' 
+                            : 'text-[#0b1110] group-hover:text-[#0f756d]'
+                      }`}>
+                        {cleanTitle}
+                      </h4>
+                      {track.recitationVariation && (
+                        <span className="px-1.5 py-0.2 rounded bg-[#26c4b7]/20 text-[#26c4b7] text-[10px] font-mono font-bold border border-[#26c4b7]/40 shrink-0">
+                          {t('quran.recitationNum', { num: track.recitationVariation }) || `تلاوة ${track.recitationVariation}`}
+                        </span>
+                      )}
+                    </div>
                     <p className={`text-[11px] truncate mt-0.5 font-medium ${
                       active 
                         ? 'text-[#041d1a]/80 font-bold' 
@@ -196,8 +264,18 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                           : 'text-[#084c41]'
                     }`}>
                       <span className="font-bold">{reciterName}</span>
-                      {surahNum >= 1 && surahNum <= 114 ? ` • ${t('quran.surahNum', { num: surahNum })}` : ''}
-                      {track.album ? ` • ${cleanQuranTrackTitle(track.album)}` : ''}
+                      {isAyah ? (
+                        <span className="text-amber-300/90 font-medium">
+                          {surahNum >= 1 && surahNum <= 114 
+                            ? ` • ${t('quran.ayahFromSurah', { surah: getSurahName(surahNum) }) || `آية من سورة ${getSurahName(surahNum)}`}` 
+                            : ` • ${t('quran.ayahOrClip') || 'آيات / مقطع خاشع'}`}
+                        </span>
+                      ) : (
+                        <>
+                          {surahNum >= 1 && surahNum <= 114 ? ` • ${t('quran.surahNum', { num: surahNum }) || `سورة رقم ${surahNum}`}` : ''}
+                        </>
+                      )}
+                      {track.album && track.album !== 'القرآن الكريم' ? ` • ${cleanQuranTrackTitle(track.album)}` : ''}
                     </p>
                   </div>
                 </div>
@@ -245,7 +323,7 @@ export const QuranSurahsTab = React.memo(function QuranSurahsTab({
                 onClick={() => setVisibleLimit((prev) => prev + 40)}
                 className="px-6 py-2.5 bg-[#17a398] hover:bg-[#26c4b7] text-black font-mono font-black text-xs brutal-border brutal-shadow-sm cursor-pointer transition-transform hover:scale-105"
               >
-                {t('quran.showMoreRecitations', { count: filteredTracks.length - visibleLimit })}
+                {t('quran.showMoreRecitations', { count: filteredTracks.length - visibleLimit }) || 'عرض المزيد'}
               </button>
             </div>
           )}

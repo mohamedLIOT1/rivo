@@ -76,6 +76,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
   let artist = '';
   let title = '';
   let strictCatalogDuration = false;
+  let excludeVideoIds = [];
 
   if (queryOrOptions && typeof queryOrOptions === 'object') {
     query = queryOrOptions.query || '';
@@ -83,6 +84,11 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     artist = queryOrOptions.artist || '';
     title = queryOrOptions.title || '';
     strictCatalogDuration = Boolean(queryOrOptions.strictCatalogDuration);
+    if (queryOrOptions.excludeVideoIds) {
+      excludeVideoIds = Array.isArray(queryOrOptions.excludeVideoIds) ? queryOrOptions.excludeVideoIds : [queryOrOptions.excludeVideoIds];
+    } else if (queryOrOptions.excludeVideoId) {
+      excludeVideoIds = [queryOrOptions.excludeVideoId];
+    }
   } else if (typeof queryOrOptions === 'string') {
     query = queryOrOptions.trim();
     if (typeof maybeOptions === 'number') {
@@ -92,8 +98,14 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
       artist = maybeOptions.artist || '';
       title = maybeOptions.title || '';
       strictCatalogDuration = Boolean(maybeOptions.strictCatalogDuration);
+      if (maybeOptions.excludeVideoIds) {
+        excludeVideoIds = Array.isArray(maybeOptions.excludeVideoIds) ? maybeOptions.excludeVideoIds : [maybeOptions.excludeVideoIds];
+      } else if (maybeOptions.excludeVideoId) {
+        excludeVideoIds = [maybeOptions.excludeVideoId];
+      }
     }
   }
+  excludeVideoIds = excludeVideoIds.map(x => String(x).trim()).filter(Boolean);
 
   if (!artist && !title && query && query.includes(' - ')) {
     const parts = query.split(' - ');
@@ -122,9 +134,13 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
 
   if (searchQueries.length === 0) return null;
 
-  const cacheKey = `${searchQueries[0]}_${targetDuration || ''}`.toLowerCase();
+  const cacheKey = `${searchQueries[0]}_${targetDuration || ''}${excludeVideoIds.length ? '_ex_' + excludeVideoIds.join(',') : ''}`.toLowerCase();
   if (ytSearchCache.has(cacheKey)) {
-    return ytSearchCache.get(cacheKey);
+    const cachedVal = ytSearchCache.get(cacheKey);
+    const cachedId = String(cachedVal?.videoId || cachedVal?.id || cachedVal || '');
+    if (!excludeVideoIds.includes(cachedId)) {
+      return cachedVal;
+    }
   }
 
   const parseSec = (renderer) => {
@@ -158,7 +174,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
       }, { timeout: 3500 });
 
       const contents = itRes.data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents || [];
-      const candidates = contents.map(c => c.videoRenderer).filter(v => v && v.videoId);
+      const candidates = contents.map(c => c.videoRenderer).filter(v => v && v.videoId && !excludeVideoIds.includes(v.videoId));
 
       if (candidates.length > 0) {
         hadInnertubeCandidates = true;
@@ -222,6 +238,7 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
 
         // Duration & title filter:
         scoredCandidates = scoredCandidates.filter(c => {
+          if (excludeVideoIds.includes(c.videoId)) return false;
           if (targetDuration && c.durationDiff !== null) {
             if (c.similarity >= 0.35 && c.durationDiff <= 90) return true;
             if (c.durationDiff > 35) return false;
@@ -272,15 +289,18 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
       });
       const items = res.data?.items || [];
       if (items.length > 0) {
-        let bestId = items[0]?.id?.videoId;
+        let bestId = null;
         const normArtistLower = (artist || '').toLowerCase();
         const normTitleLower = (title || '').toLowerCase();
         for (const it of items) {
+          const itVid = it.id?.videoId;
+          if (!itVid || excludeVideoIds.includes(itVid)) continue;
           const t = (it.snippet?.title || '').toLowerCase();
           if (normTitleLower && t.includes(normTitleLower)) {
-            bestId = it.id?.videoId;
+            bestId = itVid;
             break;
           }
+          if (!bestId) bestId = itVid;
         }
         if (bestId && bestId.length === 11) {
           if (ytSearchCache.size > 5000) ytSearchCache.clear();

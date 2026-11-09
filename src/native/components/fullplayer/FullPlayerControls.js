@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, ActivityIndicator, PanResponder, Dimensio
 import {
   Shuffle, SkipBack, Play, Pause, SkipForward, Repeat,
   Volume2, Disc, Mic, BookOpen, Download, CheckCircle2,
+  RotateCcw, RotateCw,
 } from 'lucide-react-native';
 import { useAudioProgress } from '../../context/AudioProgressContext';
 import { controlStyles as styles } from './fullPlayerControlsStyles';
@@ -37,8 +38,20 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
   handleDownloadTrack,
   setIsSleepTimerOpen,
   setActiveTab,
+  isCurPodcast = false,
+  jumpBy,
+  playbackRate = 1.0,
+  setPlaybackRate,
 }) {
   const { currentTime = 0, duration = 0, progress = 0 } = useAudioProgress();
+
+  const PLAYBACK_SPEEDS = useMemo(() => [1, 1.25, 1.5, 2], []);
+  const cyclePlaybackSpeed = useCallback(() => {
+    const cur = Number(playbackRate) || 1.0;
+    const curIdx = PLAYBACK_SPEEDS.findIndex(s => Math.abs(s - cur) < 0.05);
+    const nextIdx = (curIdx + 1) % PLAYBACK_SPEEDS.length;
+    setPlaybackRate?.(PLAYBACK_SPEEDS[nextIdx]);
+  }, [playbackRate, PLAYBACK_SPEEDS, setPlaybackRate]);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubPercent, setScrubPercent] = useState(0);
   const [scrubTime, setScrubTime] = useState(0);
@@ -170,46 +183,120 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
       </View>
 
       {/* ── Transport Controls ── */}
-      <View style={styles.controlsRow}>
-        <TouchableOpacity
-          style={styles.transportBtnBox}
-          onPress={() => toggleShuffle ? toggleShuffle() : setIsShuffle(!isShuffle)}
-          activeOpacity={0.7}
-        >
-          <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
-        </TouchableOpacity>
+      {isCurPodcast ? (
+        <View style={styles.podcastControlsRow}>
+          {/* Playback Speed Toggle */}
+          <TouchableOpacity
+            style={styles.speedBtnCircle}
+            onPress={cyclePlaybackSpeed}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Text style={styles.speedBtnText}>
+              {playbackRate || 1}x
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.transportBtnBox} onPress={playPrevTrack} activeOpacity={0.7}>
-          <SkipBack size={20} color="#ffffff" fill="#ffffff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.mainPlayBtn}
-          onPress={togglePlay}
-          activeOpacity={0.8}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#0b1110" />
-          ) : isPlaying ? (
-            <Pause size={24} color="#0b1110" fill="#0b1110" />
-          ) : (
-            <Play size={24} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.transportBtnBox} onPress={playNextTrack} activeOpacity={0.7}>
-          <SkipForward size={20} color="#ffffff" fill="#ffffff" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.transportBtnBox} onPress={toggleRepeat} activeOpacity={0.7}>
-          <Repeat size={18} color={repeatMode !== 'off' ? colors.mint : '#9ca3af'} />
-          {repeatMode === 'one' && (
-            <View style={styles.repeatOneBadge}>
-              <Text style={styles.repeatOneText}>1</Text>
+          {/* Jump -15s */}
+          <TouchableOpacity
+            style={styles.transportBtnCircle}
+            onPress={() => jumpBy ? jumpBy(-15) : seekTo?.(Math.max(0, currentTime - 15))}
+            onLongPress={playPrevTrack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <View style={styles.jumpBtnInner}>
+              <RotateCcw size={25} color="#e2e8f0" strokeWidth={2.2} />
+              <View style={styles.jumpTextCenter}>
+                <Text style={styles.jumpNumberText}>15</Text>
+              </View>
             </View>
-          )}
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+
+          {/* Play / Pause */}
+          <TouchableOpacity
+            style={styles.mainPlayBtn}
+            onPress={togglePlay}
+            activeOpacity={0.8}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#0b1110" />
+            ) : isPlaying ? (
+              <Pause size={24} color="#0b1110" fill="#0b1110" />
+            ) : (
+              <Play size={24} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+            )}
+          </TouchableOpacity>
+
+          {/* Jump +15s */}
+          <TouchableOpacity
+            style={styles.transportBtnCircle}
+            onPress={() => jumpBy ? jumpBy(15) : seekTo?.(Math.max(0, currentTime + 15))}
+            onLongPress={playNextTrack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <View style={styles.jumpBtnInner}>
+              <RotateCw size={25} color="#e2e8f0" strokeWidth={2.2} />
+              <View style={styles.jumpTextCenter}>
+                <Text style={styles.jumpNumberText}>15</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Next Episode */}
+          <TouchableOpacity
+            style={styles.transportBtnCircle}
+            onPress={playNextTrack}
+            activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <SkipForward size={20} color="#ffffff" fill="#ffffff" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={styles.controlsRow}>
+          <TouchableOpacity
+            style={styles.transportBtnBox}
+            onPress={() => toggleShuffle ? toggleShuffle() : setIsShuffle(!isShuffle)}
+            activeOpacity={0.7}
+          >
+            <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.transportBtnBox} onPress={playPrevTrack} activeOpacity={0.7}>
+            <SkipBack size={20} color="#ffffff" fill="#ffffff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.mainPlayBtn}
+            onPress={togglePlay}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#0b1110" />
+            ) : isPlaying ? (
+              <Pause size={24} color="#0b1110" fill="#0b1110" />
+            ) : (
+              <Play size={24} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.transportBtnBox} onPress={playNextTrack} activeOpacity={0.7}>
+            <SkipForward size={20} color="#ffffff" fill="#ffffff" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.transportBtnBox} onPress={toggleRepeat} activeOpacity={0.7}>
+            <Repeat size={18} color={repeatMode !== 'off' ? colors.mint : '#9ca3af'} />
+            {repeatMode === 'one' && (
+              <View style={styles.repeatOneBadge}>
+                <Text style={styles.repeatOneText}>1</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── Dashed Divider ── */}
       <View style={styles.dashedDivider} />
@@ -236,7 +323,7 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             <Disc size={17} color="#94a3b8" />
           </TouchableOpacity>
 
-          {!isCurRadio && (
+          {!isCurRadio && !isCurPodcast && (
             <TouchableOpacity
               style={styles.quickToolBtnTeal}
               onPress={() => setActiveTab('lyrics')}

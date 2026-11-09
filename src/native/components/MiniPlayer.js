@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
-import { Play, Pause, Heart, Disc } from 'lucide-react-native';
+import { View, Text, TouchableOpacity, Image, Platform, ActivityIndicator } from 'react-native';
+import { Play, Pause, Heart, Disc, RotateCcw, RotateCw } from 'lucide-react-native';
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
+import { styles } from './miniPlayerStyles';
 
 const MiniProgressBar = React.memo(function MiniProgressBar({ isLive, isDark, defaultDuration }) {
   const { currentTime, duration } = useAudioProgress();
@@ -22,7 +24,7 @@ const MiniProgressBar = React.memo(function MiniProgressBar({ isLive, isDark, de
 
 function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const { isDark = true } = useTheme?.() || {};
-  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus, queue } = useAudioPlayer();
+  const { currentTrack, isPlaying, isLoading, togglePlay, isMixMode, vocalIsolationStatus, queue, jumpBy } = useAudioPlayer();
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
   const [imageError, setImageError] = React.useState(false);
 
@@ -35,6 +37,7 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = Array.isArray(likedTrackIds) ? likedTrackIds.includes(trackId) : false;
   const isQuran = isQuranContent(currentTrack);
+  const isPodcast = isPodcastContent(currentTrack);
   const isLive = Boolean(currentTrack?.isLive || currentTrack?.genre === 'quran-radio');
   const rawCover = currentTrack?.coverUrl || currentTrack?.cover || '';
   const coverUri = imageError ? normalizeCoverUri(null, currentTrack) : normalizeCoverUri(rawCover, currentTrack);
@@ -91,6 +94,11 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
                   <Text style={{ color: '#ffffff', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>LIVE</Text>
                 </View>
               )}
+              {isPodcast && (
+                <View style={{ backgroundColor: 'rgba(23, 163, 152, 0.2)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, borderWidth: 0.5, borderColor: colors.mint }}>
+                  <Text style={{ color: colors.mint, fontSize: 9, fontWeight: '800', letterSpacing: 0.5 }}>🎙️ PODCAST</Text>
+                </View>
+              )}
               {Boolean(!isQuran && isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')) || (queue?._playlistName && String(queue._playlistName).toUpperCase().includes('MIX')))) && (
                 <View style={{ backgroundColor: '#f59e0b', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                   <Text style={{ color: '#0b1110', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>🎛️ MIX</Text>
@@ -117,34 +125,81 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
           </View>
 
           {/* Actions */}
-          <View style={styles.buttonsRow}>
-            <TouchableOpacity
-              style={styles.iconBtn}
-              onPress={() => toggleLikeTrack(trackId)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Heart
-                size={18}
-                color={isLiked ? colors.crimson : (!isDark ? '#64748b' : '#94a3b8')}
-                fill={isLiked ? colors.crimson : 'transparent'}
-              />
-            </TouchableOpacity>
+          {isPodcast ? (
+            <View style={styles.podcastButtonsRow}>
+              <TouchableOpacity
+                style={[styles.jumpBtn, !isDark && styles.jumpBtnLight]}
+                onPress={() => jumpBy?.(-15)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.miniJumpInner}>
+                  <RotateCcw size={18} color={!isDark ? '#334155' : '#cbd5e1'} strokeWidth={2.2} />
+                  <View style={styles.miniJumpCenter}>
+                    <Text style={[styles.miniJumpNumber, !isDark && styles.miniJumpNumberLight]}>15</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={styles.playBtn}
-              onPress={togglePlay}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              activeOpacity={0.85}
-            >
-              {isLoading ? (
-                <ActivityIndicator size="small" color="#0b1110" />
-              ) : isPlaying ? (
-                <Pause size={15} color="#0b1110" fill="#0b1110" />
-              ) : (
-                <Play size={15} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
-              )}
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={styles.playBtn}
+                onPress={togglePlay}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.85}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#0b1110" />
+                ) : isPlaying ? (
+                  <Pause size={15} color="#0b1110" fill="#0b1110" />
+                ) : (
+                  <Play size={15} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.jumpBtn, !isDark && styles.jumpBtnLight]}
+                onPress={() => jumpBy?.(15)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.miniJumpInner}>
+                  <RotateCw size={18} color={!isDark ? '#334155' : '#cbd5e1'} strokeWidth={2.2} />
+                  <View style={styles.miniJumpCenter}>
+                    <Text style={[styles.miniJumpNumber, !isDark && styles.miniJumpNumberLight]}>15</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.buttonsRow}>
+              <TouchableOpacity
+                style={styles.iconBtn}
+                onPress={() => toggleLikeTrack(trackId)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Heart
+                  size={18}
+                  color={isLiked ? colors.crimson : (!isDark ? '#64748b' : '#94a3b8')}
+                  fill={isLiked ? colors.crimson : 'transparent'}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.playBtn}
+                onPress={togglePlay}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.85}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#0b1110" />
+                ) : isPlaying ? (
+                  <Pause size={15} color="#0b1110" fill="#0b1110" />
+                ) : (
+                  <Play size={15} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     )}
@@ -153,204 +208,3 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
 }
 
 export default React.memo(MiniPlayer);
-
-const styles = StyleSheet.create({
-  miniVocalBanner: {
-    height: 28,
-    backgroundColor: '#052e26',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.6)',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  miniVocalDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#34d399',
-  },
-  miniVocalTitle: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: 'bold',
-    color: '#ffffff',
-  },
-  miniVocalEta: {
-    flex: 1,
-    textAlign: 'right',
-    marginLeft: 6,
-    fontSize: 9,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    color: '#94a3b8',
-  },
-
-  outerDock: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 14 : 10,
-    left: 8,
-    right: 8,
-    maxWidth: 680,
-    alignSelf: 'center',
-    zIndex: 90,
-  },
-  container: {
-    backgroundColor: '#111817',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#263330',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: Platform.OS === 'android' ? 0 : 8,
-  },
-  containerLight: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: Platform.OS === 'android' ? 0 : 4,
-  },
-  progressTrack: {
-    height: 2.5,
-    backgroundColor: '#1e2928',
-    width: '100%',
-  },
-  progressTrackLight: {
-    backgroundColor: '#e2e8f0',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#17a398',
-  },
-  contentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  coverFrame: {
-    width: 38,
-    height: 38,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#0b1110',
-  },
-  coverFrameLight: {
-    backgroundColor: '#f1f5f9',
-  },
-  cover: {
-    width: '100%',
-    height: '100%',
-  },
-  coverPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#12211e',
-  },
-  coverPlaceholderLight: {
-    backgroundColor: '#f8fafc',
-  },
-  textColumn: {
-    flex: 1,
-    marginLeft: 10,
-    marginRight: 8,
-  },
-  title: {
-    fontSize: 12.5,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-  titleLight: {
-    color: '#0b1110',
-  },
-  artist: {
-    fontSize: 10.5,
-    color: '#94a3b8',
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  artistLight: {
-    color: '#64748b',
-  },
-  mixSubtitle: {
-    fontSize: 10,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    fontWeight: '700',
-    color: '#34d399',
-    marginTop: 2,
-  },
-  connectingText: {
-    fontSize: 9.5,
-    color: '#26c4b7',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    marginTop: 1,
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  iconBtn: {
-    padding: 6,
-  },
-  playBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: '#17a398',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  connectBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#0e1614',
-    borderWidth: 1,
-    borderColor: '#17a398',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 6,
-  },
-  connectPulseDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#17a398',
-  },
-  connectTitle: {
-    color: '#17a398',
-    fontSize: 9.5,
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  connectSub: {
-    color: '#e2e8f0',
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 1,
-  },
-  connectSwitchBtn: {
-    backgroundColor: '#17a398',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  connectSwitchBtnText: {
-    color: '#0b1110',
-    fontSize: 9.5,
-    fontWeight: '900',
-    fontFamily: 'monospace',
-  },
-});

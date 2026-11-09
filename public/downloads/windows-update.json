@@ -1,7 +1,7 @@
 {
-  "version": "2.4.1",
-  "pub_date": "2026-11-07T20:00:00Z",
+  "version": "2.4.2",
+  "pub_date": "2026-11-08T10:30:00Z",
   "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe",
-  "size": 118138495,
-  "notes": "Update v2.4.1: Windows desktop stability improvements, streaming fixes, and auto-update enhancements."
+  "size": 52448091,
+  "notes": "Update v2.4.2: Dedicated Podcasts section, creator show collections, ±15s jump controls, variable speed playback, and AI podcast queue isolation."
 }

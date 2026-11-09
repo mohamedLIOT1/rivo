@@ -11,6 +11,7 @@ import profile from './translations/ar/profile.js';
 import modals from './translations/ar/modals.js';
 import admin from './translations/ar/admin.js';
 import home from './translations/ar/home.js';
+import podcast from './translations/ar/podcast.js';
 
 export default {
   home,
@@ -22,6 +23,11 @@ export default {
   library,
   jam,
   quran,
+  podcast,
+  queue: {
+    clearAll: 'مسح الكل',
+    upNext: 'التالي في الانتظار',
+  },
   offline,
   profile,
   modals,

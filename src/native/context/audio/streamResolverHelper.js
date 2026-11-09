@@ -4,25 +4,61 @@ import NetInfo from '@react-native-community/netinfo';
 import { API_BASE_URL } from '../../config';
 import { resolveAudioStream, clearStreamCache } from '../../services/youtubeResolver';
 import { isQuranContent } from '../../../utils/quranUtils';
-import { reanchorDocumentUri, updateTrackDownloadRecord } from '../../services/download/storageManifestService';
+import {
+  reanchorDocumentUri,
+  updateTrackDownloadRecord,
+  getDownloadedTracks,
+  getTrackDedupeKey,
+} from '../../services/download/storageManifestService';
 
 /**
- * Checks if a candidate URI points to a valid, playable local file (>= 5000 bytes).
+ * Checks if a candidate URI points to a valid, playable local file (>= 1000 bytes or content://).
  */
 export const verifyLocalAudioFile = async (rawUri) => {
   if (!rawUri || typeof rawUri !== 'string') return null;
-  const reanchored = reanchorDocumentUri(rawUri);
-  if (!reanchored || !reanchored.startsWith('file://')) return null;
 
-  try {
-    const info = await FileSystem.getInfoAsync(reanchored);
-    if (info && info.exists && typeof info.size === 'number' && info.size >= 5000) {
-      return { uri: reanchored, size: info.size, exists: true };
-    }
-    return { uri: reanchored, size: info?.size || 0, exists: Boolean(info?.exists) };
-  } catch {
+  // Re-anchor if needed
+  let reanchored = reanchorDocumentUri(rawUri);
+  if (!reanchored || typeof reanchored !== 'string') return null;
+
+  // Support raw absolute paths without file:// scheme
+  if (reanchored.startsWith('/')) {
+    reanchored = `file://${reanchored}`;
+  }
+
+  // Accept file:// and Android SAF content:// URIs
+  if (!reanchored.startsWith('file://') && !reanchored.startsWith('content://')) {
     return null;
   }
+
+  // Build candidate URIs testing raw, decoded, and encoded forms
+  const candidateUris = [reanchored];
+  try {
+    const decoded = decodeURI(reanchored);
+    if (decoded !== reanchored && !candidateUris.includes(decoded)) {
+      candidateUris.push(decoded);
+    }
+  } catch {}
+  try {
+    const encoded = encodeURI(reanchored);
+    if (encoded !== reanchored && !candidateUris.includes(encoded)) {
+      candidateUris.push(encoded);
+    }
+  } catch {}
+
+  for (const testUri of candidateUris) {
+    try {
+      const info = await FileSystem.getInfoAsync(testUri);
+      if (info && info.exists) {
+        const size = typeof info.size === 'number' ? info.size : 5000;
+        if (size >= 1000 || testUri.startsWith('content://')) {
+          return { uri: testUri, size, exists: true };
+        }
+      }
+    } catch {}
+  }
+
+  return null;
 };
 
 /**
@@ -52,15 +88,45 @@ export const resolveTrackPlaybackUri = async ({
   // 1. Check direct local candidate with re-anchoring
   if (candidateLocal) {
     const check = await verifyLocalAudioFile(candidateLocal);
-    if (check && check.exists && check.size >= 5000) {
+    if (check && check.exists) {
       validLocalUri = check.uri;
-    } else if (check && check.exists && check.size < 5000) {
-      // Corrupt/empty file on disk: purge it
-      await FileSystem.deleteAsync(check.uri, { idempotent: true }).catch(() => {});
     }
   }
 
-  // 2. If candidate wasn't valid, scan candidate files in rivo_tracks / rivo_vault
+  // 2. Offline storage manifest lookup fallback
+  if (!validLocalUri) {
+    try {
+      const downloadedList = await getDownloadedTracks();
+      if (Array.isArray(downloadedList) && downloadedList.length > 0) {
+        const dedupeKey = getTrackDedupeKey(track);
+        const match = downloadedList.find((item) => {
+          if (!item) return false;
+          const itemId = String(item._id || item.id || '');
+          if (trackId && itemId && itemId === trackId) return true;
+          if (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) return true;
+          if (dedupeKey && getTrackDedupeKey(item) === dedupeKey) return true;
+          return false;
+        });
+
+        if (match) {
+          const matchUri = match.localAudioUri ||
+            (match.nativeAudioUri && (match.nativeAudioUri.startsWith('file://') || match.nativeAudioUri.startsWith('content://') || match.nativeAudioUri.startsWith('/')) ? match.nativeAudioUri : null) ||
+            (match.audioUrl && (match.audioUrl.startsWith('file://') || match.audioUrl.startsWith('content://') || match.audioUrl.startsWith('/')) ? match.audioUrl : null);
+
+          if (matchUri) {
+            const check = await verifyLocalAudioFile(matchUri);
+            if (check && check.exists) {
+              validLocalUri = check.uri;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[streamResolverHelper] Storage manifest lookup error:', e?.message);
+    }
+  }
+
+  // 3. If candidate wasn't valid, scan candidate files in rivo_tracks / rivo_vault
   if (!validLocalUri && FileSystem.documentDirectory) {
     const docDir = FileSystem.documentDirectory;
     const baseDir = docDir.endsWith('/') ? docDir : `${docDir}/`;
@@ -72,6 +138,14 @@ export const resolveTrackPlaybackUri = async ({
       candidates.push(`${baseDir}rivo_tracks/${trackId}`);
       candidates.push(`${baseDir}rivo_vault/${trackId}.mp3`);
       candidates.push(`${baseDir}rivo_vault/${trackId}.m4a`);
+      candidates.push(`${baseDir}rivo_vault/${trackId}`);
+    }
+
+    if (track.youtubeId && track.youtubeId !== trackId) {
+      candidates.push(`${baseDir}rivo_tracks/${track.youtubeId}.mp3`);
+      candidates.push(`${baseDir}rivo_tracks/${track.youtubeId}.m4a`);
+      candidates.push(`${baseDir}rivo_vault/${track.youtubeId}.mp3`);
+      candidates.push(`${baseDir}rivo_vault/${track.youtubeId}.m4a`);
     }
 
     if (candidateLocal) {
@@ -83,17 +157,15 @@ export const resolveTrackPlaybackUri = async ({
     }
 
     for (const cand of candidates) {
-      try {
-        const cInfo = await FileSystem.getInfoAsync(cand);
-        if (cInfo && cInfo.exists && typeof cInfo.size === 'number' && cInfo.size >= 5000) {
-          validLocalUri = cand;
-          break;
-        }
-      } catch {}
+      const check = await verifyLocalAudioFile(cand);
+      if (check && check.exists) {
+        validLocalUri = check.uri;
+        break;
+      }
     }
   }
 
-  // 3. If recovered a valid local file, auto-heal track record in storage
+  // 4. If recovered a valid local file, auto-heal track record in storage
   if (validLocalUri) {
     if (track.localAudioUri !== validLocalUri || track.nativeAudioUri !== validLocalUri) {
       track.localAudioUri = validLocalUri;
@@ -111,19 +183,7 @@ export const resolveTrackPlaybackUri = async ({
     return validLocalUri;
   }
 
-  // 4. If local file was expected but missing/corrupt on disk, auto-heal storage record
-  if (track.isDownloaded || track.downloaded || candidateLocal) {
-    if (trackId) {
-      updateTrackDownloadRecord(trackId, {
-        isDownloaded: false,
-        downloaded: false,
-        localAudioUri: null,
-        nativeAudioUri: null,
-      }).catch(() => {});
-    }
-  }
-
-  // 5. If local file was expected but damaged/missing, check network before failing
+  // 5. If local file was expected but damaged/missing, check network before failing (WITHOUT wiping local download records)
   if (track.isDownloaded || track.downloaded || candidateLocal) {
     const netState = await NetInfo.fetch().catch(() => null);
     const isOnline = netState ? (netState.isConnected && netState.isInternetReachable !== false) : true;
@@ -144,6 +204,9 @@ export const resolveTrackPlaybackUri = async ({
     remoteUri = `${API_BASE_URL}${remoteUri}`;
   }
 
+  if (remoteUri) {
+    track.resolvedAudioUrl = remoteUri;
+  }
   return remoteUri;
 };
 
@@ -165,6 +228,14 @@ export const createAudioSound = async ({
   let activeUri = uri;
 
   try {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false,
+    }).catch(() => {});
+
     const result = await Audio.Sound.createAsync(
       { uri: activeUri },
       {
@@ -177,22 +248,10 @@ export const createAudioSound = async ({
     return { sound: result.sound, status: result.status, uri: activeUri };
   } catch (err) {
     // If local file playback failed in AVPlayer (e.g. damaged AVPlayerItem, container error, or corrupt codec)
-    if (activeUri && typeof activeUri === 'string' && activeUri.startsWith('file://') && (!signal || !signal.aborted)) {
+    if (activeUri && typeof activeUri === 'string' && (activeUri.startsWith('file://') || activeUri.startsWith('content://')) && (!signal || !signal.aborted)) {
       console.warn('[streamResolverHelper] AVPlayer failed on local file, falling back to online stream:', err?.message);
 
-      // Delete corrupt local file and heal storage record
-      await FileSystem.deleteAsync(activeUri, { idempotent: true }).catch(() => {});
-      const trackId = String(track?._id || track?.id || '');
-      if (trackId) {
-        updateTrackDownloadRecord(trackId, {
-          isDownloaded: false,
-          downloaded: false,
-          localAudioUri: null,
-          nativeAudioUri: null,
-        }).catch(() => {});
-      }
-
-      // Check network before fallback
+      // Check network before fallback (DO NOT delete local file or wipe storage record!)
       const netState = await NetInfo.fetch().catch(() => null);
       const isOnline = netState ? (netState.isConnected && netState.isInternetReachable !== false) : true;
       if (!isOnline) {
@@ -237,7 +296,7 @@ export const createAudioSound = async ({
       }
 
       try {
-        const retryTrack = { ...track, isRetry: true, _clearCache: true };
+        const retryTrack = { ...track, isRetry: true, _clearCache: true, audioUrl: '' };
         let freshUri = await resolveAudioStream(
           retryTrack,
           isQuranContent(track) ? false : isVocalOnly,

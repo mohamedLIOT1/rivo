@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import { io } from 'socket.io-client';
 import { API_BASE_URL } from '../config';
 import { resumeAudioContext } from '../utils/audioEngine';
+import { playNotificationSound } from '../utils/chatSound';
 import { useUI } from './UIContext';
 import { useAudioPlayer } from './AudioContext';
 import { useUser } from './UserContext';
@@ -9,12 +10,13 @@ import { useUser } from './UserContext';
 const JamContext = createContext(null);
 
 const getStoredToken = () => {
-  try {
-    return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-  } catch {
-    return '';
-  }
+  try { return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || ''; }
+  catch { return ''; }
 };
+
+const makeUserPayload = (cur) => (cur
+  ? { id: cur.id || cur._id, name: cur.name, avatar: cur.avatar }
+  : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' });
 
 export function JamProvider({ children }) {
   const { currentUser } = useUser();
@@ -47,9 +49,7 @@ export function JamProvider({ children }) {
     const cur = currentUserRef.current;
     const randomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
     const code = jamSessionRef.current?.code || `JAM-${randomCode}`;
-    const userPayload = cur 
-      ? { id: cur.id || cur._id, name: cur.name, avatar: cur.avatar }
-      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+    const userPayload = makeUserPayload(cur);
 
     const curTime = audioRef?.current?.currentTime || 0;
     if (!jamSessionRef.current?.code) {
@@ -117,9 +117,7 @@ export function JamProvider({ children }) {
     resumeAudioContext();
     const cleanCode = code.trim().toUpperCase();
     const cur = currentUserRef.current;
-    const userPayload = cur 
-      ? { id: cur.id || cur._id, name: cur.name, avatar: cur.avatar }
-      : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+    const userPayload = makeUserPayload(cur);
 
     if (socket) {
       if (!socket.connected) socket.connect();
@@ -180,9 +178,7 @@ export function JamProvider({ children }) {
         s.emit('user:online', { userId: curUser.id || curUser._id });
       }
       if (jamSessionRef.current?.code) {
-        const userPayload = curUser 
-          ? { id: curUser.id || curUser._id, name: curUser.name, avatar: curUser.avatar }
-          : { id: `user-${Math.floor(1000 + Math.random() * 9000)}`, name: 'Guest Listener', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop' };
+        const userPayload = makeUserPayload(curUser);
         s.emit('jam:join_room', { roomCode: jamSessionRef.current.code, user: userPayload });
       }
     });
@@ -259,6 +255,44 @@ export function JamProvider({ children }) {
       });
     });
 
+    const refreshUnreadCount = async () => {
+      try {
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        if (!token) {
+          setUnreadChatCount(0);
+          return;
+        }
+        const res = await fetch(`${API_BASE_URL}/api/chat/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data && typeof data.count === 'number') {
+          setUnreadChatCount(data.count);
+        }
+      } catch {}
+    };
+
+    refreshUnreadCount();
+
+    s.on('chat:unread_count', ({ count }) => {
+      if (typeof count === 'number') {
+        setUnreadChatCount(count);
+      }
+    });
+
+    s.on('chat:dismiss_notification', () => {
+      refreshUnreadCount();
+    });
+
+    const isClientFocusedOnScreen = () => {
+      if (typeof document === 'undefined') return true;
+      return (
+        document.visibilityState === 'visible' &&
+        !document.hidden &&
+        (typeof document.hasFocus === 'function' ? document.hasFocus() : true)
+      );
+    };
+
     s.on('chat:message', (msg) => {
       const cur = currentUserRef.current;
       const myId = String(cur?.id || cur?._id || '');
@@ -267,10 +301,14 @@ export function JamProvider({ children }) {
       if (senderId && senderId === myId) return;
       if (recipientId && myId && recipientId !== myId) return;
 
+      const isScreenActive = isClientFocusedOnScreen();
       const isOpenWithSender = isChatOpenRef.current && String(chatTargetUserRef.current?.id || chatTargetUserRef.current?._id) === senderId;
-      if (isOpenWithSender) {
+
+      if (isOpenWithSender && isScreenActive) {
+        // User is directly looking at this chat on screen
         s.emit('chat:mark_read', { senderId });
       } else {
+        // User is in another tab, app is minimized, window not focused, or chat is not open with sender
         setUnreadChatCount(prev => prev + 1);
         const senderName = msg.senderName || 'Someone';
         const preview = msg.text || (msg.track ? `Shared song: ${msg.track.title || 'a track'}` : (msg.jamInvite ? 'Invited you to a Jam Session' : 'Sent an attachment'));
@@ -278,6 +316,7 @@ export function JamProvider({ children }) {
         if (msg.jamInvite?.roomCode) {
           showToast({
             type: 'jam',
+            position: 'top',
             title: `📻 Jam Session • ${senderName}`,
             body: `Invited you to a live Jam Session! Tap to join (${msg.jamInvite.roomCode})`,
             roomCode: msg.jamInvite.roomCode,
@@ -286,15 +325,41 @@ export function JamProvider({ children }) {
         } else {
           showToast({
             type: 'chat',
+            position: 'top',
             title: `💬 ${senderName}`,
             body: preview,
             sender: { id: senderId, name: senderName, avatar: msg.senderAvatar }
           });
         }
+
+        // Always play gentle notification sound when user is away or not viewing this conversation
+        playNotificationSound();
       }
     });
 
-    return () => s.disconnect();
+    const handleWindowFocusOrVisible = () => {
+      if (!isClientFocusedOnScreen()) return;
+      if (isChatOpenRef.current && chatTargetUserRef.current) {
+        const targetId = chatTargetUserRef.current.id || chatTargetUserRef.current._id;
+        if (targetId) {
+          s.emit('chat:mark_read', { senderId: String(targetId) });
+        }
+      }
+      refreshUnreadCount();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('visibilitychange', handleWindowFocusOrVisible);
+      window.addEventListener('focus', handleWindowFocusOrVisible);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('visibilitychange', handleWindowFocusOrVisible);
+        window.removeEventListener('focus', handleWindowFocusOrVisible);
+      }
+      s.disconnect();
+    };
   }, [currentUser?.id, currentUser?._id, setJamSync, syncRemotePlayState, showToast, setIsJamOpen, setUnreadChatCount]);
 
   useEffect(() => {

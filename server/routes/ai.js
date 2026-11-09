@@ -19,7 +19,9 @@ router.post('/recommendations', optionalAuth, async (req, res) => {
       isQuran = false, 
       name = '', 
       playlistName = '', 
-      trackIds = [] 
+      trackIds = [],
+      excludeTrackIds = [],
+      refresh = false
     } = req.body || {};
 
     const effectiveName = name || playlistName || '';
@@ -33,7 +35,9 @@ router.post('/recommendations', optionalAuth, async (req, res) => {
       availableTracks,
       isQuran: isPlQuran,
       effectiveName,
-      trackIds
+      trackIds,
+      excludeTrackIds,
+      refresh
     });
 
     res.json({ success: true, recommendations: finalRecs, tracks: finalRecs });

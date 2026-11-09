@@ -150,25 +150,11 @@ function registerChatHandlers(io, socket, {
       const senderName = data.senderName || 'Listener';
       const senderAvatar = data.senderAvatar || '';
 
-      const msgPayload = {
-        id: data.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        _id: data._id || data.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        sender: senderId,
-        senderId: senderId,
-        senderName: senderName,
-        senderAvatar: senderAvatar,
-        text: cleanText,
-        track: data.track || null,
-        jamInvite: data.jamInvite || null,
-        recipient: recipientId,
-        recipientId: recipientId,
-        timestamp: data.timestamp || new Date().toISOString(),
-        createdAt: new Date()
-      };
-
+      // Create document in MongoDB FIRST so the message has its real MongoDB _id
+      let savedMsg = null;
       if (socket.userId && recipientId && mongoose.isValidObjectId(recipientId)) {
         try {
-          await Message.create({
+          savedMsg = await Message.create({
             sender: socket.userId,
             recipient: recipientId,
             text: cleanText,
@@ -180,6 +166,25 @@ function registerChatHandlers(io, socket, {
           console.warn('[Message.create error]', dbErr.message);
         }
       }
+
+      const realId = savedMsg ? String(savedMsg._id) : (data._id || data.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
+
+      const msgPayload = {
+        id: realId,
+        _id: realId,
+        sender: senderId,
+        senderId: senderId,
+        senderName: senderName,
+        senderAvatar: senderAvatar,
+        text: cleanText,
+        track: data.track || null,
+        jamInvite: data.jamInvite || null,
+        recipient: recipientId,
+        recipientId: recipientId,
+        timestamp: savedMsg?.createdAt ? savedMsg.createdAt.toISOString() : (data.timestamp || new Date().toISOString()),
+        createdAt: savedMsg?.createdAt || new Date(),
+        reactions: []
+      };
 
       if (recipientId) {
         const recStr = String(recipientId);
@@ -273,8 +278,64 @@ function registerChatHandlers(io, socket, {
       io.to(`user:${currentUserId}`).emit('chat:dismiss_notification', {
         senderId: senderId
       });
+
+      const unreadCount = await Message.countDocuments({
+        recipient: currentUserId,
+        read: false
+      });
+      io.to(`user:${currentUserId}`).emit('chat:unread_count', { count: unreadCount });
+      const mySockets = userSocketMap?.get(String(currentUserId));
+      if (mySockets) {
+        mySockets.forEach(sid => io.to(sid).emit('chat:unread_count', { count: unreadCount }));
+      }
     } catch (err) {
       console.error('[Socket chat:mark_read error]', err.message);
+    }
+  });
+
+  // Chat message reaction toggle (real-time)
+  socket.on('chat:reaction', async ({ messageId, emoji }) => {
+    try {
+      const currentUserId = socket.userId;
+      if (!currentUserId || !messageId || !emoji) return;
+
+      const msg = await Message.findById(messageId);
+      if (!msg) return;
+
+      if (!Array.isArray(msg.reactions)) msg.reactions = [];
+
+      const existingIdx = msg.reactions.findIndex(
+        r => String(r.userId?._id || r.userId) === String(currentUserId) && r.emoji === emoji
+      );
+
+      if (existingIdx >= 0) {
+        msg.reactions.splice(existingIdx, 1);
+      } else {
+        msg.reactions.push({ emoji, userId: currentUserId });
+      }
+
+      msg.markModified('reactions');
+      await msg.save();
+
+      const payload = {
+        messageId: String(msg._id),
+        reactions: msg.reactions,
+        senderId: String(msg.sender),
+        recipientId: String(msg.recipient)
+      };
+
+      io.to(`user:${msg.sender}`).emit('chat:reaction_updated', payload);
+      io.to(`user:${msg.recipient}`).emit('chat:reaction_updated', payload);
+      const recipientSockets = userSocketMap?.get(String(msg.recipient));
+      if (recipientSockets) {
+        recipientSockets.forEach(sid => io.to(sid).emit('chat:reaction_updated', payload));
+      }
+      const senderSockets = userSocketMap?.get(String(msg.sender));
+      if (senderSockets) {
+        senderSockets.forEach(sid => io.to(sid).emit('chat:reaction_updated', payload));
+      }
+    } catch (err) {
+      console.error('[Socket chat:reaction error]', err.message);
     }
   });
 }

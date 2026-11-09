@@ -29,21 +29,9 @@ export default function ListeningActivityPanel({
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const handleOpenAuth = useCallback(() => {
-    if (onOpenAuth) {
-      onOpenAuth();
-    } else if (setIsAuthOpen) {
-      setIsAuthOpen(true);
-    }
-  }, [onOpenAuth, setIsAuthOpen]);
-
-  const handleOpenUserProfile = useCallback((user) => {
-    if (onViewProfile) {
-      onViewProfile(user);
-    } else if (openProfileScreen) {
-      openProfileScreen(user);
-    }
-  }, [onViewProfile, openProfileScreen]);
+  const handleOpenAuth = useCallback(() => (onOpenAuth ? onOpenAuth() : setIsAuthOpen?.(true)), [onOpenAuth, setIsAuthOpen]);
+  const handleOpenUserProfile = useCallback((u) => (onViewProfile ? onViewProfile(u) : openProfileScreen?.(u)), [onViewProfile, openProfileScreen]);
+  const handleChatWithUser = useCallback((f) => (openChatModal ? openChatModal(f) : onOpenChat?.(f)), [openChatModal, onOpenChat]);
 
   const handlePlayFriendTrack = useCallback((friend) => {
     if (!friend.currentListening) return;
@@ -55,20 +43,9 @@ export default function ListeningActivityPanel({
       cover: t.cover || friend.avatar,
       audioUrl: t.audioUrl || ''
     };
-    if (onPlayTrack) {
-      onPlayTrack(trackPayload);
-    } else if (onSelectTrack) {
-      onSelectTrack(trackPayload);
-    }
+    if (onPlayTrack) onPlayTrack(trackPayload);
+    else if (onSelectTrack) onSelectTrack(trackPayload);
   }, [onPlayTrack, onSelectTrack]);
-
-  const handleChatWithUser = useCallback((friend) => {
-    if (openChatModal) {
-      openChatModal(friend);
-    } else if (onOpenChat) {
-      onOpenChat(friend);
-    }
-  }, [openChatModal, onOpenChat]);
 
   const fetchActivity = useCallback(async (signal) => {
     if (!currentUser) {
@@ -155,26 +132,46 @@ export default function ListeningActivityPanel({
     const handleUserStatus = (data) => {
       if (!data || !data.userId) return;
       setActivities((prev) =>
-        prev.map((friend) => {
-          if (String(friend.id) === String(data.userId)) {
-            const isOnline = Boolean(data.isOnline);
-            return {
-              ...friend,
-              isOnline,
-              isLive: !isOnline ? false : (data.isLive !== undefined ? Boolean(data.isLive) : friend.isLive)
-            };
-          }
-          return friend;
-        })
+        prev.map((friend) => (String(friend.id) === String(data.userId) ? {
+          ...friend,
+          isOnline: Boolean(data.isOnline),
+          isLive: !data.isOnline ? false : (data.isLive !== undefined ? Boolean(data.isLive) : friend.isLive)
+        } : friend))
+      );
+    };
+
+    const handleChatMessage = (msg) => {
+      const senderId = String(msg?.sender?._id || msg?.sender || msg?.senderId || '');
+      if (!senderId) return;
+      setActivities((prev) =>
+        prev.map((friend) => (String(friend.id || friend._id) === senderId ? {
+          ...friend,
+          unreadCount: (friend.unreadCount || 0) + 1
+        } : friend))
+      );
+    };
+
+    const handleChatSeen = (data) => {
+      const targetId = String(data?.senderId || data?.seenBy || '');
+      if (!targetId) return;
+      setActivities((prev) =>
+        prev.map((friend) => (String(friend.id || friend._id) === targetId ? {
+          ...friend,
+          unreadCount: 0
+        } : friend))
       );
     };
 
     socket.on('activity:updated', handleActivityUpdated);
     socket.on('user:status', handleUserStatus);
+    socket.on('chat:message', handleChatMessage);
+    socket.on('chat:seen', handleChatSeen);
 
     return () => {
       socket.off('activity:updated', handleActivityUpdated);
       socket.off('user:status', handleUserStatus);
+      socket.off('chat:message', handleChatMessage);
+      socket.off('chat:seen', handleChatSeen);
     };
   }, [socket, currentUser]);
 

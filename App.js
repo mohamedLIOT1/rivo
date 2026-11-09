@@ -53,6 +53,7 @@ import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
+import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import {
   installApk,
@@ -70,6 +71,7 @@ import HomeScreen from './src/native/screens/HomeScreen';
 import SearchScreen from './src/native/screens/SearchScreen';
 import LibraryScreen from './src/native/screens/LibraryScreen';
 import QuranScreen from './src/native/screens/QuranScreen';
+import PodcastScreen from './src/native/screens/PodcastScreen';
 import ProfileScreen from './src/native/screens/ProfileScreen';
 import StatsScreen from './src/native/screens/StatsScreen';
 import OfflineScreen from './src/native/screens/OfflineScreen';
@@ -85,6 +87,7 @@ const TABS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'search', label: 'Search', icon: Search },
   { id: 'library', label: 'Library', icon: Disc },
+  { id: 'podcasts', label: 'Podcasts', icon: Radio },
   { id: 'quran', label: 'Quran', icon: BookOpen },
   { id: 'offline', label: 'Vault', icon: Download },
 ];
@@ -118,6 +121,14 @@ function MainAppShell() {
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
 
   useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false
+    }).catch(() => {});
+
     getCurrentOtaVersion().then(v => {
       if (v) setActiveOtaVersion(v);
     }).catch(() => {});
@@ -738,6 +749,14 @@ function NativeAppShell() {
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
 
   useEffect(() => {
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      staysActiveInBackground: true,
+      playsInSilentModeIOS: true,
+      shouldDuckAndroid: true,
+      playThroughEarpieceAndroid: false
+    }).catch(() => {});
+
     getCurrentOtaVersion().then(v => {
       if (v) setActiveOtaVersion(v);
     }).catch(() => {});
@@ -1111,7 +1130,7 @@ function NativeAppShell() {
           ACTIVE SCREEN (Instant Tab Switching via Lazy Keep-Alive)
           ───────────────────────────────────────── */}
       <View style={[styles.screenContainer, !isDark && styles.screenContainerLight]}>
-        <View style={[{ flex: 1 }, (activeTab === 'home' || activeTab === 'music' || (!['search', 'library', 'quran', 'profile', 'stats', 'offline', 'admin'].includes(activeTab))) ? { display: 'flex' } : { display: 'none' }]}>
+        <View style={[{ flex: 1 }, (activeTab === 'home' || activeTab === 'music' || (!['search', 'library', 'podcasts', 'quran', 'profile', 'stats', 'offline', 'admin'].includes(activeTab))) ? { display: 'flex' } : { display: 'none' }]}>
           <HomeScreen
             initialFilter="all"
             onOpenAddSong={handleOpenAddSong}
@@ -1143,6 +1162,12 @@ function NativeAppShell() {
               onNavigateOffline={handleNavigateOffline}
               onTrackAction={handleTrackAction}
             />
+          </View>
+        )}
+
+        {visitedTabs.has('podcasts') && (
+          <View style={[{ flex: 1 }, activeTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
+            <PodcastScreen onTrackAction={handleTrackAction} />
           </View>
         )}
 

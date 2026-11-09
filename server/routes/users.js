@@ -125,6 +125,29 @@ router.get('/friends', auth, async (req, res) => {
     const friends = await User.find({ _id: { $in: friendIds } })
       .select('_id name avatar bio')
       .lean();
+
+    const { Message } = require('../models');
+    let myObjId = null;
+    if (mongoose.isValidObjectId(req.user.id)) {
+      myObjId = new mongoose.Types.ObjectId(String(req.user.id));
+    }
+    const unreadMap = new Map();
+    const unreadCounts = await Message.aggregate([
+      {
+        $match: {
+          recipient: { $in: [myObjId, String(req.user.id)].filter(Boolean) },
+          read: false
+        }
+      },
+      {
+        $group: {
+          _id: '$sender',
+          count: { $sum: 1 }
+        }
+      }
+    ]).catch(() => []);
+    (unreadCounts || []).forEach(u => unreadMap.set(String(u._id), u.count));
+
     res.json({
       success: true,
       friends: friends.map(f => ({
@@ -132,7 +155,8 @@ router.get('/friends', auth, async (req, res) => {
         name: f.name,
         avatar: f.avatar,
         bio: f.bio || '',
-        isVerified: isVerifiedUser(f.name)
+        isVerified: isVerifiedUser(f.name),
+        unreadCount: unreadMap.get(String(f._id)) || 0
       }))
     });
   } catch (e) {

@@ -26,6 +26,7 @@ import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { API_BASE_URL } from '../config';
+import StatsTimeframeSelector from './stats/StatsTimeframeSelector';
 
 const { width } = Dimensions.get('window');
 
@@ -46,11 +47,14 @@ function StatsScreen({ onBack }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [currentWeek, setCurrentWeek] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [timeframe, setTimeframe] = useState('weekly'); // 'weekly' | 'all_time'
 
-  const fetchLeaderboard = useCallback(async () => {
+  const isAllTime = timeframe === 'all_time';
+
+  const fetchLeaderboard = useCallback(async (tf = timeframe) => {
     try {
       setIsLoading(true);
-      const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard`, {
+      const res = await fetch(`${API_BASE_URL}/api/stats/leaderboard?timeframe=${tf}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.ok) {
@@ -65,11 +69,11 @@ function StatsScreen({ onBack }) {
     } finally {
       setIsLoading(false);
     }
-  }, [token]);
+  }, [token, timeframe]);
 
   useEffect(() => {
-    fetchLeaderboard();
-  }, [token]);
+    fetchLeaderboard(timeframe);
+  }, [token, timeframe, fetchLeaderboard]);
 
   // Real user listening metrics
   const myUserId = String(currentUser?._id || currentUser?.id || '');
@@ -121,7 +125,11 @@ function StatsScreen({ onBack }) {
             <View style={styles.heroTagRow}>
               <View style={styles.crownTag}>
                 <Crown size={12} color="#082621" strokeWidth={3} />
-                <Text style={[styles.crownTagText, rtlTextStyle]}>{isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK'}</Text>
+                <Text style={[styles.crownTagText, rtlTextStyle]}>
+                  {isAllTime
+                    ? (isRTL ? 'المستمع الأول في كل الأوقات' : 'ALL-TIME TOP LISTENER')
+                    : (isRTL ? 'المستمع الأول هذا الأسبوع' : 'TOP LISTENER OF THE WEEK')}
+                </Text>
               </View>
               {currentWeek ? (
                 <Text style={styles.weekText}>{currentWeek}</Text>
@@ -234,10 +242,20 @@ function StatsScreen({ onBack }) {
 
       {/* ── Community Leaderboard Section ── */}
       <View style={styles.leaderboardSection}>
+        <StatsTimeframeSelector
+          timeframe={timeframe}
+          onChangeTimeframe={setTimeframe}
+          isRTL={isRTL}
+        />
+
         <View style={styles.sectionHeaderRow}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <Award size={16} color={colors.mint} />
-            <Text style={[styles.sectionTitle, rtlTextStyle]}>{isRTL ? 'لوحة المتصدرين الأسبوعية' : 'WEEKLY LEADERBOARD'}</Text>
+            <Text style={[styles.sectionTitle, rtlTextStyle]}>
+              {isAllTime
+                ? (isRTL ? 'لوحة المتصدرين الكلية' : 'ALL-TIME LEADERBOARD')
+                : (isRTL ? 'لوحة المتصدرين الأسبوعية' : 'WEEKLY LEADERBOARD')}
+            </Text>
           </View>
           <Text style={[styles.sectionCount, rtlTextStyle]}>{leaderboard.length} {isRTL ? 'مستمع' : 'LISTENERS'}</Text>
         </View>
@@ -247,7 +265,7 @@ function StatsScreen({ onBack }) {
             <Text style={styles.emptyText}>
               {isLoading
                 ? (isRTL ? 'جاري تحميل إحصائيات المتصدرين...' : 'Loading leaderboard statistics...')
-                : (isRTL ? 'لا يوجد نشاط مسجل هذا الأسبوع بعد.' : 'No activity recorded yet this week.')}
+                : (isRTL ? 'لا يوجد نشاط مسجل بعد.' : 'No activity recorded yet.')}
             </Text>
           </View>
         ) : (
@@ -316,7 +334,7 @@ function StatsScreen({ onBack }) {
 
                   <View style={styles.timePill}>
                     <Text style={styles.timePillText}>
-                      {item.minutes || Math.floor((item.seconds || 0) / 60)} {isRTL ? 'دقيقة' : 'MIN'}
+                      {formatSeconds(item.seconds || (item.minutes || 0) * 60, isRTL)}
                     </Text>
                   </View>
                 </View>

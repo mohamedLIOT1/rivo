@@ -11,8 +11,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  AppState,
 } from 'react-native';
-import { X, Send, MessageSquare, ArrowLeft, Search, Users, Radio } from 'lucide-react-native';
+import { X, Send, MessageSquare, ArrowLeft, Search, Users, Radio, Smile } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSocket } from '../context/SocketContext';
 import { useUser } from '../context/UserContext';
@@ -22,6 +23,7 @@ import { useTranslation } from '../context/LocalizationContext';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import ChatMessageItem from './ChatMessageItem';
+import ChatEmojiPickerModal from './ChatEmojiPickerModal';
 import {
   getCachedConversations,
   loadCachedConversationsAsync,
@@ -33,6 +35,7 @@ import {
   loadCachedMessagesAsync,
   setCachedMessages,
   appendCachedMessage,
+  updateCachedMessageReactions,
 } from '../services/chatCache';
 
 export default function ChatModal({
@@ -63,12 +66,19 @@ export default function ChatModal({
     return id ? getCachedMessages(id) : [];
   });
   const [inputText, setInputText] = useState('');
+  const [showInputEmojiPicker, setShowInputEmojiPicker] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'friends'
   const [loadingHub, setLoadingHub] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
+
+  // Instant scroll & reverse message order for inverted chat FlatList
+  const reversedMessages = useMemo(() => {
+    if (!messages || messages.length === 0) return [];
+    return [...messages].reverse();
+  }, [messages]);
 
   const flatListRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -168,9 +178,19 @@ export default function ChatModal({
     // 2. Fetch fresh messages in background
     fetchMessages(activeUserId);
 
-    if (socket) {
+    if (socket && AppState.currentState === 'active') {
       socket.emit('chat:mark_read', { senderId: activeUserId });
     }
+
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && activeUserId && socket) {
+        socket.emit('chat:mark_read', { senderId: activeUserId });
+      }
+    });
+
+    return () => {
+      appStateSub.remove();
+    };
   }, [visible, activeUser?._id, activeUser?.id, socket]);
 
   const fetchMessages = async (userId) => {
@@ -180,7 +200,8 @@ export default function ChatModal({
     }
     try {
       const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
-      const res = await fetch(`${API_BASE_URL}/api/chat/${userId}`, {
+      const markQuery = AppState.currentState === 'active' ? '?markRead=1' : '';
+      const res = await fetch(`${API_BASE_URL}/api/chat/${userId}${markQuery}`, {
         headers: activeToken ? { Authorization: `Bearer ${activeToken}` } : {},
       });
       if (res.ok) {
@@ -222,7 +243,7 @@ export default function ChatModal({
         (String(msg.sender) === myId && String(msg.recipient) === activeUserId);
 
       if (isForActiveThread) {
-        if (String(msg.sender) === activeUserId) {
+        if (String(msg.sender) === activeUserId && AppState.currentState === 'active') {
           socket.emit('chat:mark_read', { senderId: activeUserId });
         }
         setMessages((prev) => {
@@ -280,49 +301,105 @@ export default function ChatModal({
       }
     };
 
+    const onReactionUpdated = (data) => {
+      if (!data?.messageId) return;
+      const activeUserId = String(activeUser?._id || activeUser?.id || '');
+      setMessages((prev) =>
+        prev.map((m) =>
+          String(m._id || m.id) === String(data.messageId)
+            ? { ...m, reactions: data.reactions }
+            : m
+        )
+      );
+      if (activeUserId) {
+        updateCachedMessageReactions(activeUserId, data.messageId, data.reactions);
+      }
+    };
+
     socket.on('chat:message', onIncomingMessage);
     socket.on('chat:seen', onSeen);
     socket.on('chat:typing', onTyping);
+    socket.on('chat:reaction_updated', onReactionUpdated);
 
     return () => {
       socket.off('chat:message', onIncomingMessage);
       socket.off('chat:seen', onSeen);
       socket.off('chat:typing', onTyping);
+      socket.off('chat:reaction_updated', onReactionUpdated);
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       if (myTypingTimeoutRef.current) clearTimeout(myTypingTimeoutRef.current);
     };
   }, [socket, visible, activeUser, currentUser]);
 
-  // Smooth & deterministic scroll to absolute bottom
+  // Instant scroll to absolute bottom without sluggish animation (offset 0 in inverted FlatList)
   const scrollToBottom = useCallback((animated = false) => {
     if (flatListRef.current) {
-      flatListRef.current.scrollToEnd({ animated });
+      flatListRef.current.scrollToOffset({ offset: 0, animated });
     }
   }, []);
 
-  const triggerStaggeredScroll = useCallback(() => {
-    scrollToBottom(false);
-    const frame = requestAnimationFrame(() => {
-      scrollToBottom(false);
-    });
-    const timer1 = setTimeout(() => {
-      scrollToBottom(false);
-    }, 80);
-    const timer2 = setTimeout(() => {
-      scrollToBottom(false);
-    }, 250);
-    return () => {
-      cancelAnimationFrame(frame);
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-    };
-  }, [scrollToBottom]);
-
   useEffect(() => {
     if (activeUser && messages.length > 0) {
-      return triggerStaggeredScroll();
+      const frame = requestAnimationFrame(() => {
+        scrollToBottom(false);
+      });
+      return () => cancelAnimationFrame(frame);
     }
-  }, [activeUser, messages.length, loadingMessages, triggerStaggeredScroll]);
+  }, [activeUser, messages.length, loadingMessages, scrollToBottom]);
+
+  // Reaction toggle handler for native chat
+  const handleToggleReaction = useCallback(
+    (messageId, emoji) => {
+      const myId = String(currentUser?._id || currentUser?.id || '');
+      const activeUserId = String(activeUser?._id || activeUser?.id || '');
+      if (!myId || !messageId || !emoji) return;
+
+      let nextReactions = [];
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (String(m._id || m.id) !== String(messageId)) return m;
+          const existing = Array.isArray(m.reactions) ? [...m.reactions] : [];
+          const idx = existing.findIndex((r) => String(r.userId) === myId && r.emoji === emoji);
+          if (idx >= 0) {
+            existing.splice(idx, 1);
+          } else {
+            existing.push({ emoji, userId: myId });
+          }
+          nextReactions = existing;
+          return { ...m, reactions: existing };
+        })
+      );
+
+      if (activeUserId) {
+        updateCachedMessageReactions(activeUserId, messageId, nextReactions);
+      }
+
+      if (socket && socket.connected) {
+        socket.emit('chat:reaction', { messageId, emoji });
+      } else {
+        (async () => {
+          try {
+            const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
+            if (activeToken) {
+              await fetch(`${API_BASE_URL}/api/chat/react`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${activeToken}`,
+                },
+                body: JSON.stringify({ messageId, emoji }),
+              });
+            }
+          } catch {}
+        })();
+      }
+    },
+    [currentUser, activeUser, socket, token]
+  );
+
+  const handleInputInsertEmoji = useCallback((emoji) => {
+    setInputText((prev) => prev + emoji);
+  }, []);
 
   const handleInputChange = (val) => {
     setInputText(val);
@@ -369,6 +446,7 @@ export default function ChatModal({
     };
     setMessages((prev) => [...prev, tempMsg]);
     appendCachedMessage(activeUserId, tempMsg);
+    requestAnimationFrame(() => scrollToBottom(false));
 
     try {
       const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
@@ -438,6 +516,7 @@ export default function ChatModal({
     };
     setMessages((prev) => [...prev, tempMsg]);
     appendCachedMessage(activeUserId, tempMsg);
+    requestAnimationFrame(() => scrollToBottom(false));
 
     try {
       const activeToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2'));
@@ -481,10 +560,12 @@ export default function ChatModal({
           onOpenJam={onOpenJam}
           joinJam={joinJam}
           onViewProfile={handleViewProfile}
+          onToggleReaction={handleToggleReaction}
+          currentUserId={myId}
         />
       );
     },
-    [currentUser, activeUser, isDark, onOpenJam, joinJam, handleViewProfile]
+    [currentUser, activeUser, isDark, onOpenJam, joinJam, handleViewProfile, handleToggleReaction]
   );
 
   return (
@@ -750,28 +831,29 @@ export default function ChatModal({
                   <View style={styles.loadingBox}>
                     <ActivityIndicator size="small" color="#17a398" />
                   </View>
+                ) : reversedMessages.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Text style={styles.emptyText}>
+                      {isRTL ? `لا توجد رسائل بعد. ألقِ التحية على ${activeUser.name}!` : `No messages yet. Say hello to ${activeUser.name}!`}
+                    </Text>
+                  </View>
                 ) : (
                   <FlatList
                     ref={flatListRef}
+                    inverted
                     style={{ flex: 1 }}
-                    data={messages}
+                    data={reversedMessages}
                     keyExtractor={(item, index) => item._id || item.id || String(index)}
                     renderItem={renderMessage}
-                    contentContainerStyle={{ paddingTop: 12, paddingBottom: 32 }}
+                    contentContainerStyle={{ paddingTop: 16, paddingBottom: 16 }}
                     showsVerticalScrollIndicator={false}
-                    onContentSizeChange={(w, h) => {
-                      flatListRef.current?.scrollToEnd({ animated: false });
-                    }}
-                    onLayout={() => {
-                      flatListRef.current?.scrollToEnd({ animated: false });
-                    }}
-                    initialNumToRender={Platform.OS === 'android' ? 6 : 14}
-                    maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 12}
-                    windowSize={Platform.OS === 'android' ? 3 : 5}
-                    updateCellsBatchingPeriod={50}
+                    initialNumToRender={Platform.OS === 'android' ? 20 : 35}
+                    maxToRenderPerBatch={Platform.OS === 'android' ? 15 : 25}
+                    windowSize={Platform.OS === 'android' ? 7 : 11}
+                    updateCellsBatchingPeriod={30}
                     removeClippedSubviews={Platform.OS === 'android'}
                     keyboardShouldPersistTaps="handled"
-                    ListFooterComponent={
+                    ListHeaderComponent={
                       isOtherTyping ? (
                         <View style={styles.typingIndicatorRow}>
                           <View style={[styles.typingBubble, !isDark && styles.typingBubbleLight]}>
@@ -784,13 +866,6 @@ export default function ChatModal({
                           </View>
                         </View>
                       ) : null
-                    }
-                    ListEmptyComponent={
-                      <View style={styles.emptyBox}>
-                        <Text style={styles.emptyText}>
-                          {isRTL ? `لا توجد رسائل بعد. ألقِ التحية على ${activeUser.name}!` : `No messages yet. Say hello to ${activeUser.name}!`}
-                        </Text>
-                      </View>
                     }
                   />
                 )}
@@ -807,6 +882,15 @@ export default function ChatModal({
                       <Radio size={16} color={!isDark ? '#082621' : '#17a398'} />
                     </TouchableOpacity>
                   )}
+                  <TouchableOpacity
+                    style={[styles.inputEmojiBtn, !isDark && styles.inputEmojiBtnLight]}
+                    onPress={() => setShowInputEmojiPicker(true)}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    accessibilityLabel="Insert emoji"
+                  >
+                    <Smile size={18} color={!isDark ? '#082621' : '#17a398'} strokeWidth={2.2} />
+                  </TouchableOpacity>
                   <TextInput
                     style={[styles.textInput, !isDark && styles.textInputLight, isRTL && { textAlign: 'right' }]}
                     placeholder={isRTL ? `اكتب رسالة إلى ${activeUser.name}...` : `Message ${activeUser.name}...`}
@@ -831,6 +915,16 @@ export default function ChatModal({
             )}
           </View>
         </KeyboardAvoidingView>
+
+        {/* Emoji Catalog Picker for Chat Input */}
+        <ChatEmojiPickerModal
+          visible={showInputEmojiPicker}
+          onClose={() => setShowInputEmojiPicker(false)}
+          onSelectEmoji={handleInputInsertEmoji}
+          isDark={isDark}
+          title={isRTL ? 'إيموجي' : 'Insert Emoji'}
+          multiSelect={true}
+        />
       </View>
     </Modal>
   );
@@ -1107,6 +1201,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  inputEmojiBtn: {
+    backgroundColor: '#162421',
+    borderWidth: 1,
+    borderColor: '#263330',
+    borderRadius: 10,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   typingIndicatorRow: {
     paddingHorizontal: 8,
     paddingVertical: 6,
@@ -1199,6 +1303,10 @@ const styles = StyleSheet.create({
     borderTopColor: '#d6c8b0',
   },
   inputJamBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  inputEmojiBtnLight: {
     backgroundColor: '#ede5d3',
     borderColor: '#0b1110',
   },

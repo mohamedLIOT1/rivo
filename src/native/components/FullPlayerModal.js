@@ -8,6 +8,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { isQuranContent, isRadioTrack } from '../../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isArabicText } from '../theme/typography';
 import QuranMushafViewer from './QuranMushafViewer';
@@ -48,10 +49,14 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
     downloadedTracks = [],
     downloadingIds = {},
     handleDownloadTrack,
+    isTrackDownloaded,
     volume = 0.8,
     setVolume,
     vocalIsolationStatus,
     isMixMode = false,
+    jumpBy,
+    playbackRate,
+    setPlaybackRate,
   } = useAudioPlayer();
 
   const { likedTrackIds = [], toggleLikeTrack } = useUser();
@@ -72,12 +77,34 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const isLiked = likedTrackIds.some(id => String(id) === trackId);
   const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
   const isCurRadio = useMemo(() => isRadioTrack(currentTrack), [currentTrack]);
+  const isCurPodcast = useMemo(() => isPodcastContent(currentTrack), [currentTrack]);
+
+  useEffect(() => {
+    if (isCurPodcast && activeTab === 'lyrics') {
+      setActiveTab('player');
+    }
+  }, [isCurPodcast, activeTab]);
 
   const isDownloaded = useMemo(() => {
-    return (downloadedTracks || []).some(t => String(t._id || t.id) === trackId);
-  }, [downloadedTracks, trackId]);
+    if (!currentTrack) return false;
+    if (typeof isTrackDownloaded === 'function' && isTrackDownloaded(currentTrack)) {
+      return true;
+    }
+    if (currentTrack.isDownloaded || (currentTrack.localAudioUri && String(currentTrack.localAudioUri).startsWith('file://'))) {
+      return true;
+    }
+    return (downloadedTracks || []).some(t => {
+      const tid = String(t._id || t.id || '');
+      if (trackId && tid && tid === trackId) return true;
+      if (currentTrack.youtubeId && t.youtubeId && currentTrack.youtubeId === t.youtubeId) return true;
+      return false;
+    });
+  }, [downloadedTracks, trackId, currentTrack, isTrackDownloaded]);
 
-  const isDownloading = Boolean(downloadingIds && downloadingIds[trackId] !== undefined);
+  const isDownloading = Boolean(
+    downloadingIds &&
+    (downloadingIds[trackId] !== undefined || (currentTrack?.youtubeId && downloadingIds[currentTrack.youtubeId] !== undefined))
+  );
 
   // Reel spin animation for cassette spools
   const spinValue = useRef(new Animated.Value(0)).current;
@@ -164,11 +191,11 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             style={[styles.tabBtn, activeTab === 'player' && styles.activeTabBtn]}
           >
             <Text style={[styles.tabText, activeTab === 'player' && styles.activeTabText, rtlTextStyle]}>
-              {isRTL ? 'يتم التشغيل' : 'Now Playing'}
+              {isRTL ? (isCurPodcast ? 'المشغل' : 'يتم التشغيل') : 'Now Playing'}
             </Text>
           </TouchableOpacity>
 
-          {!isCurRadio && (
+          {!isCurRadio && !isCurPodcast && (
             <TouchableOpacity
               onPress={() => setActiveTab('lyrics')}
               style={[styles.tabBtn, activeTab === 'lyrics' && styles.activeTabBtn]}
@@ -248,6 +275,10 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 handleDownloadTrack={handleDownloadTrack}
                 setIsSleepTimerOpen={setIsSleepTimerOpen}
                 setActiveTab={setActiveTab}
+                isCurPodcast={isCurPodcast}
+                jumpBy={jumpBy}
+                playbackRate={playbackRate}
+                setPlaybackRate={setPlaybackRate}
               />
             </View>
           </ScrollView>

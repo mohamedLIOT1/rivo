@@ -3,6 +3,8 @@ import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, 
 import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
+import PodcastPlayerControls, { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
 import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
 
 function MiniPlayer({
@@ -68,9 +70,13 @@ function MiniPlayer({
   const [scrubPercent, setScrubPercent] = useState(0);
 
   const [isVolScrubbing, setIsVolScrubbing] = useState(false);
+
+  usePodcastResumeProgress(currentTrack, seekTo, isPlaying);
+
   if (!currentTrack) return null;
 
   const isQuran = isQuranContent(currentTrack);
+  const isPodcast = isPodcastContent(currentTrack);
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
   const rawActiveDur = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
@@ -343,10 +349,13 @@ function MiniPlayer({
               }}
               className="w-9 h-9 rounded-xl bg-[#17a398] text-[#0b1110] brutal-border flex items-center justify-center brutal-shadow-sm brutal-btn cursor-pointer"
             >
-              {isPlaying 
-                ? <Pause size={17} fill="currentColor" /> 
-                : <Play size={17} fill="currentColor" className="ml-0.5" />
-              }
+              {isLoadingTrack ? (
+                <Loader2 size={17} className="animate-spin text-[#0b1110]" />
+              ) : isPlaying ? (
+                <Pause size={17} fill="currentColor" />
+              ) : (
+                <Play size={17} fill="currentColor" className="ml-0.5" />
+              )}
             </button>
           </div>
         </div>
@@ -459,16 +468,28 @@ function MiniPlayer({
           {/* CENTER: Cassette Controls & Progress Scrubber */}
           <div className="w-5/12 flex flex-col items-center gap-1">
             {/* Control buttons */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button 
-                onClick={toggleShuffle}
-                className={`p-1.5 transition cursor-pointer ${
-                  isShuffle ? 'text-[#17a398] font-bold' : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
-                }`} 
-                title="Random Shuffle"
-              >
-                <Shuffle size={15} strokeWidth={2.5} />
-              </button>
+            <div className={`flex items-center ${isPodcast ? 'gap-2.5 sm:gap-3.5' : 'gap-2 sm:gap-3'}`}>
+              {isPodcast ? (
+                <PodcastPlayerControls
+                  audioRef={audio?.audioRef}
+                  currentTrack={currentTrack}
+                  currentTime={currentTime}
+                  duration={activeDuration}
+                  seekTo={seekTo}
+                  compact={true}
+                  isDark={isDark}
+                />
+              ) : (
+                <button 
+                  onClick={toggleShuffle}
+                  className={`p-1.5 transition cursor-pointer ${
+                    isShuffle ? 'text-[#17a398] font-bold' : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
+                  }`} 
+                  title="Random Shuffle"
+                >
+                  <Shuffle size={15} strokeWidth={2.5} />
+                </button>
+              )}
 
               <button 
                 onClick={playPrev}
@@ -487,7 +508,9 @@ function MiniPlayer({
                 className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border-thick flex items-center justify-center brutal-shadow brutal-btn cursor-pointer" 
                 title={isPlaying ? "Pause" : "Play"}
               >
-                {isPlaying ? (
+                {isLoadingTrack ? (
+                  <Loader2 size={18} className="animate-spin text-[#0b1110]" />
+                ) : isPlaying ? (
                   <Pause size={18} fill="currentColor" />
                 ) : (
                   <Play size={18} fill="currentColor" className="ml-0.5" />
@@ -506,29 +529,31 @@ function MiniPlayer({
                 <SkipForward size={15} className={isDark ? 'text-zinc-200' : 'text-[#0b1110]'} fill="currentColor" />
               </button>
 
-              <button 
-                onClick={toggleRepeat}
-                className={`p-1.5 transition cursor-pointer relative ${
-                  repeatMode === 'one' 
-                    ? 'text-[#26c4b7] font-bold' 
-                    : repeatMode === 'all'
-                      ? 'text-[#10b981] font-bold'
-                      : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
-                }`} 
-                title={
-                  repeatMode === 'one' 
-                    ? 'Repeat: Current Track (Looping)' 
-                    : repeatMode === 'all' 
-                      ? 'Repeat: All (Queue / Playlist)' 
-                      : 'Repeat: Off'
-                }
-              >
-                {repeatMode === 'one' ? (
-                  <Repeat1 size={15} strokeWidth={2.5} />
-                ) : (
-                  <Repeat size={15} strokeWidth={2.5} />
-                )}
-              </button>
+              {!isPodcast && (
+                <button 
+                  onClick={toggleRepeat}
+                  className={`p-1.5 transition cursor-pointer relative ${
+                    repeatMode === 'one' 
+                      ? 'text-[#26c4b7] font-bold' 
+                      : repeatMode === 'all'
+                        ? 'text-[#10b981] font-bold'
+                        : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-black'
+                  }`} 
+                  title={
+                    repeatMode === 'one' 
+                      ? 'Repeat: Current Track (Looping)' 
+                      : repeatMode === 'all' 
+                        ? 'Repeat: All (Queue / Playlist)' 
+                        : 'Repeat: Off'
+                  }
+                >
+                  {repeatMode === 'one' ? (
+                    <Repeat1 size={15} strokeWidth={2.5} />
+                  ) : (
+                    <Repeat size={15} strokeWidth={2.5} />
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Progress bar & time */}

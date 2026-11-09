@@ -26,24 +26,42 @@ const GENRES = {
     aliases: ['quran', 'islamic', 'holy quran', 'murattal', 'mujawwad', 'قران', 'قرآن']
   },
   SHAABI: {
-    id: 'mahraganat',
-    name: 'Mahraganat / Shaabi',
-    arabicName: 'مهرجانات / شعبي',
+    id: 'shaabi',
+    name: 'Shaabi',
+    arabicName: 'شعبي',
     code: 'SHAABI',
     color: '#f59e0b',
     keywords: [
-      'مهرجان', 'مهرجانات', 'شعبي', 'شعبيات', 'مولد', 'سرسجي', 'دبكة', 'زار', 'سستم',
-      'mahragan', 'mahraganat', 'shaabi', 'shabi', 'electro shaabi'
+      'شعبي', 'الشعبي', 'شعبيات', 'أغاني شعبية', 'اغاني شعبية', 'بلدي', 'موال شعبي',
+      'shaabi', 'shabi', 'egyptian shaabi', 'folk shaabi'
+    ],
+    artists: [
+      'أحمد عدوية', 'احمد عدوية', 'ahmed adaweya', 'adaweya', 'عبد الباسط حمودة', 'عبد الباسط',
+      'abdel baset hamouda', 'abdel basset hamouda', 'abdelbaset hamouda', 'محمود الليثي', 'mahmoud el leithy',
+      'طارق الشيخ', 'tarek el sheikh', 'احمد شيبة', 'أحمد شيبة', 'ahmed sheba', 'ahmed sheiba',
+      'رضا البحراوي', 'reda el bahrawy', 'حكيم', 'hakim', 'حجازي متقال', 'hegazy metkal',
+      'شفيقة', 'حسن الأسمر', 'حسن الاسمر', 'hassan el asmar', 'بوسي', 'bosy', 'محمد رشدي', 'محمد العزبي'
+    ],
+    aliases: ['shaabi', 'shabi', 'شعبي', 'شعبيات', 'اغاني شعبية', 'egyptian shaabi']
+  },
+  MAHRAGANAT: {
+    id: 'mahraganat',
+    name: 'Mahraganat',
+    arabicName: 'مهرجانات',
+    code: 'MAHRAGANAT',
+    color: '#fbbf24',
+    keywords: [
+      'مهرجان', 'مهرجانات', 'المهرجانات', 'سرسجي', 'دبكة', 'زار', 'سستم', 'درامز', 'توزيع درامز',
+      'mahragan', 'mahraganat', 'electro shaabi'
     ],
     artists: [
       'عصام صاصا', 'essam sasa', 'حمو بيكا', 'hamo bika', 'حسن شاكوش', 'hassan shakosh',
-      'عمر كمال', 'omar kamal', 'رضا البحراوي', 'reda el bahrawy', 'محمود الليثي', 'mahmoud el leithy',
-      'طارق الشيخ', 'tarek el sheikh', 'احمد شيبة', 'ahmed sheba', 'عنبة', '3enba', 'enaba',
-      'دبل زوكش', 'double zuksh', 'شواحة', 'المدفعجية', 'فيجو الدخلاوي', 'حودة بندق',
-      'houda bondok', 'سيف مجدي', 'اسلام كابونجا', 'سامر المدني', 'فيلو', 'شحتة كاريكا',
-      'shehta karika', 'كزبرة', 'اوكا واورتيجا', 'الصواريخ', 'حمو الطيخا', 'نور التوت', 'زوكش'
+      'عمر كمال', 'omar kamal', 'عنبة', '3enba', 'enaba', 'دبل زوكش', 'double zuksh',
+      'شواحة', 'المدفعجية', 'فيجو الدخلاوي', 'حودة بندق', 'houda bondok', 'سيف مجدي',
+      'اسلام كابونجا', 'سامر المدني', 'فيلو', 'شحتة كاريكا', 'shehta karika', 'كزبرة',
+      'اوكا واورتيجا', 'الصواريخ', 'حمو الطيخا', 'نور التوت', 'زوكش'
     ],
-    aliases: ['mahraganat', 'shaabi', 'mahraganat / shaabi', 'مهرجانات', 'شعبي', 'مهرجان']
+    aliases: ['mahraganat', 'mahragan', 'مهرجانات', 'مهرجان', 'electro shaabi']
   },
   RAP: {
     id: 'rap-hiphop',
@@ -83,19 +101,20 @@ const GENRES = {
       'أوتوستراد', 'autostrad', 'جدل', 'jadal', 'مشروع ليلى', 'mashrou leila', 'المربع',
       'el morabba3', 'عزيز مرقة', 'aziz maraka', 'ديسكو مصر', 'disco misr', 'اخر زفير',
       'akher zapheer', 'هوس', 'أدونيس', 'adonis', 'تامر نفار', 'وسط البلد', 'بلاك تيما',
-      'arctic monkeys', 'the strokes', 'tame impala', 'radiohead', 'coldplay', 'the 1975'
+      'arctic monkeys', 'the strokes', 'tame impala', 'radiohead', 'coldplay', 'the 1975', 'the cure'
     ],
     aliases: ['indie', 'alternative', 'indie / alternative', 'إندي', 'بديل', 'اندرجراوند']
   },
   TARAB: {
-    id: 'tarab-classic',
-    name: 'Tarab / Classical',
-    arabicName: 'طرب / كلاسيك',
+    id: 'tarab',
+    name: 'Tarab',
+    arabicName: 'طرب أصيل',
     code: 'TARAB',
     color: '#d97706',
     keywords: [
-      'طرب', 'سلطنة', 'تراث', 'موشح', 'قدود', 'قصيدة', 'تخت شرقي', 'عود', 'tarab',
-      'classic arabic', 'classical arabic', 'andalusian', 'mawwal', 'muwashah'
+      'طرب', 'الطرب', 'طرب أصيل', 'طرب اصيل', 'سلطنة', 'تراث', 'موشح', 'قدود', 'قصيدة',
+      'تخت شرقي', 'عود', 'تقاسيم', 'موال', 'tarab', 'classic arabic', 'classical arabic',
+      'andalusian', 'mawwal', 'muwashah', 'taqsim'
     ],
     artists: [
       'أم كلثوم', 'ام كلثوم', 'om kalthoum', 'um kalthoum', 'umm kulthum', 'عبد الحليم حافظ',
@@ -105,7 +124,7 @@ const GENRES = {
       'فريد الأطرش', 'farid el atrache', 'اسمهان', 'وديع الصافي', 'جورج وسوف', 'george wassouf',
       'ميادة الحناوي', 'ملحم بركات', 'شادية', 'ليلى مراد', 'فايزة أحمد'
     ],
-    aliases: ['tarab', 'tarab / classical', 'طرب', 'كلاسيك عربي', 'تراث']
+    aliases: ['tarab', 'طرب', 'طرب أصيل', 'كلاسيك عربي', 'تراث', 'classic arabic', 'classical arabic']
   },
   ARABIC_POP: {
     id: 'arabic-pop',
@@ -146,10 +165,11 @@ const GENRES = {
     arabicName: 'روك',
     code: 'ROCK',
     color: '#ef4444',
-    keywords: ['rock', 'hard rock', 'alternative rock', 'classic rock', 'grunge', 'روك'],
+    keywords: ['rock', 'hard rock', 'alternative rock', 'classic rock', 'grunge', 'روك', 'الروك'],
     artists: [
       'linkin park', 'queen', 'led zeppelin', 'nirvana', 'ac/dc', 'guns n roses',
-      'red hot chili peppers', 'foo fighters', 'green day', 'muse', 'pink floyd', 'bon jovi'
+      'red hot chili peppers', 'foo fighters', 'green day', 'muse', 'pink floyd', 'bon jovi',
+      'pearl jam', 'carlos santana', 'santana'
     ],
     aliases: ['rock', 'classic rock', 'hard rock', 'روك']
   },
@@ -208,13 +228,13 @@ const GENRES = {
   },
   JAZZ: {
     id: 'jazz',
-    name: 'Jazz',
-    arabicName: 'جاز',
+    name: 'Jazz / Blues',
+    arabicName: 'جاز / بلوز',
     code: 'JAZZ',
     color: '#3b82f6',
     keywords: ['jazz', 'smooth jazz', 'bebop', 'swing', 'blues', 'saxophone', 'trumpet', 'جاز', 'بلوز'],
     artists: ['miles davis', 'john coltrane', 'louis armstrong', 'ella fitzgerald', 'bill evans', 'chet baker', 'nina simone'],
-    aliases: ['jazz', 'smooth jazz', 'blues', 'جاز']
+    aliases: ['jazz', 'jazz / blues', 'smooth jazz', 'blues', 'جاز', 'بلوز']
   },
   CLASSICAL: {
     id: 'classical',
@@ -222,9 +242,53 @@ const GENRES = {
     arabicName: 'موسيقى كلاسيكية',
     code: 'CLASSIC',
     color: '#64748b',
-    keywords: ['symphony', 'concerto', 'sonata', 'orchestral', 'philharmonic', 'classical music', 'سيمفونية', 'اوركسترا'],
-    artists: ['mozart', 'beethoven', 'bach', 'chopin', 'tchaikovsky', 'vivaldi', 'debussy', 'brahms', 'rachmaninoff'],
-    aliases: ['classical', 'symphony', 'orchestral']
+    keywords: [
+      'classical', 'symphony', 'concerto', 'sonata', 'orchestral', 'orchestra', 'philharmonic',
+      'classical music', 'chamber music', 'opera', 'سيمفونية', 'اوركسترا', 'أوركسترا', 'موسيقى كلاسيكية'
+    ],
+    artists: [
+      'mozart', 'wolfgang amadeus mozart', 'beethoven', 'ludwig van beethoven', 'bach',
+      'chopin', 'tchaikovsky', 'vivaldi', 'debussy', 'brahms', 'rachmaninoff', 'yo-yo ma',
+      'andre rieu', 'luciano pavarotti'
+    ],
+    aliases: ['classical', 'symphony', 'orchestral', 'opera', 'موسيقى كلاسيكية']
+  },
+  SOUNDTRACK: {
+    id: 'soundtrack',
+    name: 'Soundtrack / Instrumental',
+    arabicName: 'موسيقى تصويرية',
+    code: 'SOUNDTRACK',
+    color: '#0ea5e9',
+    keywords: [
+      'soundtrack', 'ost', 'score', 'film score', 'original soundtrack', 'theme song',
+      'main theme', 'motion picture', 'instrumental', 'bgm', 'game soundtrack',
+      'موسيقى تصويرية', 'موسيقي تصويرية', 'اوست'
+    ],
+    artists: [
+      'hans zimmer', 'john williams', 'ennio morricone', 'howard shore', 'ramin djawadi',
+      'alan silvestri', 'ludovico einaudi', 'yann tiersen', 'yiruma', 'max richter',
+      'عمر خيرت', 'omar khairat', 'ياسر عبد الرحمن'
+    ],
+    aliases: ['soundtrack', 'ost', 'score', 'instrumental', 'soundtrack / instrumental', 'film score', 'موسيقى تصويرية']
+  },
+  BOLLYWOOD_INDIC: {
+    id: 'bollywood-indic',
+    name: 'Bollywood / Indic',
+    arabicName: 'بوليوود / هندي',
+    code: 'INDIC',
+    color: '#e11d48',
+    keywords: [
+      'bollywood', 'hindi', 'indic', 'punjabi', 'desi', 'urdu', 'bhangra', 'filmi',
+      'qawwali', 'ghazal', 'بوليوود', 'هندي', 'بنجابي'
+    ],
+    artists: [
+      'arijit singh', 'shreya ghoshal', 'neha kakkar', 'ar rahman', 'a.r. rahman',
+      'lata mangeshkar', 'kishore kumar', 'mohammed rafi', 'asha bhosle', 'sonu nigam',
+      'badshah', 'diljit dosanjh', 'sidhu moose wala', 'yo yo honey singh', 'pritam',
+      'alka yagnik', 'kumar sanu', 'udit narayan', 'atif aslam', 'rahat fateh ali khan',
+      'nusrat fateh ali khan'
+    ],
+    aliases: ['bollywood', 'indic', 'hindi', 'punjabi', 'desi', 'bollywood / indic', 'بوليوود', 'هندي']
   },
   POP: {
     id: 'pop',
@@ -236,15 +300,40 @@ const GENRES = {
     artists: [
       'taylor swift', 'michael jackson', 'ariana grande', 'ed sheeran', 'bruno mars',
       'dua lipa', 'justin bieber', 'katy perry', 'rihanna', 'billie eilish', 'lady gaga',
-      'harry styles', 'selena gomez', 'olivia rodrigo', 'shawn mendes'
+      'harry styles', 'selena gomez', 'olivia rodrigo', 'shawn mendes', 'abba'
     ],
     aliases: ['pop']
+  },
+  PODCAST: {
+    id: 'podcast',
+    name: 'Podcast',
+    arabicName: 'بودكاست',
+    code: 'PODCAST',
+    color: '#8b5cf6',
+    isPodcast: true,
+    keywords: [
+      'بودكاست', 'podcast', 'podcasts', 'حلقة', 'حلقه', 'episode', 'episodes',
+      'كبريت', 'فنجان', 'ثمانية', 'ثمانيه', 'وعي', 'دوباميكافين', 'دروس أونلاين',
+      'دروس اونلاين', 'السندباد', 'سندباد', 'مربع', 'طحالب', 'بدون ورق',
+      'أبجورة', 'ابجورة', 'ابجوره', 'سوالف بزنس', 'إيه المشكلة', 'ايه المشكلة',
+      'ايه المشكله', 'الدحيح', 'دحيح', 'سين وجيم', 'تيك فويس', 'حوار مع',
+      'بودكاست الماتش'
+    ],
+    artists: [
+      'كبريت', 'كبريت ai', 'كبريت ai+', 'بودكاست وعي', 'وعي', 'بودكاست فنجان', 'فنجان',
+      'ثمانية', 'thmanyah', 'الدحيح', 'احمد الغندور', 'أحمد الغندور', 'دوباميكافين',
+      'دروس أونلاين', 'احمد ابو زيد', 'أحمد أبو زيد', 'بودكاست السندباد', 'السندباد',
+      'سوالف بزنس', 'مشهور الدبيان', 'إيه المشكلة', 'ايه المشكلة', 'امير منير',
+      'أمير منير', 'أحمد عامر', 'احمد عامر', 'ياسر ممدوح', 'محمد الغليظ', 'بودكاست الماتش',
+      'بدون ورق', 'مربع', 'أبجورة', 'طحالب'
+    ],
+    aliases: ['podcast', 'podcasts', 'بودكاست', 'حلقات بودكاست', 'حلقة بودكاست', 'episode']
   }
 };
 
 const GENERIC_GENRES = new Set([
-  'pop', 'imported', 'other', 'unknown', 'stereo', 'music', 'single', 'audio',
-  'track', 'various', 'soundtrack', 'general', ''
+  'imported', 'other', 'unknown', 'stereo', 'music', 'single', 'audio',
+  'track', 'various', 'general', ''
 ]);
 
 module.exports = {

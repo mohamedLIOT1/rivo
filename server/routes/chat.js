@@ -4,42 +4,9 @@ const mongoose = require('mongoose');
 const { Message, User } = require('../models');
 const { auth, isVerifiedUser, isAdminUser } = require('../middleware/auth');
 const { sanitizeText } = require('../utils/security');
+const { BOT_EMAIL, getOrCreateSystemBot, handleAdminBroadcast } = require('../utils/chatBot');
 
-const BOT_EMAIL = 'bot@rivo.app';
-const BOT_NAME = 'Rivo Bot';
-const BOT_AVATAR = 'https://rivo-m.duckdns.org/public/assets/rivo-bot.png';
-
-async function getOrCreateSystemBot() {
-  let bot = await User.findOne({ email: BOT_EMAIL });
-  if (!bot) {
-    bot = await User.findOne({ isBot: true });
-  }
-  if (!bot) {
-    bot = await User.create({
-      name: BOT_NAME,
-      email: BOT_EMAIL,
-      password: 'SYSTEM_BOT_NO_LOGIN_' + Math.random().toString(36),
-      isBot: true,
-      bio: 'Official Rivo System Bot & Announcements',
-      avatar: BOT_AVATAR
-    });
-  } else {
-    let changed = false;
-    if (!bot.isBot) {
-      bot.isBot = true;
-      changed = true;
-    }
-    if (!bot.avatar || bot.avatar.includes('unsplash.com')) {
-      bot.avatar = BOT_AVATAR;
-      changed = true;
-    }
-    if (changed) {
-      await bot.save();
-    }
-  }
-  return bot;
-}
-
+// ── GET /conversations ──────────────────────────────────────────────────
 router.get('/conversations', auth, async (req, res) => {
   try {
     const myId = String(req.user.id);
@@ -49,9 +16,9 @@ router.get('/conversations', auth, async (req, res) => {
     const messages = await Message.find({
       $or: [{ sender: myId }, { recipient: myId }]
     })
-    .sort({ createdAt: -1 })
-    .limit(200)
-    .lean();
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
 
     const conversationMap = new Map();
     for (const msg of messages) {
@@ -64,6 +31,27 @@ router.get('/conversations', auth, async (req, res) => {
     const otherUserIds = Array.from(conversationMap.keys());
     if (!otherUserIds.includes(botId) && myId !== botId) {
       otherUserIds.push(botId);
+    }
+
+    // Calculate unread messages count per conversation sender
+    const myObjId = mongoose.isValidObjectId(myId) ? new mongoose.Types.ObjectId(myId) : null;
+    const unreadMap = new Map();
+    if (myObjId) {
+      const unreadCounts = await Message.aggregate([
+        {
+          $match: {
+            recipient: { $in: [myObjId, myId].filter(Boolean) },
+            read: false
+          }
+        },
+        {
+          $group: {
+            _id: '$sender',
+            count: { $sum: 1 }
+          }
+        }
+      ]).catch(() => []);
+      unreadCounts.forEach(u => unreadMap.set(String(u._id), u.count));
     }
 
     const users = await User.find({ _id: { $in: otherUserIds } })
@@ -80,13 +68,13 @@ router.get('/conversations', auth, async (req, res) => {
         isVerified: isVerifiedUser(u.name),
         isBot: Boolean(u.isBot || String(u.email) === BOT_EMAIL)
       },
+      unreadCount: unreadMap.get(String(u._id)) || 0,
       lastMessage: conversationMap.get(String(u._id)) || (String(u._id) === botId ? {
         text: 'Official Rivo System Bot. Announcements will appear here.',
         createdAt: bot.createdAt || new Date()
       } : null)
     }));
 
-    // Sort: most recent message first
     conversations.sort((a, b) => {
       const timeA = a.lastMessage?.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
       const timeB = b.lastMessage?.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
@@ -99,6 +87,7 @@ router.get('/conversations', auth, async (req, res) => {
   }
 });
 
+// ── GET /unread-count ───────────────────────────────────────────────────
 router.get('/unread-count', auth, async (req, res) => {
   try {
     const count = await Message.countDocuments({
@@ -111,6 +100,9 @@ router.get('/unread-count', auth, async (req, res) => {
   }
 });
 
+// ── GET /:recipientId (History) ─────────────────────────────────────────
+// NOTE: Must NEVER mark messages as read automatically unless explicitly
+// requested via `?markRead=1` by an active focused client on screen!
 router.get('/:recipientId', auth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -120,42 +112,142 @@ router.get('/:recipientId', auth, async (req, res) => {
       return res.json({ success: true, messages: [] });
     }
 
-    // Mark messages from this sender to current user as read
+    const shouldMarkRead = req.query.markRead === '1' || req.query.markRead === 'true';
+    if (shouldMarkRead) {
+      await Message.updateMany(
+        { sender: recipientId, recipient: currentUserId, read: false },
+        { $set: { read: true } }
+      ).catch(() => {});
+
+      if (req.io) {
+        req.io.to(`user:${recipientId}`).emit('chat:seen', {
+          seenBy: currentUserId,
+          senderId: recipientId,
+          readAt: Date.now()
+        });
+
+        req.io.to(`user:${currentUserId}`).emit('chat:dismiss_notification', {
+          senderId: recipientId
+        });
+
+        const unreadCount = await Message.countDocuments({
+          recipient: currentUserId,
+          read: false
+        });
+        req.io.to(`user:${currentUserId}`).emit('chat:unread_count', { count: unreadCount });
+      }
+    }
+
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const filter = {
+      $or: [
+        { sender: currentUserId, recipient: recipientId },
+        { sender: recipientId, recipient: currentUserId }
+      ]
+    };
+
+    if (req.query.before) {
+      filter.createdAt = { $lt: new Date(req.query.before) };
+    }
+
+    const rawMessages = await Message.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit + 1)
+      .lean();
+
+    const hasMore = rawMessages.length > limit;
+    const messages = hasMore ? rawMessages.slice(0, limit) : rawMessages;
+    messages.reverse();
+
+    res.json({ success: true, messages, hasMore });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /:recipientId/read (Explicit Read Mark) ────────────────────────
+router.post('/:recipientId/read', auth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const recipientId = req.params.recipientId;
+
+    if (!recipientId || !mongoose.isValidObjectId(recipientId)) {
+      return res.status(400).json({ error: 'Valid recipient ID is required' });
+    }
+
     await Message.updateMany(
       { sender: recipientId, recipient: currentUserId, read: false },
       { $set: { read: true } }
     ).catch(() => {});
 
     if (req.io) {
-      // Notify original sender that their messages were seen
       req.io.to(`user:${recipientId}`).emit('chat:seen', {
         seenBy: currentUserId,
         senderId: recipientId,
         readAt: Date.now()
       });
 
-      // Dismiss notification on reader's other connected devices (e.g. mobile/desktop sync)
       req.io.to(`user:${currentUserId}`).emit('chat:dismiss_notification', {
         senderId: recipientId
       });
+
+      const unreadCount = await Message.countDocuments({
+        recipient: currentUserId,
+        read: false
+      });
+      req.io.to(`user:${currentUserId}`).emit('chat:unread_count', { count: unreadCount });
     }
 
-    const messages = await Message.find({
-      $or: [
-        { sender: currentUserId, recipient: recipientId },
-        { sender: recipientId, recipient: currentUserId }
-      ]
-    })
-    .sort({ createdAt: 1 })
-    .limit(100)
-    .lean();
-
-    res.json({ success: true, messages });
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// ── POST /react (Emoji toggle) ──────────────────────────────────────────
+router.post('/react', auth, async (req, res) => {
+  try {
+    const { messageId, emoji } = req.body;
+    if (!messageId || !emoji) return res.status(400).json({ error: 'messageId and emoji required' });
+    if (!mongoose.isValidObjectId(messageId)) return res.status(400).json({ error: 'Invalid messageId' });
+
+    const msg = await Message.findById(messageId);
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    if (!Array.isArray(msg.reactions)) msg.reactions = [];
+
+    const currentUserId = String(req.user.id);
+    const existingIdx = msg.reactions.findIndex(
+      r => String(r.userId) === currentUserId && r.emoji === emoji
+    );
+
+    if (existingIdx >= 0) {
+      msg.reactions.splice(existingIdx, 1);
+    } else {
+      msg.reactions.push({ emoji, userId: currentUserId });
+    }
+
+    msg.markModified('reactions');
+    await msg.save();
+
+    const payload = {
+      messageId: String(msg._id),
+      reactions: msg.reactions,
+      senderId: String(msg.sender),
+      recipientId: String(msg.recipient)
+    };
+
+    if (req.io) {
+      req.io.to(`user:${msg.sender}`).emit('chat:reaction_updated', payload);
+      req.io.to(`user:${msg.recipient}`).emit('chat:reaction_updated', payload);
+    }
+
+    res.json({ success: true, reactions: msg.reactions });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /send (Send Message / Broadcast) ────────────────────────────────
 router.post('/send', auth, async (req, res) => {
   try {
     const { recipientId, text, track, jamInvite } = req.body;
@@ -187,120 +279,12 @@ router.post('/send', auth, async (req, res) => {
     const isAdmin = isAdminUser(req.user) || isAdminUser(sender);
 
     if (broadcastMatch) {
-      // 1. Record admin's command in the Bot thread
-      const userCmdMsg = await new Message({
-        sender: req.user.id,
-        recipient: botId,
-        text: cleanText,
-        read: true
-      }).save();
-
-      const userCmdPayload = {
-        ...userCmdMsg.toObject(),
-        senderName: sender?.name || 'You',
-        senderAvatar: sender?.avatar || '',
-        isBot: false
-      };
-
-      if (req.io) {
-        req.io.to(`user:${req.user.id}`).emit('chat:message', userCmdPayload);
-      }
-
-      if (!isAdmin) {
-        // Reject non-admin
-        const botReply = await new Message({
-          sender: botId,
-          recipient: req.user.id,
-          text: '⛔ Permission denied: Only system administrators can broadcast announcements.',
-          read: false
-        }).save();
-
-        if (req.io) {
-          req.io.to(`user:${req.user.id}`).emit('chat:message', {
-            ...botReply.toObject(),
-            senderName: bot.name,
-            senderAvatar: bot.avatar,
-            isBot: true
-          });
-        }
-
-        return res.json({ success: true, message: userCmdPayload });
-      }
-
-      const broadcastBody = (broadcastMatch[1] || '').trim();
-      if (!broadcastBody) {
-        const hintMsg = await new Message({
-          sender: botId,
-          recipient: req.user.id,
-          text: '🤖 Broadcast usage:\n`/send all <your announcement message>`\nor\n`/sendall <your announcement message>`',
-          read: true
-        }).save();
-
-        if (req.io) {
-          req.io.to(`user:${req.user.id}`).emit('chat:message', {
-            ...hintMsg.toObject(),
-            senderName: bot.name,
-            senderAvatar: bot.avatar,
-            isBot: true
-          });
-        }
-        return res.json({ success: true, message: userCmdPayload });
-      }
-
-      // Broadcast to all registered users (excluding bot and the broadcasting admin)
-      const allUsers = await User.find({ _id: { $nin: [bot._id, req.user._id, req.user.id] } }).select('_id').lean();
-
-      if (allUsers.length > 0) {
-        const bulkMessages = allUsers.map(u => ({
-          sender: bot._id,
-          recipient: u._id,
-          text: broadcastBody,
-          read: false
-        }));
-
-        await Message.insertMany(bulkMessages);
-
-        // Emit to all users in real-time
-        if (req.io) {
-          allUsers.forEach(u => {
-            const uIdStr = String(u._id);
-            req.io.to(`user:${uIdStr}`).emit('chat:message', {
-              sender: botId,
-              recipient: uIdStr,
-              text: broadcastBody,
-              senderName: bot.name,
-              senderAvatar: bot.avatar,
-              isBot: true,
-              read: uIdStr === String(req.user.id),
-              createdAt: new Date()
-            });
-          });
-        }
-      }
-
-      // Send confirmation back to Admin in bot thread
-      const confirmMsg = await new Message({
-        sender: botId,
-        recipient: req.user.id,
-        text: `📢 System Announcement successfully broadcasted to ${allUsers.length} users!\n\n"${broadcastBody}"`,
-        read: true
-      }).save();
-
-      if (req.io) {
-        req.io.to(`user:${req.user.id}`).emit('chat:message', {
-          ...confirmMsg.toObject(),
-          senderName: bot.name,
-          senderAvatar: bot.avatar,
-          isBot: true
-        });
-      }
-
-      return res.json({ success: true, message: userCmdPayload });
+      const payload = await handleAdminBroadcast({ req, cleanText, broadcastMatch, bot, sender, isAdmin });
+      return res.json({ success: true, message: payload });
     }
 
-    // Check if sending a regular message to System Bot
+    // Message sent to System Bot
     if (isSendingToBot) {
-      // 1. Save user's message to Bot in database
       const userMsg = await new Message({
         sender: req.user.id,
         recipient: botId,
@@ -321,13 +305,9 @@ router.post('/send', auth, async (req, res) => {
         req.io.to(`user:${req.user.id}`).emit('chat:message', userMsgPayload);
       }
 
-      // Non-broadcast message sent to bot
-      let helpText = '';
-      if (isAdmin) {
-        helpText = '🤖 Rivo Bot Admin Console:\n\nTo broadcast an announcement to ALL registered users as a direct message, type:\n`/send all <your message>`\nor\n`/sendall <your message>`';
-      } else {
-        helpText = '🤖 Hello! I am Rivo Bot. Official system updates, feature releases, and notifications will be delivered to you here. Stay tuned!';
-      }
+      let helpText = isAdmin
+        ? '🤖 Rivo Bot Admin Console:\n\nTo broadcast an announcement to ALL registered users as a direct message, type:\n`/send all <your message>`\nor\n`/sendall <your message>`'
+        : '🤖 Hello! I am Rivo Bot. Official system updates, feature releases, and notifications will be delivered to you here. Stay tuned!';
 
       const autoReply = await new Message({
         sender: botId,

@@ -47,7 +47,7 @@ function normalizeSearchText(text) {
   const arabicNorm = normalizeArabic(cleaned);
   return arabicNorm
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/[^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -75,16 +75,10 @@ function matchesPattern(haystackNorm, needleNorm) {
   if (!haystackNorm || !needleNorm) return false;
   if (haystackNorm === needleNorm) return true;
   
-  // Direct substring match
-  if (haystackNorm.includes(needleNorm)) {
-    // If needle is short (<= 3 chars), require word boundary
-    if (needleNorm.length <= 3) {
-      const regex = new RegExp(`(^|\\s)${escapeRegex(needleNorm)}(\\s|$)`, 'i');
-      return regex.test(haystackNorm);
-    }
-    return true;
-  }
-  return false;
+  // Enforce word boundary matching for all needles to prevent false substring collisions
+  const escaped = escapeRegex(needleNorm);
+  const regex = new RegExp(`(^|[^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF])${escaped}([^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]|$)`, 'i');
+  return regex.test(haystackNorm);
 }
 
 function escapeRegex(str) {

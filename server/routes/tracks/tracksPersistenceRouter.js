@@ -67,7 +67,14 @@ router.post('/by-ids', async (req, res) => {
     });
 
     const formatted = tracks.map((t) => {
-      const cls = classifyGenre({ title: t.title, artist: t.artist, album: t.album, genre: t.genre });
+      const cls = classifyGenre({
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        genre: t.genre,
+        tags: t.tags,
+        description: t.description
+      });
       return {
         id: String(t._id),
         _id: String(t._id),
@@ -98,7 +105,7 @@ router.post('/by-ids', async (req, res) => {
 // Auto-persist fully listened external song into database
 const autoPersistTrackHandler = async (req, res) => {
   try {
-    const { id, trackId, title, artist, album, cover, coverUrl, audioUrl, streamUrl, duration, youtubeId, source } = req.body || {};
+    const { id, trackId, title, artist, album, cover, coverUrl, audioUrl, streamUrl, duration, youtubeId, source, genre, tags, description } = req.body || {};
     if (!title || typeof title !== 'string' || !title.trim()) {
       return res.status(400).json({ error: 'Title is required' });
     }
@@ -157,7 +164,14 @@ const autoPersistTrackHandler = async (req, res) => {
     }
 
     // Create new track entry with intelligent genre classification
-    const classification = classifyGenre({ title: cleanTitle, artist: cleanArtist, album: cleanAlbum });
+    const classification = classifyGenre({
+      title: cleanTitle,
+      artist: cleanArtist,
+      album: cleanAlbum,
+      genre,
+      tags,
+      description
+    });
     const finalGenre = classification.genre;
     const finalIsQuran = Boolean(classification.isQuran || isQuranContent(cleanTitle, cleanArtist, cleanAlbum, finalGenre));
 

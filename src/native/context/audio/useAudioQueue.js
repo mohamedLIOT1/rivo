@@ -4,6 +4,8 @@ import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
 import { QURAN_LIVE_STATIONS } from '../../data/quranLiveStations';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { getTrackDedupeKey } from '../../services/downloadManager';
+import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
+import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
 
 export const useAudioQueue = ({
   userTracks = [],
@@ -42,17 +44,39 @@ export const useAudioQueue = ({
 
   const addToQueue = useCallback((track) => {
     if (!track) return;
+    const cur = currentTrackRef.current;
+    if (cur) {
+      const isCurRadio = isRadioTrack(cur);
+      const isCurQuran = !isCurRadio && isQuranContent(cur);
+      const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
+      const isTrackMatch = isCurRadio
+        ? isRadioTrack(track)
+        : (isCurQuran ? isQuranContent(track) : (isCurPodcast ? isPodcastContent(track) : (!isRadioTrack(track) && !isQuranContent(track) && !isPodcastContent(track))));
+      if (!isTrackMatch) return;
+    }
     const newQ = [...queueRef.current, track];
     setQueue(newQ);
     showToast(`Added to queue: ${track.title}`, 'info');
-  }, [setQueue, showToast]);
+  }, [setQueue, showToast, currentTrackRef]);
 
   const addMultipleToQueue = useCallback((tracksToAdd) => {
     if (!Array.isArray(tracksToAdd) || tracksToAdd.length === 0) return;
-    const newQ = [...queueRef.current, ...tracksToAdd];
+    const cur = currentTrackRef.current;
+    let allowedTracks = tracksToAdd;
+    if (cur) {
+      const isCurRadio = isRadioTrack(cur);
+      const isCurQuran = !isCurRadio && isQuranContent(cur);
+      const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
+      allowedTracks = tracksToAdd.filter(t => isCurRadio
+        ? isRadioTrack(t)
+        : (isCurQuran ? isQuranContent(t) : (isCurPodcast ? isPodcastContent(t) : (!isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t))))
+      );
+    }
+    if (allowedTracks.length === 0) return;
+    const newQ = [...queueRef.current, ...allowedTracks];
     setQueue(newQ);
-    showToast(`Added ${tracksToAdd.length} track(s) to queue`, 'info');
-  }, [setQueue, showToast]);
+    showToast(`Added ${allowedTracks.length} track(s) to queue`, 'info');
+  }, [setQueue, showToast, currentTrackRef]);
 
   const removeFromQueue = useCallback((trackIdOrIdx) => {
     if (typeof trackIdOrIdx === 'number') {
@@ -158,10 +182,33 @@ export const useAudioQueue = ({
       q = downloadedTracks.length > 0 ? downloadedTracks : [];
       if (q.length > 0) setQueue(q);
     }
-    const isCurQuran = Boolean(cur && isQuranContent(cur));
+    const isCurRadio = Boolean(cur && isRadioTrack(cur));
+    const isCurQuran = !isCurRadio && Boolean(cur && isQuranContent(cur));
+    const isCurPodcast = !isCurRadio && !isCurQuran && Boolean(cur && isPodcastContent(cur));
 
     const triggerAutoQueue = async () => {
       try {
+        // Strict Podcast Auto-Queue: Never recommend songs after a podcast!
+        if (isCurPodcast) {
+          const podcastPool = ((userTracks && userTracks.length > 0) ? userTracks : [])
+            .filter(t => isPodcastContent(t));
+          const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
+          const seedQ = buildPodcastSeedQueue(cur, fullPool, 20);
+          const nextBatch = seedQ.filter(t => String(t._id || t.id) !== String(cur?._id || cur?.id));
+          if (nextBatch.length > 0) {
+            const newQueue = cur ? [cur, ...nextBatch] : nextBatch;
+            setQueue(newQueue);
+            if (playTrackCallbackRef.current) playTrackCallbackRef.current(nextBatch[0], newQueue);
+            return;
+          }
+          if (seedQ.length > 0) {
+            setQueue(seedQ);
+            if (playTrackCallbackRef.current) playTrackCallbackRef.current(seedQ[0], seedQ);
+            return;
+          }
+          return;
+        }
+
         if (cur) {
           playedSmartSongIdsRef.current.add(String(cur._id || cur.id));
           const curDedupeKey = getTrackDedupeKey(cur);
@@ -176,7 +223,7 @@ export const useAudioQueue = ({
         });
 
         const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
-          .filter(t => (isCurQuran ? isQuranContent(t) : !isQuranContent(t)));
+          .filter(t => (isCurQuran ? isQuranContent(t) : (!isQuranContent(t) && !isPodcastContent(t))));
 
         let nextBatch = getSmartTasteAndMoodTracks({
           allTracks: pool,
@@ -190,7 +237,10 @@ export const useAudioQueue = ({
         });
 
         if (!nextBatch || nextBatch.length === 0) {
-          playedSmartSongIdsRef.current = new Set(cur ? [String(cur._id || cur.id), getTrackDedupeKey(cur)] : []);
+          const curK = cur ? getTrackDedupeKey(cur) : '';
+          const curTId = String(cur?._id || cur?.id || '');
+          const recentList = Array.from(playedSmartSongIdsRef.current).slice(-15);
+          playedSmartSongIdsRef.current = new Set([curTId, curK, ...recentList].filter(Boolean));
           nextBatch = getSmartTasteAndMoodTracks({
             allTracks: pool,
             currentUser,
@@ -207,6 +257,12 @@ export const useAudioQueue = ({
           const newQueue = cur ? [cur, ...nextBatch] : nextBatch;
           setQueue(newQueue);
           if (playTrackCallbackRef.current) playTrackCallbackRef.current(nextBatch[0], newQueue);
+          return;
+        }
+
+        // Seamless wrap-around fallback so background playback never dies unexpectedly
+        if (q && q.length > 0 && playTrackCallbackRef.current) {
+          playTrackCallbackRef.current(q[0], q);
           return;
         }
       } catch (err) {}
@@ -230,7 +286,8 @@ export const useAudioQueue = ({
     if (i >= 0 && i < q.length - 1) {
       if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[i + 1], q);
     } else if (q.length > 0) {
-      if (repeatModeRef.current === 'all' || isMixModeRef?.current) {
+      const isExplicitPlaylist = !q.some(t => t.isSmartMoodQueue || t.isAiSuggestion);
+      if ((repeatModeRef.current === 'all' || isMixModeRef?.current) && isExplicitPlaylist) {
         if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[0], q);
       } else {
         triggerAutoQueue();

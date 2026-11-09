@@ -1,7 +1,14 @@
 // High-performance Quran Reciters & Full 114 Surahs Streaming Service
 // Provides canonical CDN streaming URLs (zero-latency MP3s) and dynamic mp3quran.net discovery
 import { SURAH_METADATA } from './quranMetadata.js';
-import { normalizeArabicText, getQuranReciterName, getSurahNumber } from './quranUtils.js';
+import {
+  normalizeArabicText,
+  getQuranReciterName,
+  getSurahNumber,
+  cleanQuranTrackTitle,
+  isAyahOrClip,
+  sortQuranTracks
+} from './quranUtils.js';
 import { CANONICAL_RECITERS } from './canonicalRecitersData.js';
 
 export { CANONICAL_RECITERS };
@@ -135,7 +142,7 @@ export function getQuranRecitersList({ quranTracks = [], downloadedTracks = [], 
       reciterMap.set(name, {
         name,
         count: info.count,
-        cover: info.cover || 'https://images.unsplash.com/photo-1542816417-0983c9c9ad53?w=600',
+        cover: info.cover || null,
         isCanonical: false
       });
     }
@@ -156,50 +163,86 @@ export function getQuranRecitersList({ quranTracks = [], downloadedTracks = [], 
  * @param {Array} [options.apiReciters] Dynamically fetched reciters
  * @returns {Array} List of Surah track objects
  */
+/**
+ * Returns the complete list of Surahs (1 to 114) and custom Ayahs for a given reciter.
+ * Supports multiple recitations of the same surah (e.g. multiple recitations of Surah Hud).
+ * Disambiguates duplicate recitations and cleanly appends custom ayahs/clips.
+ * Uses direct high-speed CDN MP3 stream URLs with zero latency and zero AVPlayer errors.
+ * Merges local offline downloaded tracks when available.
+ * @param {string} reciterName 
+ * @param {Object} options
+ * @param {Array} [options.quranTracks] MongoDB tracks
+ * @param {Array} [options.downloadedTracks] Local offline tracks
+ * @param {boolean} [options.isOffline] Offline mode flag
+ * @param {Array} [options.apiReciters] Dynamically fetched reciters
+ * @returns {Array} List of Surah track objects
+ */
 export function getSurahsForReciter(reciterName, { quranTracks = [], downloadedTracks = [], isOffline = false, apiReciters = [] } = {}) {
   if (!reciterName) return [];
   const reciter = findReciter(reciterName, apiReciters);
+  const normReciter = normalizeArabicText(reciter ? reciter.name : reciterName);
+
+  const matchesReciter = (t) => {
+    if (!t) return false;
+    const tReciter = normalizeArabicText(getQuranReciterName(t));
+    return tReciter === normReciter || tReciter.includes(normReciter) || normReciter.includes(tReciter);
+  };
 
   if (isOffline) {
-    const normR = normalizeArabicText(reciterName);
-    const matched = (downloadedTracks || []).filter(t => {
-      const r = normalizeArabicText(getQuranReciterName(t));
-      return r === normR || r.includes(normR) || normR.includes(r);
-    });
-    return matched.sort((a, b) => getSurahNumber(a) - getSurahNumber(b));
+    const matched = (downloadedTracks || []).filter(matchesReciter);
+    return sortQuranTracks(matched);
   }
+
+  // Find all DB and downloaded tracks for this reciter
+  const reciterDbTracks = (quranTracks || []).filter(matchesReciter);
+  const reciterDlTracks = (downloadedTracks || []).filter(matchesReciter);
 
   if (reciter && reciter.server) {
     const slug = (reciter.id || normalizeArabicText(reciter.name)).replace(/[^a-z0-9_-]/gi, '-');
     const reciterServer = reciter.server.endsWith('/') ? reciter.server : `${reciter.server}/`;
-    const reciterCover = reciter.cover || 'https://images.unsplash.com/photo-1609599006353-e629aaabfeae?w=600';
+    const reciterCover = reciter.cover || null;
 
-    const normReciter = normalizeArabicText(reciter.name);
+    // Multi-map: local downloads grouped by surah number
     const localDownloadedBySurah = new Map();
-    (downloadedTracks || []).forEach(t => {
-      const tReciter = normalizeArabicText(getQuranReciterName(t));
-      if (tReciter === normReciter || tReciter.includes(normReciter) || normReciter.includes(tReciter)) {
-        const sNum = getSurahNumber(t);
-        if (sNum >= 1 && sNum <= 114) {
-          localDownloadedBySurah.set(sNum, t);
+    reciterDlTracks.forEach(t => {
+      const sNum = getSurahNumber(t);
+      if (sNum >= 1 && sNum <= 114) {
+        if (!localDownloadedBySurah.has(sNum)) {
+          localDownloadedBySurah.set(sNum, []);
         }
+        localDownloadedBySurah.get(sNum).push(t);
       }
     });
 
-    const dbTrackBySurah = new Map();
-    (quranTracks || []).forEach(t => {
-      const tReciter = normalizeArabicText(getQuranReciterName(t));
-      if (tReciter === normReciter || tReciter.includes(normReciter) || normReciter.includes(tReciter)) {
-        const sNum = getSurahNumber(t);
-        if (sNum >= 1 && sNum <= 114) {
-          dbTrackBySurah.set(sNum, t);
+    // Multi-map: DB tracks grouped by surah number + custom ayahs/clips array
+    const dbTracksBySurah = new Map(); // surahId (1..114) => Array<track>
+    const customAyahsAndClips = [];
+
+    reciterDbTracks.forEach(t => {
+      const sNum = getSurahNumber(t);
+      const isClip = isAyahOrClip(t);
+
+      if (isClip || sNum < 1 || sNum > 114) {
+        // Individual ayah, clip, or general recitation
+        customAyahsAndClips.push({
+          ...t,
+          isAyah: true,
+          _surahNum: sNum,
+          surahNumber: sNum >= 1 && sNum <= 114 ? sNum : 999
+        });
+      } else {
+        // Full recitation of surah sNum
+        if (!dbTracksBySurah.has(sNum)) {
+          dbTracksBySurah.set(sNum, []);
         }
+        dbTracksBySurah.get(sNum).push(t);
       }
     });
 
     const surahsList = reciter.surahList || SURAH_METADATA.map(s => s.id);
+    const catalog = [];
 
-    return surahsList.map(surahId => {
+    surahsList.forEach(surahId => {
       const meta = SURAH_METADATA.find(s => s.id === surahId) || {
         id: surahId,
         name: `سورة ${surahId}`,
@@ -208,41 +251,123 @@ export function getSurahsForReciter(reciterName, { quranTracks = [], downloadedT
 
       const surahPad = String(surahId).padStart(3, '0');
       const directAudioUrl = `${reciterServer}${surahPad}.mp3`;
-      const localDl = localDownloadedBySurah.get(surahId);
-      const dbTrack = dbTrackBySurah.get(surahId);
-
+      const dbTracks = dbTracksBySurah.get(surahId) || [];
+      const dlTracks = localDownloadedBySurah.get(surahId) || [];
       const estimatedDuration = Math.max(45, (meta.verses || 30) * 14);
 
-      return {
-        _id: localDl?._id || dbTrack?._id || `quran-${slug}-${surahId}`,
-        id: localDl?.id || dbTrack?.id || `quran-${slug}-${surahId}`,
-        title: `سورة ${meta.name}`,
-        englishTitle: meta.englishName || `Surah ${meta.name}`,
-        artist: reciter.name,
-        album: 'القرآن الكريم',
-        audioUrl: localDl?.localAudioUri || localDl?.audioUrl || directAudioUrl,
-        localAudioUri: localDl?.localAudioUri || null,
-        isDownloaded: Boolean(localDl?.isDownloaded || localDl?.localAudioUri),
-        cover: reciterCover,
-        coverUrl: reciterCover,
-        duration: dbTrack?.duration || localDl?.duration || estimatedDuration,
-        verses: meta.verses || 0,
-        isQuran: true,
-        genre: 'Quran',
-        surahNumber: surahId,
-        _surahNum: surahId
-      };
+      if (dbTracks.length === 0) {
+        // Canonical CDN track (default)
+        const localDl = dlTracks[0];
+        catalog.push({
+          _id: localDl?._id || `quran-${slug}-${surahId}`,
+          id: localDl?.id || `quran-${slug}-${surahId}`,
+          title: `سورة ${meta.name}`,
+          englishTitle: meta.englishName || `Surah ${meta.name}`,
+          artist: reciter.name,
+          album: 'القرآن الكريم',
+          audioUrl: localDl?.localAudioUri || localDl?.audioUrl || directAudioUrl,
+          localAudioUri: localDl?.localAudioUri || null,
+          isDownloaded: Boolean(localDl?.isDownloaded || localDl?.localAudioUri),
+          cover: reciterCover,
+          coverUrl: reciterCover,
+          duration: localDl?.duration || estimatedDuration,
+          verses: meta.verses || 0,
+          isQuran: true,
+          genre: 'Quran',
+          surahNumber: surahId,
+          _surahNum: surahId
+        });
+      } else if (dbTracks.length === 1) {
+        // Single DB track for this Surah
+        const dbTrack = dbTracks[0];
+        const localDl = dlTracks.find(d => String(d.id || d._id) === String(dbTrack.id || dbTrack._id)) || dlTracks[0];
+        const rawClean = cleanQuranTrackTitle(dbTrack.title || '');
+        const displayTitle = (rawClean && rawClean.includes(meta.name))
+          ? rawClean
+          : `سورة ${meta.name}`;
+
+        catalog.push({
+          ...dbTrack,
+          _id: dbTrack._id || dbTrack.id || localDl?._id || `quran-${slug}-${surahId}`,
+          id: dbTrack.id || dbTrack._id || localDl?.id || `quran-${slug}-${surahId}`,
+          title: displayTitle,
+          englishTitle: meta.englishName || `Surah ${meta.name}`,
+          artist: reciter.name,
+          album: dbTrack.album || 'القرآن الكريم',
+          audioUrl: localDl?.localAudioUri || dbTrack.audioUrl || directAudioUrl,
+          localAudioUri: localDl?.localAudioUri || dbTrack.localAudioUri || null,
+          isDownloaded: Boolean(localDl?.isDownloaded || dbTrack.isDownloaded),
+          cover: dbTrack.cover || dbTrack.coverUrl || reciterCover,
+          coverUrl: dbTrack.coverUrl || dbTrack.cover || reciterCover,
+          duration: dbTrack.duration || localDl?.duration || estimatedDuration,
+          verses: meta.verses || 0,
+          isQuran: true,
+          genre: 'Quran',
+          surahNumber: surahId,
+          _surahNum: surahId
+        });
+      } else {
+        // Multiple DB recitations for this Surah (e.g. Surah Hud has two recitations!)
+        const cleanTitles = dbTracks.map(t => cleanQuranTrackTitle(t.title || ''));
+        const areTitlesIdentical = cleanTitles.every(t => t === cleanTitles[0]);
+
+        dbTracks.forEach((dbTrack, vIdx) => {
+          const localDl = dlTracks.find(d => String(d.id || d._id) === String(dbTrack.id || dbTrack._id));
+          let displayTitle = cleanTitles[vIdx];
+          if (!displayTitle || !displayTitle.includes(meta.name)) {
+            displayTitle = `سورة ${meta.name}`;
+          }
+          if (areTitlesIdentical || displayTitle === `سورة ${meta.name}`) {
+            displayTitle = `${displayTitle} (تلاوة ${vIdx + 1})`;
+          }
+
+          catalog.push({
+            ...dbTrack,
+            _id: dbTrack._id || dbTrack.id || `quran-${slug}-${surahId}-v${vIdx + 1}`,
+            id: dbTrack.id || dbTrack._id || `quran-${slug}-${surahId}-v${vIdx + 1}`,
+            title: displayTitle,
+            englishTitle: `${meta.englishName || `Surah ${meta.name}`} (Recitation ${vIdx + 1})`,
+            artist: reciter.name,
+            album: dbTrack.album || 'القرآن الكريم',
+            audioUrl: localDl?.localAudioUri || dbTrack.audioUrl || directAudioUrl,
+            localAudioUri: localDl?.localAudioUri || dbTrack.localAudioUri || null,
+            isDownloaded: Boolean(localDl?.isDownloaded || dbTrack.isDownloaded),
+            cover: dbTrack.cover || dbTrack.coverUrl || reciterCover,
+            coverUrl: dbTrack.coverUrl || dbTrack.cover || reciterCover,
+            duration: dbTrack.duration || localDl?.duration || estimatedDuration,
+            verses: meta.verses || 0,
+            isQuran: true,
+            genre: 'Quran',
+            surahNumber: surahId,
+            _surahNum: surahId,
+            recitationVariation: vIdx + 1
+          });
+        });
+      }
     });
+
+    // Append custom ayahs and clips for this reciter cleanly at the appropriate location
+    if (customAyahsAndClips.length > 0) {
+      const sortedClips = sortQuranTracks(customAyahsAndClips);
+      sortedClips.forEach((clip, cIdx) => {
+        catalog.push({
+          ...clip,
+          _id: clip._id || clip.id || `quran-${slug}-clip-${cIdx}`,
+          id: clip.id || clip._id || `quran-${slug}-clip-${cIdx}`,
+          title: cleanQuranTrackTitle(clip.title || ''),
+          artist: reciter.name,
+          isQuran: true,
+          isAyah: true,
+          genre: 'Quran'
+        });
+      });
+    }
+
+    return catalog;
   }
 
-  // Custom reciter without CDN server (e.g. Abdulrahman Mosad): return their DB tracks
-  const normSelected = normalizeArabicText(reciterName);
-  const matched = (quranTracks || []).filter(t => {
-    const rName = normalizeArabicText(getQuranReciterName(t));
-    return rName === normSelected || rName.includes(normSelected) || normSelected.includes(rName);
-  });
-
-  return matched.sort((a, b) => getSurahNumber(a) - getSurahNumber(b));
+  // Custom reciter without CDN server (e.g. Abdulrahman Mosad): return their DB tracks sorted
+  return sortQuranTracks(reciterDbTracks);
 }
 
 /**

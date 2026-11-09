@@ -18,9 +18,9 @@ const axios = require('axios');
 const memoryStreamCache = new Map();
 const STREAM_CACHE_TTL = 3 * 3600 * 1000;
 
-// Circuit breaker for YouTube direct datacenter block
+// Circuit breaker configuration (softened so temporary errors do not block other tracks)
 let ytDirectBlockedUntil = 0;
-const BLOCK_COOLDOWN_MS = 60 * 1000; // 60 seconds cooldown when IP block is detected
+const BLOCK_COOLDOWN_MS = 3 * 1000;
 
 // Candidate Invidious & Piped public instances with adaptive health ranking
 const INSTANCE_POOL = [
@@ -60,21 +60,41 @@ function checkMemoryCache(videoId) {
   if (!videoId) return null;
   const cached = memoryStreamCache.get(videoId);
   if (cached && Date.now() < cached.expireAt) {
+    if (cached.url) {
+      const expMatch = cached.url.match(/[?&]expire=([0-9]+)/);
+      if (expMatch && Number(expMatch[1]) * 1000 <= Date.now()) {
+        memoryStreamCache.delete(videoId);
+        return null;
+      }
+    }
     return cached;
   }
   if (cached) memoryStreamCache.delete(videoId);
   return null;
 }
 
+function invalidateMemoryCache(videoId) {
+  if (!videoId) return;
+  memoryStreamCache.delete(videoId);
+}
+
 /**
- * Stores resolved stream in in-memory cache.
+ * Stores resolved stream in in-memory cache with proactive TTL based on expire timestamp.
  */
 function cacheStreamUrl(videoId, url, duration = null) {
   if (!videoId || !url) return;
+  let ttl = STREAM_CACHE_TTL;
+  const expMatch = url.match(/[?&]expire=([0-9]+)/);
+  if (expMatch && !isNaN(Number(expMatch[1]))) {
+    const remaining = Number(expMatch[1]) * 1000 - Date.now() - 300000;
+    if (remaining > 60000) {
+      ttl = Math.min(ttl, remaining);
+    }
+  }
   memoryStreamCache.set(videoId, {
     url,
     duration,
-    expireAt: Date.now() + STREAM_CACHE_TTL
+    expireAt: Date.now() + ttl
   });
 }
 
@@ -93,20 +113,20 @@ function isYouTubeDirectBlocked() {
 }
 
 /**
- * Attempt stream extraction via fast Invidious instance with strict 450ms timeout.
+ * Attempt stream extraction via fast Invidious instance with resilient timeout.
  */
 async function fetchInvidiousStream(instUrl, videoId, parentSignal) {
   const controller = new AbortController();
   const onParentAbort = () => controller.abort();
   if (parentSignal) parentSignal.addEventListener('abort', onParentAbort);
 
-  const timeoutId = setTimeout(() => controller.abort(), 450);
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
   try {
     const res = await axios.get(
       `${instUrl}/api/v1/videos/${encodeURIComponent(videoId)}?fields=adaptiveFormats,formatStreams,title,lengthSeconds`,
       {
         signal: controller.signal,
-        timeout: 450,
+        timeout: 2500,
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
       }
     );
@@ -138,18 +158,18 @@ async function fetchInvidiousStream(instUrl, videoId, parentSignal) {
 }
 
 /**
- * Attempt stream extraction via fast Piped instance with strict 450ms timeout.
+ * Attempt stream extraction via fast Piped instance with resilient timeout.
  */
 async function fetchPipedStream(instUrl, videoId, parentSignal) {
   const controller = new AbortController();
   const onParentAbort = () => controller.abort();
   if (parentSignal) parentSignal.addEventListener('abort', onParentAbort);
 
-  const timeoutId = setTimeout(() => controller.abort(), 450);
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
   try {
     const res = await axios.get(`${instUrl}/streams/${encodeURIComponent(videoId)}`, {
       signal: controller.signal,
-      timeout: 450,
+      timeout: 2500,
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
     });
     clearTimeout(timeoutId);
@@ -207,7 +227,7 @@ async function raceAlternativeInstances(videoId) {
   try {
     const raceResult = await Promise.race([
       ...requests,
-      new Promise(resolve => setTimeout(() => resolve(null), 500))
+      new Promise(resolve => setTimeout(() => resolve(null), 3500))
     ]);
     if (raceResult) return raceResult;
   } catch {}
@@ -231,14 +251,14 @@ async function raceAlternativeInstances(videoId) {
  * 4. Fast Parallel Alternative Instance Race (< 500ms)
  * 5. Client Extraction Directive (Instructs client app to resolve locally on residential IP)
  */
-async function resolveBulletproofAudioStream({ videoId, uploadsDir, primaryExtractor }) {
+async function resolveBulletproofAudioStream({ videoId, uploadsDir, primaryExtractor, bypassCache = false }) {
   if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
     return null;
   }
 
   // Tier 0: Disk Cache (0ms)
   const localDiskPath = checkDiskAudioCache(videoId, uploadsDir);
-  if (localDiskPath) {
+  if (localDiskPath && !bypassCache) {
     return {
       success: true,
       url: localDiskPath,
@@ -249,26 +269,28 @@ async function resolveBulletproofAudioStream({ videoId, uploadsDir, primaryExtra
   }
 
   // Tier 1: In-Memory Stream Cache (0ms)
-  const memCached = checkMemoryCache(videoId);
-  if (memCached) {
-    return {
-      success: true,
-      url: memCached.url,
-      directUrl: memCached.url,
-      duration: memCached.duration,
-      source: 'memory-cache',
-      latencyMs: 0
-    };
+  if (!bypassCache) {
+    const memCached = checkMemoryCache(videoId);
+    if (memCached) {
+      return {
+        success: true,
+        url: memCached.url,
+        directUrl: memCached.url,
+        duration: memCached.duration,
+        source: 'memory-cache',
+        latencyMs: 0
+      };
+    }
   }
 
   const startTime = Date.now();
 
-  // Tier 2: Primary Extractor (if not blocked by circuit breaker)
-  if (!isYouTubeDirectBlocked() && typeof primaryExtractor === 'function') {
+  // Tier 2: Primary Extractor (Innertube / direct)
+  if (typeof primaryExtractor === 'function') {
     try {
       const primaryRes = await Promise.race([
         primaryExtractor(videoId),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000))
       ]);
       if (primaryRes && primaryRes.url) {
         cacheStreamUrl(videoId, primaryRes.url, primaryRes.duration);
@@ -282,7 +304,7 @@ async function resolveBulletproofAudioStream({ videoId, uploadsDir, primaryExtra
         };
       }
     } catch (e) {
-      markYouTubeDirectBlocked();
+      // Do not block future tracks when a single track times out or errors
     }
   }
 
@@ -319,6 +341,7 @@ module.exports = {
   resolveBulletproofAudioStream,
   checkDiskAudioCache,
   checkMemoryCache,
+  invalidateMemoryCache,
   cacheStreamUrl,
   markYouTubeDirectBlocked,
   isYouTubeDirectBlocked,

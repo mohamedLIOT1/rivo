@@ -5,9 +5,13 @@ import { getTrackMusicalData, checkHarmonicCompatibility } from '../utils/musicA
 import { getOfflineTrackAudioUrl } from '../utils/offlineStorage';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 import { isRadioTrack, isQuranContent } from '../utils/quranUtils';
+import { isPodcastContent, buildPodcastSeedQueue } from '../utils/podcastUtils';
+import { PODCAST_SHOWS_EPISODES } from '../data/podcastsData';
 import { API_BASE_URL } from '../config';
-import { recordListeningTick, onTrackStarted, onTrackEnded } from '../utils/listeningTracker';
+import { recordListeningTick, onTrackStarted, onTrackEnded, flushSessionToServer } from '../utils/listeningTracker';
 import { useUser } from './UserContext';
+import { useUI } from './UIContext';
+import { createPlaybackWatchdog, notifyStreamUnavailable } from '../utils/streamRecoveryHelper';
 import { getSmartTasteAndMoodTracks, getTrackDedupeKey, getPrimaryArtistNormalized } from '../utils/tasteAlgorithm';
 import { normalizeCoverUrl } from '../utils/coverUtils';
 import { resolveClientSideYouTubeStream, searchYouTubeClientSide, resolveDirectYouTubeAudio } from '../utils/clientStreamResolver';
@@ -74,22 +78,24 @@ function setTrackBlobCache(key, blobUrl) {
 }
 const CLIENT_CACHE_TTL = 3 * 3600 * 1000; // 3 hours
 
-export async function resolvePlayableAudioStream(track, signal = null, isPrefetch = false) {
+export async function resolvePlayableAudioStream(track, signal = null, isPrefetch = false, isRetryAlt = false) {
   if (!track) return null;
   const isVocalOnly = typeof window !== 'undefined' && localStorage.getItem('rivo_vocal_only') === 'true';
   const trackId = String(track.id || track._id || '');
   const cacheKey = isVocalOnly ? `${trackId}_vocal` : trackId;
-  if (cacheKey && clientStreamCache.has(cacheKey)) {
+  if (!isRetryAlt && cacheKey && clientStreamCache.has(cacheKey)) {
     const cached = clientStreamCache.get(cacheKey);
     if (Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
       return cached.data;
     } else {
       clientStreamCache.delete(cacheKey);
     }
+  } else if (isRetryAlt && cacheKey) {
+    clientStreamCache.delete(cacheKey);
   }
 
-  const result = await doResolvePlayableAudioStream(track, signal, isVocalOnly, isPrefetch);
-  if (cacheKey && result?.url) {
+  const result = await doResolvePlayableAudioStream(track, signal, isVocalOnly, isPrefetch, isRetryAlt);
+  if (!isRetryAlt && cacheKey && result?.url) {
     clientStreamCache.set(cacheKey, { data: result, timestamp: Date.now() });
     try {
       if (typeof window !== 'undefined' && result.url.startsWith('http')) {
@@ -132,10 +138,10 @@ async function _skip_rest(track, signal) {
 }
 
 // ── Direct Audio Stream Resolver (HTML5 <audio> & Web Audio API) ──
-async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false, isPrefetch = false) {
+async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false, isPrefetch = false, isRetryAlt = false) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
-  let targetUrl = track.resolvedAudioUrl || track.audioUrl || '';
+  let targetUrl = isRetryAlt ? '' : (track.resolvedAudioUrl || track.audioUrl || (track.youtubeId ? `https://www.youtube.com/watch?v=${track.youtubeId}` : ''));
 
   // Vocal-Only Mode: check and stream isolated vocal stem
   const isQuran = isQuranContent(track);
@@ -309,7 +315,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   }
 
   // 2c. Direct HTTP audio stream URL (e.g. from Jam host or pre-resolved stream)
-  if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes('youtube.com/watch') && !targetUrl.includes('youtu.be/') && !targetUrl.includes('googlevideo.com')) {
+  if (!isRetryAlt && targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) && !targetUrl.includes('youtube.com/watch') && !targetUrl.includes('youtu.be/') && !targetUrl.includes('googlevideo.com') && !targetUrl.includes('/api/tracks/stream-proxy')) {
     return {
       url: targetUrl,
       duration: sanitizeDuration(track.duration, 210),
@@ -351,7 +357,7 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   }
 
   // 4. If URL is already a direct stream proxy
-  if (targetUrl && (targetUrl.includes('/api/tracks/stream-proxy') || targetUrl.includes('/api/proxy-audio'))) {
+  if (!isRetryAlt && targetUrl && (targetUrl.includes('/api/tracks/stream-proxy') || targetUrl.includes('/api/proxy-audio'))) {
     const fullUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : targetUrl;
     return {
       url: fullUrl,
@@ -365,12 +371,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
 
-  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (with fast 7s timeout and instant fallback)
+  // 5. Direct backend audio stream endpoint: /api/tracks/:id/stream (responsive 4.5s timeout)
   let backendStreamResult = null;
   const backendController = new AbortController();
   const backendTimeoutId = setTimeout(() => {
     try { backendController.abort(); } catch {}
-  }, 7000);
+  }, 4500);
 
   const onParentAbort = () => {
     clearTimeout(backendTimeoutId);
@@ -385,7 +391,8 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
   }
 
   try {
-    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}`, { signal: backendController.signal });
+    const retryParam = isRetryAlt ? '&retryAlt=1' : '';
+    const sRes = await fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}${retryParam}`, { signal: backendController.signal });
     clearTimeout(backendTimeoutId);
     if (signal && onParentAbort) signal.removeEventListener('abort', onParentAbort);
 
@@ -406,7 +413,6 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     clearTimeout(backendTimeoutId);
     if (signal && onParentAbort) signal.removeEventListener('abort', onParentAbort);
     if (signal?.aborted) return null;
-    // Backend timed out (>3.5s) or failed - immediately fall through to instant direct client-side stream resolution
   }
 
   if (backendStreamResult?.url) {
@@ -432,12 +438,12 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     }
   }
 
-  // 6. Direct backend resolve-stream endpoint: /api/tracks/resolve-stream?stream=true (with fast 7s timeout)
-  if (!signal?.aborted) {
+  // 6. Direct backend resolve-stream endpoint: only attempted if primary didn't time out (bounded to 2s to eliminate double 7s waterfall)
+  if (!signal?.aborted && !backendController.signal.aborted) {
     const resolveController = new AbortController();
     const resolveTimeoutId = setTimeout(() => {
       try { resolveController.abort(); } catch {}
-    }, 7000);
+    }, 2000);
     const onResolveParentAbort = () => {
       clearTimeout(resolveTimeoutId);
       try { resolveController.abort(); } catch {}
@@ -447,7 +453,8 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
     }
 
     try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}`, { signal: resolveController.signal });
+      const retryParam = isRetryAlt ? '&retryAlt=1' : '';
+      const res = await fetch(`${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}${retryParam}`, { signal: resolveController.signal });
       clearTimeout(resolveTimeoutId);
       if (signal && onResolveParentAbort) signal.removeEventListener('abort', onResolveParentAbort);
 
@@ -492,6 +499,15 @@ async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = 
 export function AudioProvider({ children, tracks, setTracks }) {
   const userCtx = useUser();
   const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx || {};
+  const uiCtx = useUI?.() || {};
+  const showToast = uiCtx?.showToast;
+  const triggerToast = useCallback((msg) => {
+    if (typeof showToast === 'function') {
+      showToast(msg);
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('rivo:toast', { detail: msg }));
+    }
+  }, [showToast]);
 
     const [currentTrack, setCurrentTrack] = useState(() => {
     try {
@@ -801,6 +817,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           } catch (e) {}
         }
         const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        flushSessionToServer(false);
         if (token && navigator.sendBeacon) {
           const payload = JSON.stringify({ track: null, isPlaying: false, currentTime: 0 });
           const blob = new Blob([payload], { type: 'application/json' });
@@ -1051,6 +1068,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
     };
 
     const attachDeckListeners = (deck) => {
+      // Zero-position playback stall watchdog (triggers after 4.5s if stuck at 0:00)
+      const zeroPosWatchdog = createPlaybackWatchdog({
+        getAudio: () => deck,
+        isPlayingRef,
+        shouldPlayRef,
+        onStall: () => triggerRecovery('stall_at_zero'),
+        timeoutMs: 4500
+      });
+
       const handleTimeUpdate = () => {
         // Only active primary deck triggers UI and scheduling
         if (deck !== audioRef.current) return;
@@ -1061,6 +1087,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (!deck || isNaN(deck.currentTime)) return;
         if (deck.currentTime > 0) {
           consecutiveErrorsRef.current = 0;
+          zeroPosWatchdog.clear();
         }
 
         if (stallRecoveryTimerRef.current) {
@@ -1124,7 +1151,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           // ── RIVO DJ MIX MODE Lookahead check & Dual-Deck transition ──
           if (isMixModeRef.current && isPlayingRef.current && !isTransitionRunningRef.current && !isChangingTrackRef.current) {
             const curTrack = currentTrackRef.current;
-            if (isQuranContent(curTrack)) return; // 📿 Holy Quran Safeguard: Never crossfade or mix Quran
+            if (isQuranContent(curTrack) || isPodcastContent(curTrack)) return; // 📿 Holy Quran Safeguard: Never crossfade or mix Quran
             const q = currentQueueRef.current;
             const curIdx = currentQueueIndexRef.current;
             if (q && q.length > 1 && curIdx >= 0) {
@@ -1132,7 +1159,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
               if (!isLast || repeatModeRef.current !== 'off') {
                 const nextIdx = (curIdx + 1) % q.length;
                 const nextTrack = q[nextIdx];
-                if (isQuranContent(nextTrack)) return; // 📿 Holy Quran Safeguard: Never mix into Quran
+                if (isQuranContent(nextTrack) || isPodcastContent(nextTrack)) return; // 📿 Holy Quran Safeguard: Never mix into Quran
                 const curId = String(curTrack?.id || curTrack?._id || '');
                 const nextId = String(nextTrack?.id || nextTrack?._id || '');
 
@@ -1300,9 +1327,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
           setIsPlaying(false);
           isPlayingRef.current = false;
           isContinuousPlaybackRef.current = false;
-          if (typeof showToast === 'function') {
-            showToast('Playback stopped by sleep timer (End of Track)');
-          }
+          triggerToast('Playback stopped by sleep timer (End of Track)');
           return;
         }
 
@@ -1328,6 +1353,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isContinuousPlaybackRef.current = false;
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
+        zeroPosWatchdog.clear();
         if (stallRecoveryTimerRef.current) {
           clearTimeout(stallRecoveryTimerRef.current);
           stallRecoveryTimerRef.current = null;
@@ -1353,6 +1379,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (deck !== audioRef.current) return;
         setIsLoadingTrack(false);
         isLoadingTrackRef.current = false;
+        if (deck.currentTime === 0 && (isPlayingRef.current || shouldPlayRef.current)) {
+          zeroPosWatchdog.start();
+        }
       };
 
       const handleLoadedData = () => {
@@ -1360,66 +1389,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if ((isPlayingRef.current || shouldPlayRef.current) && deck.paused) {
           resumeAudioContext();
           deck.play().catch(() => {});
+          zeroPosWatchdog.start();
         }
       };
 
-      const handleStalledOrWaiting = () => {
-        if (deck !== audioRef.current) return;
-        if (!isPlayingRef.current || isChangingTrackRef.current) return;
-
-        // Show buffering indicator whenever stalled or waiting for stream chunks
-        setIsLoadingTrack(true);
-        isLoadingTrackRef.current = true;
-
-        if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
-        // Stream watchdog: If audio is waiting/buffering for > 5 seconds, auto-refresh stream URL and retry once seamlessly
-        stallRecoveryTimerRef.current = setTimeout(async () => {
-          if (!isPlayingRef.current || isChangingTrackRef.current) return;
-          if (deck !== audioRef.current) return;
-          const cur = currentTrackRef.current;
-          if (!cur) return;
-          const curId = String(cur.id || cur._id || '');
-
-          if (!cur._watchdogRetryDone) {
-            cur._watchdogRetryDone = true;
-            console.warn('[AudioContext] Stream buffering >5s, refreshing stream URL for:', cur.title);
-            if (curId) clientStreamCache.delete(curId);
-            const resumePos = deck.currentTime || 0;
-            try {
-              const res = await doResolvePlayableAudioStream(cur, null, false, false);
-              if (res?.url && deck === audioRef.current && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === curId) {
-                const refreshedUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
-                deck.src = refreshedUrl;
-                try { deck.currentTime = resumePos; } catch {}
-                resumeAudioContext();
-                deck.play().catch(() => {});
-                return;
-              }
-            } catch (err) {
-              console.warn('[AudioContext] Watchdog stream refresh failed:', err?.message);
-            }
-          }
-
-          if (deck) {
-            resumeAudioContext();
-            deck.play().catch(() => {
-              // Never auto-advance or skip track while buffering!
-              // Keep loading state until stream packets arrive and playback resumes naturally
-            });
-          }
-        }, 5000);
-      };
-
-      const handleError = () => {
+      const triggerRecovery = async (reason = 'audio_error') => {
         if (deck !== audioRef.current) return;
         deck.crossOrigin = null;
+        zeroPosWatchdog.clear();
         if (isChangingTrackRef.current) return;
         if (!isPlayingRef.current && !shouldPlayRef.current) return;
         const cur = currentTrackRef.current;
+        if (!cur) return;
+        const curId = String(cur.id || cur._id || '');
 
         // Live radio auto-reconnect & fallback mirror
-        if (cur && (cur.isLive || cur.isRadio || isRadioTrack(cur))) {
-          const radioTrackId = String(cur.id || cur._id || '');
+        if (cur.isLive || cur.isRadio || isRadioTrack(cur)) {
+          const radioTrackId = curId;
           setTimeout(() => {
             const latest = currentTrackRef.current;
             if (!latest || String(latest.id || latest._id || '') !== radioTrackId) return;
@@ -1438,49 +1424,105 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setIsLoadingTrack(true);
         isLoadingTrackRef.current = true;
 
-        if (cur && (cur.title || cur.artist) && !cur._retryDone) {
-          cur._retryDone = true;
-          const curId = String(cur.id || cur._id || '');
-          if (curId) clientStreamCache.delete(curId);
-          console.warn('[AudioContext] Playback error encountered, attempting fresh stream recovery for:', cur.title);
-          const resumePos = deck.currentTime || 0;
-
-          doResolvePlayableAudioStream(cur, null, false, false)
-            .then(res => {
-              if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
-              const latestCur = currentTrackRef.current;
-              if (latestCur && String(latestCur.id || latestCur._id) === curId && res?.url && deck === audioRef.current) {
-                stopYouTube();
-                const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
-                deck.src = fullUrl;
-                try { deck.currentTime = resumePos; } catch {}
-                resumeAudioContext();
-                deck.play().catch(() => {});
-              } else {
-                // Recovery did not yield a playable stream - cleanly stop loading without auto-advancing track
-                setIsLoadingTrack(false);
-                isLoadingTrackRef.current = false;
-                setIsPlaying(false);
-                isPlayingRef.current = false;
-                shouldPlayRef.current = false;
-              }
-            })
-            .catch(() => {
-              // Recovery failed - cleanly stop loading without auto-advancing track
-              setIsLoadingTrack(false);
-              isLoadingTrackRef.current = false;
-              setIsPlaying(false);
-              isPlayingRef.current = false;
-              shouldPlayRef.current = false;
-            });
-        } else {
-          // Retry was already attempted or no valid track info - cleanly stop loading without auto-advancing track
+        if (cur._recoveryDone) {
+          console.warn(`[AudioContext] Stream recovery exhausted for "${cur.title}", gracefully advancing...`);
           setIsLoadingTrack(false);
           isLoadingTrackRef.current = false;
           setIsPlaying(false);
           isPlayingRef.current = false;
           shouldPlayRef.current = false;
+          try { deck.pause(); } catch {}
+
+          notifyStreamUnavailable(triggerToast, cur.title);
+
+          consecutiveErrorsRef.current += 1;
+          if (consecutiveErrorsRef.current >= 3) {
+            if (typeof triggerToast === 'function') {
+              triggerToast('Playback stopped after consecutive errors. Stream proxy or cookies required.');
+            }
+            return;
+          }
+
+          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+          errorAdvanceTimerRef.current = setTimeout(() => {
+            if (playNextTrackRef.current && !isChangingTrackRef.current) {
+              playNextTrackRef.current(true);
+            }
+          }, 1500);
+          return;
         }
+
+        cur._recoveryDone = true;
+        cur._retryDone = true;
+        cur._watchdogRetryDone = true;
+
+        if (curId) clientStreamCache.delete(curId);
+        console.warn(`[AudioContext] Playback issue (${reason}) for "${cur.title}", attempting alternative stream recovery...`);
+        const resumePos = deck.currentTime || 0;
+
+        try {
+          const res = await doResolvePlayableAudioStream(cur, null, false, false, true /* isRetryAlt */);
+          if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
+          const latestCur = currentTrackRef.current;
+          if (latestCur && String(latestCur.id || latestCur._id) === curId && res?.url && deck === audioRef.current) {
+            stopYouTube();
+            const refreshedUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
+            deck.src = refreshedUrl;
+            try { deck.currentTime = resumePos; } catch {}
+            resumeAudioContext();
+            deck.play().catch(() => {});
+            zeroPosWatchdog.start();
+            return;
+          }
+        } catch (err) {
+          console.warn('[AudioContext] Stream recovery exception:', err?.message);
+        }
+
+        // Recovery did not yield a playable stream - cleanly advance/stop and toast
+        if (deck === audioRef.current && String(currentTrackRef.current?.id || currentTrackRef.current?._id) === curId) {
+          setIsLoadingTrack(false);
+          isLoadingTrackRef.current = false;
+          setIsPlaying(false);
+          isPlayingRef.current = false;
+          shouldPlayRef.current = false;
+          try { deck.pause(); } catch {}
+
+          notifyStreamUnavailable(triggerToast, cur.title);
+
+          consecutiveErrorsRef.current += 1;
+          if (consecutiveErrorsRef.current >= 3) {
+            if (typeof triggerToast === 'function') {
+              triggerToast('Playback stopped after consecutive errors. Stream proxy or cookies required.');
+            }
+            return;
+          }
+
+          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+          errorAdvanceTimerRef.current = setTimeout(() => {
+            if (playNextTrackRef.current && !isChangingTrackRef.current) {
+              playNextTrackRef.current(true);
+            }
+          }, 1500);
+        }
+      };
+
+      const handleStalledOrWaiting = () => {
+        if (deck !== audioRef.current) return;
+        if (!isPlayingRef.current || isChangingTrackRef.current) return;
+
+        setIsLoadingTrack(true);
+        isLoadingTrackRef.current = true;
+
+        if (stallRecoveryTimerRef.current) clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = setTimeout(() => {
+          if (!isPlayingRef.current || isChangingTrackRef.current) return;
+          if (deck !== audioRef.current) return;
+          triggerRecovery('stalled_buffering');
+        }, 4500);
+      };
+
+      const handleError = () => {
+        triggerRecovery('audio_error');
       };
 
       deck.addEventListener('timeupdate', handleTimeUpdate);
@@ -1496,6 +1538,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       deck.addEventListener('error', handleError);
 
       return () => {
+        zeroPosWatchdog.clear();
         deck.removeEventListener('timeupdate', handleTimeUpdate);
         deck.removeEventListener('loadedmetadata', handleLoadedMetadata);
         deck.removeEventListener('loadeddata', handleLoadedData);
@@ -1591,17 +1634,45 @@ export function AudioProvider({ children, tracks, setTracks }) {
     if (audioRef.current) audioRef.current.volume = val;
   }, []);
 
-  // ── Real Listening Activity Tracker (Ticks accurate seconds when music is playing) ──
+  // ── Real Listening Activity Tracker (Ticks accurate seconds with wall-clock delta & background tab resilience) ──
+  const lastListeningTickRef = useRef(Date.now());
+  const lastListeningPosRef = useRef(0);
+
   useEffect(() => {
-    if (!isPlaying || !currentTrack) return;
+    if (!isPlaying || !currentTrack) {
+      flushSessionToServer(false);
+      return;
+    }
+
+    lastListeningTickRef.current = Date.now();
+    lastListeningPosRef.current = audioRef.current?.currentTime || 0;
 
     const ticker = setInterval(() => {
-      if (audioRef.current && !audioRef.current.paused && !isNaN(audioRef.current.currentTime) && audioRef.current.currentTime > 0) {
-        recordListeningTick(currentTrack, 1);
+      const audio = audioRef.current;
+      if (audio && !audio.paused && !isNaN(audio.currentTime) && audio.currentTime > 0) {
+        const now = Date.now();
+        const wallClockDelta = Math.floor((now - lastListeningTickRef.current) / 1000);
+        if (wallClockDelta >= 1) {
+          lastListeningTickRef.current = now;
+          const posDelta = audio.currentTime - lastListeningPosRef.current;
+          lastListeningPosRef.current = audio.currentTime;
+          // Verify actual audio progress to protect against paused/stalled audio while accounting for throttled background timers
+          const effectiveElapsed = (posDelta > 0)
+            ? Math.min(wallClockDelta, Math.max(1, Math.round(posDelta + 0.5)))
+            : wallClockDelta;
+          const cappedElapsed = Math.max(1, Math.min(60, effectiveElapsed));
+          recordListeningTick(currentTrack, cappedElapsed);
+        }
+      } else {
+        lastListeningTickRef.current = Date.now();
+        if (audio) lastListeningPosRef.current = audio.currentTime || 0;
       }
     }, 1000);
 
-    return () => clearInterval(ticker);
+    return () => {
+      clearInterval(ticker);
+      flushSessionToServer(false);
+    };
   }, [isPlaying, currentTrack]);
 
   // ── Main track playback logic (100% Direct Audio API) ──
@@ -1648,6 +1719,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (err.name === 'AbortError') return;
       }
 
+      if (!streamResult?.url && !abortController.signal.aborted) {
+        console.warn('[AudioContext] Initial stream resolution failed, attempting alternative stream for:', currentTrack.title);
+        try {
+          streamResult = await resolvePlayableAudioStream(currentTrack, abortController.signal, false, true /* isRetryAlt */);
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+        }
+      }
+
       if (isEffectCancelled || effectSeq !== playRequestSeqRef.current || String(currentTrackRef.current?.id || currentTrackRef.current?._id) !== newId) return;
 
       if (!streamResult?.url) {
@@ -1659,25 +1739,23 @@ export function AudioProvider({ children, tracks, setTracks }) {
         isPlayingRef.current = false;
         shouldPlayRef.current = false;
 
-        const isContinuous = isContinuousPlaybackRef.current;
-        // ONLY auto-advance if this was part of continuous background playback when previous track ended naturally
-        if (isContinuous && consecutiveErrorsRef.current < 2) {
-          consecutiveErrorsRef.current += 1;
-          if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
-          errorAdvanceTimerRef.current = setTimeout(() => {
-            if (playNextTrackRef.current && !isChangingTrackRef.current) {
-              playNextTrackRef.current(true);
-            }
-          }, 1500);
-        } else {
-          // Manual user play or consecutive limit reached: NEVER auto-advance!
-          isContinuousPlaybackRef.current = false;
-          consecutiveErrorsRef.current = 0;
-          if (errorAdvanceTimerRef.current) {
-            clearTimeout(errorAdvanceTimerRef.current);
-            errorAdvanceTimerRef.current = null;
+        notifyStreamUnavailable(triggerToast, currentTrack.title);
+
+        consecutiveErrorsRef.current += 1;
+        if (consecutiveErrorsRef.current >= 3) {
+          if (typeof triggerToast === 'function') {
+            triggerToast('Playback stopped after consecutive errors. Stream proxy or cookies required.');
           }
+          return;
         }
+
+        if (errorAdvanceTimerRef.current) clearTimeout(errorAdvanceTimerRef.current);
+        errorAdvanceTimerRef.current = setTimeout(() => {
+          if (playNextTrackRef.current && !isChangingTrackRef.current) {
+            playNextTrackRef.current(true);
+          }
+        }, 1500);
+
         const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
         if (token) {
           fetch(`${API_BASE_URL}/api/users/listening-activity`, {
@@ -1916,11 +1994,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
       // Windows Desktop Native App Tray & Discord RPC Bridge (.exe)
       if (typeof window !== 'undefined' && window.chrome?.webview?.postMessage) {
+        const cleanAlbum = (currentTrack.album || '').trim();
+        const isRealAlbum = cleanAlbum && !/youtube|single|none|unknown|rivo|sound\s*cloud/i.test(cleanAlbum);
         window.chrome.webview.postMessage(JSON.stringify({
           action: isPlaying ? 'PLAY' : 'PAUSE',
           title: currentTrack.title || 'Rivo',
           artist: currentTrack.artist || 'Rivo Music',
-          album: currentTrack.album || 'Rivo',
+          album: isRealAlbum ? cleanAlbum : '',
           artwork: coverSrc,
           currentTime: safeTime,
           duration: safeDuration
@@ -2272,11 +2352,42 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
 
-    let trackToPlay = { ...track };
+    let trackToPlay = { ...track, _recoveryDone: false, _retryDone: false, _watchdogRetryDone: false };
+    const targetId = String(trackToPlay.id || trackToPlay._id || '');
 
-    // ── STRICT QUEUE ISOLATION (Quran vs Music) & RELEVANT BATCHING ──
+    // Record played track in session cooldown / history so recommendations never repeat it
+    if (targetId) playedSmartSongIdsRef.current.add(targetId);
+    const targetKey = getTrackDedupeKey(trackToPlay);
+    if (targetKey) playedSmartSongIdsRef.current.add(targetKey);
+    if (playedSmartSongIdsRef.current.size > 150) {
+      const arr = Array.from(playedSmartSongIdsRef.current);
+      playedSmartSongIdsRef.current = new Set(arr.slice(-80));
+    }
+
+    // ── STRICT QUEUE ISOLATION (Quran vs Music vs Podcast vs Radio) & RELEVANT BATCHING ──
     const isTargetRadio = isRadioTrack(trackToPlay);
     const isTargetQuran = !isTargetRadio && isQuranContent(trackToPlay);
+    const isTargetPodcast = !isTargetRadio && !isTargetQuran && isPodcastContent(trackToPlay);
+    const matchTargetType = (t) => {
+      if (isTargetRadio) return isRadioTrack(t);
+      if (isTargetQuran) return isQuranContent(t);
+      if (isTargetPodcast) return isPodcastContent(t);
+      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+    };
+
+    const isExplicitPlaylist = Boolean(
+      newQueue &&
+      Array.isArray(newQueue) &&
+      newQueue.length > 1 &&
+      newQueue !== currentQueueRef.current
+    );
+
+    const isQueueNavigation = Boolean(
+      queueIndex !== null &&
+      queueIndex !== undefined &&
+      (newQueue === currentQueueRef.current || !newQueue)
+    );
+
     let resolvedQueue = currentQueueRef.current;
 
     if (isTargetRadio) {
@@ -2286,47 +2397,82 @@ export function AudioProvider({ children, tracks, setTracks }) {
       resolvedQueue = radioPool.length > 0 ? radioPool : [trackToPlay];
       currentQueueRef.current = resolvedQueue;
       setCurrentQueue(resolvedQueue);
-    } else if (newQueue?.length > 0) {
-      if (newQueue === currentQueueRef.current) {
-        resolvedQueue = currentQueueRef.current;
+      isSmartMoodQueueRef.current = false;
+    } else if (isTargetPodcast) {
+      const podcastPool = (tracksRef.current.filter(t => isPodcastContent(t)).length > 0)
+        ? tracksRef.current.filter(t => isPodcastContent(t))
+        : PODCAST_SHOWS_EPISODES;
+      resolvedQueue = buildPodcastSeedQueue(trackToPlay, podcastPool, 20);
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
+      isSmartMoodQueueRef.current = false;
+    } else if (isTargetQuran) {
+      if (isExplicitPlaylist) {
+        const sanitized = newQueue.filter(matchTargetType);
+        resolvedQueue = sanitized.length > 0 ? sanitized : [trackToPlay];
       } else {
-        const sanitized = newQueue.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        const pool = sanitized.length > 0 ? sanitized : tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        const targetId = String(trackToPlay.id || trackToPlay._id || '');
+        const pool = tracksRef.current.filter(matchTargetType);
         const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
-        if (sanitized.length === 1 && !isTargetRadio && !isTargetQuran) {
-          const allPool = tracksRef.current.filter(t => !isQuranContent(t));
-          let followed = [];
-          try {
-            const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
-            if (raw) followed = JSON.parse(raw);
-          } catch {}
-          const smartUpcoming = getSmartTasteAndMoodTracks({
-            allTracks: allPool,
-            currentUser: currentUserRef.current,
-            followedArtists: followed,
-            likedTrackIds: likedTrackIds || [],
-            currentTrack: trackToPlay,
-            limit: 20,
-            maxPerArtist: 2,
-          });
-          resolvedQueue = [trackToPlay, ...smartUpcoming];
-        } else if (pool.length <= 50) {
-          resolvedQueue = pool;
-        } else {
-          const startIdx = foundIdx >= 0 ? foundIdx : 0;
-          resolvedQueue = pool.slice(startIdx, startIdx + 20);
-        }
-        if (resolvedQueue.length === 0) resolvedQueue = [trackToPlay];
-        currentQueueRef.current = resolvedQueue;
-        setCurrentQueue(resolvedQueue);
+        const startIdx = foundIdx >= 0 ? foundIdx : 0;
+        resolvedQueue = pool.length > 0 ? pool.slice(startIdx, startIdx + 30) : [trackToPlay];
       }
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
+      isSmartMoodQueueRef.current = false;
+    } else if (isExplicitPlaylist) {
+      // User explicitly launched an album, saved playlist, or custom queue
+      const sanitized = newQueue.filter(matchTargetType);
+      let pool = sanitized.length > 0 ? sanitized : tracksRef.current.filter(matchTargetType);
+      const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
+      resolvedQueue = pool.length <= 50 ? pool : pool.slice(Math.max(0, foundIdx), Math.max(0, foundIdx) + 30);
+      if (resolvedQueue.length === 0) resolvedQueue = [trackToPlay];
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
+      isSmartMoodQueueRef.current = Boolean(isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue);
+    } else if (isQueueNavigation) {
+      // User tapped a specific row inside the existing playback queue
+      resolvedQueue = currentQueueRef.current;
+    } else {
+      // DIRECT TRACK SELECTION (from search results, recommendations, home screen, or single track tap)
+      // Even if trackToPlay was already in curQ, NEVER freeze queue: generate 20 fresh dynamic upcoming suggestions!
+      const pool = tracksRef.current.filter(matchTargetType);
+      let followed = [];
+      try {
+        const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+        if (raw) followed = JSON.parse(raw);
+      } catch {}
+
+      const excludeSet = new Set(playedSmartSongIdsRef.current);
+      if (targetKey) excludeSet.add(targetKey);
+      if (targetId) excludeSet.add(targetId);
+
+      const smartUpcoming = getSmartTasteAndMoodTracks({
+        allTracks: pool,
+        currentUser: currentUserRef.current,
+        followedArtists: followed,
+        likedTrackIds: likedTrackIds || [],
+        excludeTrackIds: excludeSet,
+        currentTrack: trackToPlay,
+        limit: 20,
+        maxPerArtist: 2,
+      });
+
+      const taggedUpcoming = (smartUpcoming || []).map(t => ({
+        ...t,
+        isSmartMoodQueue: true,
+        isAiSuggestion: true,
+      }));
+
+      resolvedQueue = [trackToPlay, ...taggedUpcoming];
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
+      isSmartMoodQueueRef.current = true;
     }
 
     // Strict Mix Mode Isolation: Only enable dual-deck mix transitions when playing from a designated Mix Playlist (never for Holy Quran)
     const isExplicitSingle = Boolean(Array.isArray(newQueue) && newQueue.length === 1 && !trackToPlay?.isMix && !newQueue._isMix && !newQueue.isMix);
     const isMixDetected = Boolean(
-      !isTargetQuran && (
+      !isTargetQuran && !isTargetPodcast && (
         (newQueue && (newQueue._isMix || newQueue.isMix || (newQueue.name && String(newQueue.name).toUpperCase().includes('MIX')) || (newQueue._transitions && Object.keys(newQueue._transitions).length > 0))) ||
         (trackToPlay && (trackToPlay.isMix || trackToPlay._isMix)) ||
         (isMixModeRef.current && !isExplicitSingle) ||
@@ -2371,61 +2517,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
     }
 
-    if (isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue) {
-      isSmartMoodQueueRef.current = true;
-    } else if (newQueue) {
-      isSmartMoodQueueRef.current = false;
-    } else {
-      const curQ = currentQueueRef.current;
-      const targetId = String(trackToPlay.id || trackToPlay._id || '');
-      const isTrackInCurQ = curQ.some(t => String(t.id || t._id) === targetId);
-
-      // If playing remotely or if track is absent from current queue, build relevant contextual queue (max 10 songs!)
-      if (!isTrackInCurQ) {
-        const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        let contextual = [];
-        if (trackToPlay.album && !isTargetQuran) {
-          contextual = pool.filter(t => t.album && t.album.toLowerCase().trim() === trackToPlay.album.toLowerCase().trim());
-        }
-        if (contextual.length <= 1 && !isTargetQuran) {
-          let followed = [];
-          try {
-            const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
-            if (raw) followed = JSON.parse(raw);
-          } catch {}
-          const smartUpcoming = getSmartTasteAndMoodTracks({
-            allTracks: pool,
-            currentUser: currentUserRef.current,
-            followedArtists: followed,
-            likedTrackIds: likedTrackIds || [],
-            currentTrack: trackToPlay,
-            limit: 20,
-            maxPerArtist: 2,
-          });
-          contextual = [trackToPlay, ...smartUpcoming];
-        }
-        if (contextual.length <= 1) {
-          const foundIdx = pool.findIndex(t => String(t.id || t._id) === targetId);
-          if (foundIdx >= 0) {
-            contextual = pool.slice(Math.max(0, foundIdx), Math.min(pool.length, foundIdx + 10));
-          } else {
-            contextual = [trackToPlay, ...pool.slice(0, 9)];
-          }
-        }
-        resolvedQueue = contextual.length > 0 ? contextual.slice(0, 10) : [trackToPlay];
-        currentQueueRef.current = resolvedQueue;
-        setCurrentQueue(resolvedQueue);
-      } else {
-        // Check if current queue is strictly composed of the same type
-        const curQMatchesType = curQ.length > 0 && curQ.every(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-        if (!curQMatchesType) {
-          const pool = tracksRef.current.filter(t => isTargetQuran ? isQuranContent(t) : !isQuranContent(t));
-          resolvedQueue = pool.length > 0 ? pool.slice(0, 10) : [trackToPlay];
-          setCurrentQueue(resolvedQueue);
-        }
-      }
-    }
-
     // If Shuffle mode is active, shuffle the upcoming queue ONLY when starting a fresh/different queue
     const isNewQueueDifferent = Boolean(newQueue && (newQueue !== currentQueueRef.current || resolvedQueue.length !== currentQueueRef.current.length));
     if (isShuffleRef.current && isNewQueueDifferent && resolvedQueue.length > 1) {
@@ -2438,7 +2529,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     // Set and track active queue index accurately (handles duplicate tracks in queue)
-    const targetId = String(trackToPlay.id || trackToPlay._id || '');
     const foundIdx = resolvedQueue.findIndex(t => String(t.id || t._id) === targetId);
     if (foundIdx >= 0) {
       currentQueueIndexRef.current = foundIdx;
@@ -2624,8 +2714,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
       playTrack(tracksToAdd[0], tracksToAdd, false, 0);
       return;
     }
-    const isCurQuran = isQuranContent(currentTrackRef.current);
-    const filteredTracks = tracksToAdd.filter(t => isQuranContent(t) === isCurQuran);
+    const isCurRadio = isRadioTrack(currentTrackRef.current);
+    const isCurQuran = !isCurRadio && isQuranContent(currentTrackRef.current);
+    const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(currentTrackRef.current);
+    const filteredTracks = tracksToAdd.filter(t => {
+      if (isCurRadio) return isRadioTrack(t);
+      if (isCurQuran) return isQuranContent(t);
+      if (isCurPodcast) return isPodcastContent(t);
+      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+    });
     if (filteredTracks.length === 0) return;
 
     setCurrentQueue(prev => {
@@ -2745,12 +2842,19 @@ export function AudioProvider({ children, tracks, setTracks }) {
       const nextMode = (!prev || prev === false) ? 'shuffle' : (prev === 'shuffle' || prev === true ? 'smart' : false);
       let curList = currentQueueRef.current;
       const curTrack = currentTrackRef.current;
-      const isCurQuran = isQuranContent(curTrack);
+      const isCurRadio = isRadioTrack(curTrack);
+      const isCurQuran = !isCurRadio && isQuranContent(curTrack);
+      const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(curTrack);
 
       // If curList is empty or only 1 item, ensure we populate from tracksRef so the queue NEVER empties or freezes
       if (!curList || curList.length <= 1) {
-        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-        curList = pool.length > 0 ? pool : (curList || []);
+        const pool = tracksRef.current.filter(t => {
+          if (isCurRadio) return isRadioTrack(t);
+          if (isCurQuran) return isQuranContent(t);
+          if (isCurPodcast) return isPodcastContent(t);
+          return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+        });
+        curList = pool.length > 0 ? pool : (isCurPodcast ? PODCAST_SHOWS_EPISODES : (curList || []));
       }
 
       const curId = String(curTrack?.id || curTrack?._id || '');
@@ -2890,11 +2994,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
       return;
     }
 
-    const isCurQuran = isQuranContent(currentTrackRef.current);
+    const isCurRadio = isRadioTrack(cur);
+    const isCurQuran = !isCurRadio && isQuranContent(cur);
+    const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
+
+    const matchQueueType = (t) => {
+      if (isCurRadio) return isRadioTrack(t);
+      if (isCurQuran) return isQuranContent(t);
+      if (isCurPodcast) return isPodcastContent(t);
+      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+    };
+
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
-    const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-    const pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)).length > 0 ? tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)) : typeIsolated);
+    const typeIsolated = rawQueue.filter(matchQueueType);
+    let pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(matchQueueType).length > 0 ? tracksRef.current.filter(matchQueueType) : typeIsolated);
+    if (isCurPodcast && pool.length === 0) pool = PODCAST_SHOWS_EPISODES;
     const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 
@@ -2907,10 +3022,46 @@ export function AudioProvider({ children, tracks, setTracks }) {
       curIdx = curId ? activeList.findIndex(t => String(t.id || t._id) === curId) : -1;
     }
 
-    // ── SMART MOOD / TASTE 10-TRACK QUEUE ROTATION ──
+    // ── STRICT PODCAST QUEUE ENGINE: Never recommend songs when playing podcasts! ──
+    if (isCurPodcast) {
+      if (curIdx >= 0 && curIdx < activeList.length - 1) {
+        const nextIdx = curIdx + 1;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+      const podcastPool = (tracksRef.current.filter(t => isPodcastContent(t)).length > 0)
+        ? tracksRef.current.filter(t => isPodcastContent(t))
+        : PODCAST_SHOWS_EPISODES;
+      const seedQ = buildPodcastSeedQueue(cur, podcastPool, 20);
+      const unplayed = seedQ.filter(t => String(t.id || t._id) !== curId);
+      if (unplayed.length > 0) {
+        const newQueue = cur ? [cur, ...unplayed] : unplayed;
+        currentQueueRef.current = newQueue;
+        setCurrentQueue(newQueue);
+        const nextIdx = cur ? 1 : 0;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(newQueue[nextIdx], newQueue, false, nextIdx, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+      if (activeList.length > 0) {
+        currentQueueIndexRef.current = 0;
+        setCurrentQueueIndex(0);
+        playTrack(activeList[0], activeList, false, 0, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+      return;
+    }
+
+    // ── SMART MOOD / TASTE QUEUE ROTATION ──
     const isSmartQueue = isSmartMoodQueueRef.current || activeList.some(t => t.isSmartMoodQueue);
     if (isSmartQueue) {
-      // 1. Advance to next track within the current 10-track set
+      // 1. Advance to next track within the current set
       if (curIdx >= 0 && curIdx < activeList.length - 1) {
         const nextIdx = curIdx + 1;
         currentQueueIndexRef.current = nextIdx;
@@ -2920,8 +3071,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
         return;
       }
 
-      // 2. All 10 tracks finished! Exclude played tracks and fetch 10 BRAND NEW tracks matching current mood & taste!
-      activeList.forEach(t => playedSmartSongIdsRef.current.add(String(t.id || t._id)));
+      // 2. All tracks finished! Exclude played tracks and fetch 20 BRAND NEW tracks matching current mood & taste!
+      activeList.forEach(t => {
+        const id = String(t.id || t._id || '');
+        if (id) playedSmartSongIdsRef.current.add(id);
+        const k = getTrackDedupeKey(t);
+        if (k) playedSmartSongIdsRef.current.add(k);
+      });
 
       let followed = [];
       try {
@@ -2930,7 +3086,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       } catch {}
 
       const allAvailable = tracksRef.current && tracksRef.current.length > 0 ? tracksRef.current : activeList;
-      let next10 = getSmartTasteAndMoodTracks({
+      let nextBatch = getSmartTasteAndMoodTracks({
         allTracks: allAvailable,
         currentUser: currentUserRef.current,
         followedArtists: followed,
@@ -2941,11 +3097,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
         maxPerArtist: 2,
       });
 
-      // If library runs out of unplayed tracks, reset history except current track and fetch again
-      if (!next10 || next10.length === 0) {
+      // If library runs out of unplayed tracks, retain recent exclusions and fetch again
+      if (!nextBatch || nextBatch.length === 0) {
         const curK = getTrackDedupeKey(currentTrackRef.current);
-        playedSmartSongIdsRef.current = new Set(curId ? (curK ? [curId, curK] : [curId]) : []);
-        next10 = getSmartTasteAndMoodTracks({
+        const curTId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+        const recentList = Array.from(playedSmartSongIdsRef.current).slice(-15);
+        playedSmartSongIdsRef.current = new Set([curTId, curK, ...recentList].filter(Boolean));
+        nextBatch = getSmartTasteAndMoodTracks({
           allTracks: allAvailable,
           currentUser: currentUserRef.current,
           followedArtists: followed,
@@ -2957,8 +3115,8 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
       }
 
-      if (next10 && next10.length > 0) {
-        const tagged = next10.map(t => ({ ...t, isSmartMoodQueue: true }));
+      if (nextBatch && nextBatch.length > 0) {
+        const tagged = nextBatch.map(t => ({ ...t, isSmartMoodQueue: true, isAiSuggestion: true }));
         const cur = currentTrackRef.current;
         let newQueue = cur ? [cur, ...tagged] : tagged;
         if (isShuffleRef.current && tagged.length > 1) {
@@ -2967,6 +3125,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         }
         currentQueueRef.current = newQueue;
         setCurrentQueue(newQueue);
+        isSmartMoodQueueRef.current = true;
         const nextIdx = cur ? 1 : 0;
         currentQueueIndexRef.current = nextIdx;
         setCurrentQueueIndex(nextIdx);
@@ -3042,8 +3201,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }
 
       if (nextIdx >= activeList.length) {
-        // Priority: If repeat queue is on, reshuffle and repeat THIS queue only!
-        if (repeatModeRef.current === 'all' || isRepeatRef.current) {
+        const isExplicitPlaylistQueue = !isSmartMoodQueueRef.current && !activeList.some(t => t.isSmartMoodQueue || t.isAiSuggestion);
+        // Priority: If repeat queue is on AND it is an explicit playlist, reshuffle and repeat THIS playlist only!
+        if ((repeatModeRef.current === 'all' || isRepeatRef.current) && isExplicitPlaylistQueue) {
           const reshuffled = shuffleArray(activeList);
           currentQueueRef.current = reshuffled;
           setCurrentQueue(reshuffled);
@@ -3053,39 +3213,62 @@ export function AudioProvider({ children, tracks, setTracks }) {
           return;
         }
 
-        // When repeat is off: Use AI recommendations to continue playback seamlessly!
-        (async () => {
-          try {
-            const fresh = await fetchSmartShuffleTracks(cur, activeList);
-            if (fresh && fresh.length > 0) {
-              const updatedQueue = [...currentQueueRef.current];
-              const newIdx = activeList.length;
-              currentQueueIndexRef.current = newIdx;
-              setCurrentQueueIndex(newIdx);
-              playTrack(fresh[0], updatedQueue, false, newIdx, false, isAutoAdvance);
-              return;
-            }
-          } catch (e) {
-            console.warn('[AI Shuffle Flow Error]', e);
-          }
+        // When repeat is off or for smart queue: Use diverse recommendations to continue playback seamlessly!
+        activeList.forEach(t => {
+          const id = String(t.id || t._id || '');
+          if (id) playedSmartSongIdsRef.current.add(id);
+          const k = getTrackDedupeKey(t);
+          if (k) playedSmartSongIdsRef.current.add(k);
+        });
 
-          // Fallback: pick matching tracks from tracksRef that aren't yet in activeList
-          const remainingPool = tracksRef.current.filter(t => 
-            !activeList.some(a => String(a.id || a._id) === String(t.id || t._id)) &&
-            (isCurQuran ? isQuranContent(t) : !isQuranContent(t))
-          );
-          if (remainingPool.length > 0) {
-            const randomPick = remainingPool[Math.floor(Math.random() * remainingPool.length)];
-            const updatedQueue = [...activeList, randomPick];
-            currentQueueRef.current = updatedQueue;
-            setCurrentQueue(updatedQueue);
-            const newIdx = activeList.length;
-            currentQueueIndexRef.current = newIdx;
-            setCurrentQueueIndex(newIdx);
-            playTrack(randomPick, updatedQueue, false, newIdx, false, isAutoAdvance);
-            return;
-          }
-        })();
+        let followed = [];
+        try {
+          const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
+          if (raw) followed = JSON.parse(raw);
+        } catch {}
+
+        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : (!isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t)));
+        let freshTracks = getSmartTasteAndMoodTracks({
+          allTracks: pool,
+          currentUser: currentUserRef.current,
+          followedArtists: followed,
+          likedTrackIds: likedTrackIds || [],
+          excludeTrackIds: playedSmartSongIdsRef.current,
+          limit: 20,
+          currentTrack: cur,
+          maxPerArtist: 2,
+        });
+
+        if (!freshTracks || freshTracks.length === 0) {
+          const curK = getTrackDedupeKey(cur);
+          const curTId = String(cur?.id || cur?._id || '');
+          const recentList = Array.from(playedSmartSongIdsRef.current).slice(-15);
+          playedSmartSongIdsRef.current = new Set([curTId, curK, ...recentList].filter(Boolean));
+          freshTracks = getSmartTasteAndMoodTracks({
+            allTracks: pool,
+            currentUser: currentUserRef.current,
+            followedArtists: followed,
+            likedTrackIds: likedTrackIds || [],
+            excludeTrackIds: playedSmartSongIdsRef.current,
+            limit: 20,
+            currentTrack: cur,
+            maxPerArtist: 2,
+          });
+        }
+
+        if (freshTracks && freshTracks.length > 0) {
+          const tagged = freshTracks.map(t => ({ ...t, isSmartMoodQueue: true, isAiSuggestion: true }));
+          const shuffled = shuffleArray(tagged);
+          const newQueue = cur ? [cur, ...shuffled] : shuffled;
+          currentQueueRef.current = newQueue;
+          setCurrentQueue(newQueue);
+          isSmartMoodQueueRef.current = true;
+          const nextNewIdx = cur ? 1 : 0;
+          currentQueueIndexRef.current = nextNewIdx;
+          setCurrentQueueIndex(nextNewIdx);
+          playTrack(newQueue[nextNewIdx], newQueue, false, nextNewIdx, true, isAutoAdvance);
+          return;
+        }
         return;
       }
       currentQueueIndexRef.current = nextIdx;
@@ -3112,9 +3295,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
       
       const normalTracks = activeList.filter(t => !t.isAiSuggestion && !t.isSmartShuffle);
       const isCurInNormal = normalTracks.some(t => String(t.id || t._id) === curId);
+      const isExplicitPlaylistQueue = !isSmartMoodQueueRef.current && !activeList.some(t => t.isSmartMoodQueue || t.isAiSuggestion);
 
-      // If repeatMode is 'all' (or legacy isRepeat) and user is in the playlist queue, loop strictly within the playlist queue!
-      if ((repeatModeRef.current === 'all' || isRepeatRef.current) && isCurInNormal && normalTracks.length > 0) {
+      // If repeatMode is 'all' (or legacy isRepeat) and user is in an explicit playlist queue, loop strictly within the playlist queue!
+      if ((repeatModeRef.current === 'all' || isRepeatRef.current) && isCurInNormal && normalTracks.length > 0 && isExplicitPlaylistQueue) {
         const normalWithIndices = [];
         activeList.forEach((t, i) => {
           if (!t.isAiSuggestion && !t.isSmartShuffle) {
@@ -3129,16 +3313,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
         setCurrentQueueIndex(nextIdx);
         playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
       } else if (idx >= activeList.length - 1) {
-        // Queue of 10 tracks finished! Exclude played songs and fetch 10 BRAND NEW tracks matching current taste & Quran boundary!
-        activeList.forEach(t => playedSmartSongIdsRef.current.add(String(t.id || t._id)));
+        // Queue finished! When repeatMode is OFF (or in smart queue), exclude played songs and fetch 20 BRAND NEW tracks matching current taste & Quran boundary!
+        activeList.forEach(t => {
+          const id = String(t.id || t._id || '');
+          if (id) playedSmartSongIdsRef.current.add(id);
+          const k = getTrackDedupeKey(t);
+          if (k) playedSmartSongIdsRef.current.add(k);
+        });
+
         let followed = [];
         try {
           const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
           if (raw) followed = JSON.parse(raw);
         } catch {}
 
-        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-        let next10 = getSmartTasteAndMoodTracks({
+        const pool = tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : (!isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t)));
+        let next20 = getSmartTasteAndMoodTracks({
           allTracks: pool,
           currentUser: currentUserRef.current,
           followedArtists: followed,
@@ -3149,10 +3339,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
           maxPerArtist: 2,
         });
 
-        if (!next10 || next10.length === 0) {
+        if (!next20 || next20.length === 0) {
           const curK = getTrackDedupeKey(currentTrackRef.current);
-          playedSmartSongIdsRef.current = new Set(curId ? (curK ? [curId, curK] : [curId]) : []);
-          next10 = getSmartTasteAndMoodTracks({
+          const curTId = String(currentTrackRef.current?.id || currentTrackRef.current?._id || '');
+          const recentList = Array.from(playedSmartSongIdsRef.current).slice(-15);
+          playedSmartSongIdsRef.current = new Set([curTId, curK, ...recentList].filter(Boolean));
+          next20 = getSmartTasteAndMoodTracks({
             allTracks: pool,
             currentUser: currentUserRef.current,
             followedArtists: followed,
@@ -3164,15 +3356,17 @@ export function AudioProvider({ children, tracks, setTracks }) {
           });
         }
 
-        if (next10 && next10.length > 0) {
+        if (next20 && next20.length > 0) {
+          const tagged = next20.map(t => ({ ...t, isSmartMoodQueue: true, isAiSuggestion: true }));
           const cur = currentTrackRef.current;
-          const newQueue = cur ? [cur, ...next10] : next10;
+          let newQueue = cur ? [cur, ...tagged] : tagged;
           currentQueueRef.current = newQueue;
           setCurrentQueue(newQueue);
+          isSmartMoodQueueRef.current = true;
           const nextIdx = cur ? 1 : 0;
           currentQueueIndexRef.current = nextIdx;
           setCurrentQueueIndex(nextIdx);
-          playTrack(newQueue[nextIdx], newQueue, false, nextIdx, false, isAutoAdvance);
+          playTrack(newQueue[nextIdx], newQueue, false, nextIdx, true, isAutoAdvance);
           return;
         }
       } else {
@@ -3246,11 +3440,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     // 2. Fallback: linear queue backwards
-    const isCurQuran = isQuranContent(currentTrackRef.current);
+    const isCurRadio = isRadioTrack(cur);
+    const isCurQuran = !isCurRadio && isQuranContent(cur);
+    const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
+
+    const matchPrevType = (t) => {
+      if (isCurRadio) return isRadioTrack(t);
+      if (isCurQuran) return isQuranContent(t);
+      if (isCurPodcast) return isPodcastContent(t);
+      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+    };
+
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;
-    const typeIsolated = rawQueue.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-    const pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)).length > 0 ? tracksRef.current.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t)) : typeIsolated);
+    const typeIsolated = rawQueue.filter(matchPrevType);
+    let pool = (typeIsolated.length > 1) ? typeIsolated : (tracksRef.current.filter(matchPrevType).length > 0 ? tracksRef.current.filter(matchPrevType) : typeIsolated);
+    if (isCurPodcast && pool.length === 0) pool = PODCAST_SHOWS_EPISODES;
     const activeList = isOfflineMode ? pool.filter(t => t.downloaded) : pool;
     if (!activeList.length) return;
 

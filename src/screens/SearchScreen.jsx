@@ -2,7 +2,7 @@ import { usePreferences, useTranslation } from '../context/PreferencesContext';
 import { BookOpen } from 'lucide-react';
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Search as SearchIcon, Play, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
+  Search as SearchIcon, Play, Pause, Heart, PlusCircle, X, Trash2, Sparkles, Disc, 
   Music, Mic, Headphones, Radio, Flame, Coffee, Zap, Compass, Waves, Loader2,
   User, Users, Edit2, MoreVertical
 } from 'lucide-react';
@@ -82,7 +82,7 @@ export default function SearchScreen({
   const { showMusic, isPureIslamicMode } = usePreferences();
   const currentTags = !showMusic ? ISLAMIC_TRENDING_TAGS : TRENDING_TAGS;
   const currentGenres = !showMusic ? ISLAMIC_GENRE_CATEGORIES : GENRE_CATEGORIES;
-  const { addToQueue } = useAudioPlayer();
+  const { currentTrack, isPlaying, addToQueue, isLoadingTrack, togglePlayPause } = useAudioPlayer();
   const [query, setQuery] = useState(initialQuery);
   const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [onlineResults, setOnlineResults] = useState([]);
@@ -1015,12 +1015,23 @@ export default function SearchScreen({
                               <button
                                 onClick={(e) => { 
                                   e.stopPropagation(); 
-                                  onSelectTrack(track, [track]); 
+                                  const isCur = String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id);
+                                  if (isCur && isPlaying) {
+                                    togglePlayPause?.();
+                                  } else {
+                                    onSelectTrack(track, [track]);
+                                  }
                                 }}
                                 className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn cursor-pointer"
-                                title="Play"
+                                title={String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isLoadingTrack ? "Loading..." : "Play"}
                               >
-                                <Play size={13} fill="currentColor" />
+                                {String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isLoadingTrack ? (
+                                  <Loader2 size={13} className="animate-spin text-[#0b1110]" />
+                                ) : String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isPlaying ? (
+                                  <Pause size={13} fill="currentColor" />
+                                ) : (
+                                  <Play size={13} fill="currentColor" />
+                                )}
                               </button>
                             </div>
                           </div>
@@ -1081,12 +1092,23 @@ export default function SearchScreen({
                           <button
                             onClick={(e) => { 
                               e.stopPropagation(); 
-                              handlePlayOnlineTrack(track); 
+                              const isCur = String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id);
+                              if (isCur && isPlaying) {
+                                togglePlayPause?.();
+                              } else {
+                                handlePlayOnlineTrack(track);
+                              }
                             }}
                             className="w-8 h-8 bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] brutal-border flex items-center justify-center brutal-btn shrink-0 cursor-pointer"
-                            title="Stream Now"
+                            title={String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isLoadingTrack ? "Loading..." : "Stream Now"}
                           >
-                            <Play size={13} fill="currentColor" />
+                            {String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isLoadingTrack ? (
+                              <Loader2 size={13} className="animate-spin text-[#0b1110]" />
+                            ) : String(currentTrack?.id || currentTrack?._id) === String(track.id || track._id) && isPlaying ? (
+                              <Pause size={13} fill="currentColor" />
+                            ) : (
+                              <Play size={13} fill="currentColor" />
+                            )}
                           </button>
                         </div>
                       ))}

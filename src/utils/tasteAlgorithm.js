@@ -1,36 +1,82 @@
 /**
  * Rivo Smart Taste & Mood Engine
- * Features:
- * 1. Intelligent Genre Deduction (Mahraganat, Rap/Hip-Hop, Classic/Tarab, Indie/Alternative, Arabic Pop, Khaleeji, R&B, Electronic, Holy Quran)
- * 2. Artist Diversity Capping (Strict max 2 songs per artist in auto-generated queue to eliminate artist monopolization)
- * 3. Strict Track Deduplication (Normalized title & primary artist to prevent duplicate uploads/variants)
- * 4. Real Audio Listening History & Play Duration Affinity
- * 5. Time-of-Day Listening Mood & Organic Dynamic Micro-Jitter
+ * Script & language filtering, genre compatibility matrix, controlled organic micro-jitter (0 to 5 pts).
  */
-
 import { getListeningStats } from './listeningTracker.js';
 import { classifyGenre } from './genreClassifier.js';
 import { resolveCanonicalArtist } from './artistAliases.js';
 
 export { GENRE_MAP } from './genreClassifier.js';
 
-/**
- * Normalizes title / text strings for robust matching & deduplication
- */
+export const INDIC_SCRIPT_REGEX = /[\u0900-\u0D7F]/;
+export const ARABIC_SCRIPT_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
+export function hasIndicScript(text) {
+  return Boolean(text && typeof text === 'string' && INDIC_SCRIPT_REGEX.test(text));
+}
+
+export function hasArabicScript(text) {
+  return Boolean(text && typeof text === 'string' && ARABIC_SCRIPT_REGEX.test(text));
+}
+
+export const INDIC_ARTISTS = new Set([
+  'arijit singh', 'neha kakkar', 'badshah', 'shreya ghoshal', 'diljit dosanjh', 'lata mangeshkar', 'kishore kumar', 'alka yagnik', 'sonu nigam', 'kumar sanu',
+  'udit narayan', 'a r rahman', 'ar rahman', 'pritam', 'jubin nautiyal', 'atif aslam', 'rahat fateh ali khan', 'sidhu moose wala', 'karan aujla', 'yo yo honey singh',
+  'honey singh', 'armaan malik', 'darshan raval', 'anuv jain', 'vishal mishra', 'mc stan', 'king', 'guru randhawa', 'sunidhi chauhan', 'mohit chauhan', 'arijit', 'neha',
+  'mohammed rafi', 'asha bhosle', 'jasleen royal', 'b praak', 'ap dhillon', 'anirudh ravichander', 'devi sri prasad', 'sid sriram', 'harrdy sandhu', 'mika singh',
+  'kanika kapoor', 'shaan', 'kk', 'alisha chinai', 'monali thakur', 'shankar mahadevan', 'javed ali', 'pankaj udhas', 'jagjit singh', 'hariharan', 'kavita krishnamurthy',
+  'أريجيت سينغ', 'نيها كاكار', 'بادشاه'
+]);
+
+export function isIndicTrack(track) {
+  if (!track) return false;
+  const title = (track.title || '').toLowerCase();
+  const artist = (track.artist || '').toLowerCase();
+  const album = (track.album || '').toLowerCase();
+  const genre = (track.genre || '').toLowerCase();
+  const text = `${title} ${artist} ${album} ${genre}`;
+
+  if (hasIndicScript(text)) return true;
+  if (/bollywood|hindi|indic|desi|punjabi|tollywood|kollywood|bhangra|filmi/.test(genre)) return true;
+
+  const normArt = getPrimaryArtistNormalized(artist);
+  if (normArt && INDIC_ARTISTS.has(normArt)) return true;
+  for (const art of INDIC_ARTISTS) {
+    if (artist.includes(art) || normArt.includes(art)) return true;
+  }
+
+  if (/(?:^|\s|[_\-–—])(bollywood|hindi|punjabi|desi|bhangra|filmi|tollywood|kollywood|qawwali|ghazal)(?:$|\s|[_\-–—])/i.test(text)) return true;
+  if (/بوليوود|هندي|بنجابي|أوردو/.test(text)) return true;
+
+  return false;
+}
+
+export const GENRE_COMPATIBILITY = {
+  'Holy Quran': { compatible: ['Holy Quran'], incompatible: ['Mahraganat', 'Rap / Hip-Hop', 'Classic / Tarab', 'Indie / Alternative', 'Arabic Pop', 'Khaleeji', 'R&B / Soul', 'Electronic', 'Pop', 'Rock', 'Metal', 'Bollywood / Indian', 'Podcast'] },
+  'Rap / Hip-Hop': { compatible: ['Rap / Hip-Hop', 'Mahraganat', 'R&B / Soul', 'Electronic', 'Pop'], incompatible: ['Holy Quran', 'Classic / Tarab', 'Classical', 'Bollywood / Indian', 'Podcast'] },
+  'Mahraganat': { compatible: ['Mahraganat', 'Rap / Hip-Hop', 'Arabic Pop', 'Electronic', 'Pop'], incompatible: ['Holy Quran', 'Classic / Tarab', 'Classical', 'Jazz', 'Rock', 'Metal', 'Bollywood / Indian', 'Podcast'] },
+  'Arabic Pop': { compatible: ['Arabic Pop', 'Indie / Alternative', 'Khaleeji', 'Classic / Tarab', 'Pop', 'Mahraganat', 'R&B / Soul'], incompatible: ['Holy Quran', 'Metal', 'Rock', 'Bollywood / Indian', 'Podcast'] },
+  'Classic / Tarab': { compatible: ['Classic / Tarab', 'Arabic Pop', 'Khaleeji', 'Classical'], incompatible: ['Holy Quran', 'Rap / Hip-Hop', 'Mahraganat', 'Metal', 'Electronic', 'Bollywood / Indian', 'Podcast'] },
+  'Khaleeji': { compatible: ['Khaleeji', 'Arabic Pop', 'Classic / Tarab', 'Pop'], incompatible: ['Holy Quran', 'Metal', 'Rock', 'Rap / Hip-Hop', 'Bollywood / Indian', 'Podcast'] },
+  'Indie / Alternative': { compatible: ['Indie / Alternative', 'Arabic Pop', 'Pop', 'Rock', 'R&B / Soul', 'Lofi'], incompatible: ['Holy Quran', 'Mahraganat', 'Metal', 'Bollywood / Indian', 'Podcast'] },
+  'R&B / Soul': { compatible: ['R&B / Soul', 'Rap / Hip-Hop', 'Pop', 'Indie / Alternative', 'Electronic', 'Arabic Pop'], incompatible: ['Holy Quran', 'Classic / Tarab', 'Classical', 'Metal', 'Bollywood / Indian', 'Podcast'] },
+  'Electronic': { compatible: ['Electronic', 'Rap / Hip-Hop', 'Pop', 'R&B / Soul', 'Mahraganat'], incompatible: ['Holy Quran', 'Classic / Tarab', 'Classical', 'Bollywood / Indian', 'Podcast'] },
+  'Pop': { compatible: ['Pop', 'Arabic Pop', 'Indie / Alternative', 'R&B / Soul', 'Electronic', 'Rap / Hip-Hop'], incompatible: ['Holy Quran', 'Metal', 'Classical', 'Podcast'] },
+  'Bollywood / Indian': { compatible: ['Bollywood / Indian', 'Pop'], incompatible: ['Holy Quran', 'Classic / Tarab', 'Khaleeji', 'Mahraganat', 'Rap / Hip-Hop', 'Arabic Pop', 'Rock', 'Metal'] },
+  'Podcast': { compatible: ['Podcast'], incompatible: ['Holy Quran', 'Mahraganat', 'Rap / Hip-Hop', 'Classic / Tarab', 'Indie / Alternative', 'Arabic Pop', 'Khaleeji', 'R&B / Soul', 'Electronic', 'Pop', 'Rock', 'Metal', 'Bollywood / Indian'] },
+};
+
 export function normalizeString(str) {
   if (!str || typeof str !== 'string') return '';
   return str
     .toLowerCase()
-    .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '') // remove parentheticals like (Official Video), [Clip]
+    .replace(/[\(\[\{][^\)\]\}]*[\)\]\}]/g, '')
     .replace(/[\-_|–—:]/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]/gu, '')            // preserve Arabic, Latin alphanumeric chars
+    .replace(/[^a-zA-Z0-9\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
-/**
- * Extracts normalized primary artist, stripping featuring / collab markers
- */
 export function getPrimaryArtistNormalized(artist) {
   if (!artist || typeof artist !== 'string') return 'unknown';
   const clean = artist.toLowerCase().split(/\b(ft\.?|feat\.?|featuring|with|x|vs\.?)\b|[,&،\+\/]/i)[0];
@@ -38,9 +84,6 @@ export function getPrimaryArtistNormalized(artist) {
   return resolveCanonicalArtist(norm) || 'unknown';
 }
 
-/**
- * Returns a canonical deduplication key for a track: "normalized_title:::normalized_primary_artist"
- */
 export function getTrackDedupeKey(track) {
   if (!track) return '';
   const normTitle = normalizeString(track.title);
@@ -49,45 +92,28 @@ export function getTrackDedupeKey(track) {
   return `${normTitle}:::${normArtist}`;
 }
 
-/**
- * Intelligently deduces the authentic genre for a track
- */
 export function detectTrackGenre(track) {
   if (!track) return 'Pop';
+  if (isIndicTrack(track)) return 'Bollywood / Indian';
   const res = classifyGenre(track);
-  return res.genre || 'Pop';
+  return res?.genre || 'Pop';
 }
 
 export function getCurrentTimeMood() {
   const hour = new Date().getHours();
-  if (hour >= 5 && hour < 12) {
-    return {
-      id: 'morning',
-      label: 'Morning Fresh',
-      keywords: ['acoustic', 'indie', 'morning', 'fresh', 'light', 'روقان', 'صباح', 'هادي', 'فيروز'],
-      energy: 'fresh',
-    };
-  } else if (hour >= 12 && hour < 17) {
-    return {
-      id: 'afternoon',
-      label: 'Afternoon Flow',
-      keywords: ['chill', 'lofi', 'focus', 'flow', 'smooth', 'موسيقى', 'تركيز', 'عصر', 'رايق'],
-      energy: 'chill',
-    };
-  } else if (hour >= 17 && hour < 23) {
-    return {
-      id: 'evening',
-      label: 'Evening Hype',
-      keywords: ['rap', 'trap', 'drill', 'hype', 'party', 'حماس', 'راب', 'سهرة', 'مهرجان', 'طاقة', 'ويجز', 'مروان', 'ليجي'],
-      energy: 'hype',
-    };
-  } else {
-    return {
-      id: 'night',
-      label: 'Night Melancholy',
-      keywords: ['slowed', 'night', 'deep', 'sad', 'melancholy', 'chill', 'ليل', 'سفر', 'هادية', 'حزين', 'روما', 'دواير'],
-      energy: 'deep',
-    };
+  if (hour >= 5 && hour < 12) return { id: 'morning', label: 'Morning Fresh', keywords: ['acoustic', 'indie', 'morning', 'fresh', 'light', 'روقان', 'صباح', 'هادي', 'فيروز'], energy: 'fresh' };
+  if (hour >= 12 && hour < 17) return { id: 'afternoon', label: 'Afternoon Flow', keywords: ['chill', 'lofi', 'focus', 'flow', 'smooth', 'موسيقى', 'تركيز', 'عصر', 'رايق'], energy: 'chill' };
+  if (hour >= 17 && hour < 23) return { id: 'evening', label: 'Evening Hype', keywords: ['rap', 'trap', 'drill', 'hype', 'party', 'حماس', 'راب', 'سهرة', 'مهرجان', 'طاقة', 'ويجز', 'مروان', 'ليجي'], energy: 'hype' };
+  return { id: 'night', label: 'Night Melancholy', keywords: ['slowed', 'night', 'deep', 'sad', 'melancholy', 'chill', 'ليل', 'سفر', 'هادية', 'حزين', 'روما', 'دواير'], energy: 'deep' };
+}
+
+const recentSuggestionsCooldown = new Map();
+const COOLDOWN_DURATION_MS = 20 * 60 * 1000;
+
+function cleanupSuggestionCooldown() {
+  const now = Date.now();
+  for (const [key, ts] of recentSuggestionsCooldown.entries()) {
+    if (now - ts > COOLDOWN_DURATION_MS) recentSuggestionsCooldown.delete(key);
   }
 }
 
@@ -102,13 +128,11 @@ export function getSmartTasteAndMoodTracks({
   maxPerArtist = 2,
 }) {
   if (!Array.isArray(allTracks) || allTracks.length === 0) return [];
+  cleanupSuggestionCooldown();
 
   const mood = getCurrentTimeMood();
   const maxCap = Math.max(1, Number(maxPerArtist) || 2);
-
-  const followedSet = new Set(
-    (followedArtists || []).map(a => getPrimaryArtistNormalized(a))
-  );
+  const followedSet = new Set((followedArtists || []).map(a => getPrimaryArtistNormalized(a)));
   if (currentUser?.following && Array.isArray(currentUser.following)) {
     currentUser.following.forEach(f => {
       const name = typeof f === 'string' ? f : f?.name || f?.username;
@@ -117,68 +141,77 @@ export function getSmartTasteAndMoodTracks({
   }
 
   const likedSet = new Set((likedTrackIds || []).map(id => String(id)));
-
-  // Extract artists from liked tracks
   const likedArtistSet = new Set();
+  let likedHasIndic = false;
   allTracks.forEach(t => {
     const id = String(t._id || t.id);
-    if (likedSet.has(id) && t.artist) {
-      likedArtistSet.add(getPrimaryArtistNormalized(t.artist));
+    if (likedSet.has(id)) {
+      if (t.artist) likedArtistSet.add(getPrimaryArtistNormalized(t.artist));
+      if (isIndicTrack(t)) likedHasIndic = true;
     }
   });
 
-  // Extract real audio listening stats & history
   let trackStatsMap = {};
   let historyList = [];
   const listenedArtistWeights = new Map();
+  let historyHasIndic = false;
+  let statsHasIndic = false;
+
   try {
     const listeningStats = typeof getListeningStats === 'function' ? getListeningStats() : null;
     trackStatsMap = listeningStats?.trackStats || {};
     historyList = Array.isArray(listeningStats?.history) ? listeningStats.history : [];
-
+    for (const h of historyList) {
+      if (h && isIndicTrack(h)) { historyHasIndic = true; break; }
+    }
     Object.values(trackStatsMap).forEach(ts => {
       if (ts && ts.artist) {
         const a = getPrimaryArtistNormalized(ts.artist);
-        const current = listenedArtistWeights.get(a) || 0;
         const weight = (Number(ts.plays) || 0) * 10 + Math.floor((Number(ts.seconds) || 0) / 30);
-        listenedArtistWeights.set(a, current + weight);
+        listenedArtistWeights.set(a, (listenedArtistWeights.get(a) || 0) + weight);
+        if ((Number(ts.plays) > 0 || Number(ts.seconds) >= 20) && isIndicTrack(ts)) statsHasIndic = true;
       }
     });
   } catch {}
 
-  const recentHistorySet = new Set(historyList.slice(0, 20).map(h => String(h.id || h._id)));
+  const recentHistorySet = new Set(historyList.slice(0, 25).map(h => String(h.id || h._id)));
+  const userLang = (currentUser?.preferences?.language || currentUser?.language || '').toLowerCase();
+  const prefersIndic = userLang === 'hi' || userLang.includes('hindi') || userLang.includes('indic') || userLang === 'pa' || userLang === 'ta' || userLang === 'te';
+  const currentIsIndic = Boolean(currentTrack && isIndicTrack(currentTrack));
+  const topTrackIsIndic = Boolean(currentUser?.topTrack && isIndicTrack(currentUser.topTrack));
 
-  // Contextual Seed Track: When currently playing a track, extract seed vibe and genre
+  let followedHasIndic = false;
+  for (const followed of followedSet) {
+    if (followed && (INDIC_ARTISTS.has(followed) || isIndicTrack({ artist: followed }))) { followedHasIndic = true; break; }
+  }
+
+  const userHasIndicAffinity = prefersIndic || currentIsIndic || historyHasIndic || statsHasIndic || topTrackIsIndic || followedHasIndic || likedHasIndic;
   const seedArtist = currentTrack ? getPrimaryArtistNormalized(currentTrack.artist) : '';
   const seedGenre = currentTrack ? detectTrackGenre(currentTrack) : null;
+  const contextIsArabic = Boolean(
+    (currentTrack && (hasArabicScript(currentTrack.title) || hasArabicScript(currentTrack.artist))) ||
+    ['Arabic Pop', 'Mahraganat', 'Classic / Tarab', 'Khaleeji'].includes(seedGenre) ||
+    userLang === 'ar'
+  );
 
-  // Identify preferred genres from seed track, top artists, liked artists, and followed artists
   const preferredGenreSet = new Set();
   if (seedGenre) preferredGenreSet.add(seedGenre);
-
   const sampleArtists = [...likedArtistSet, ...followedSet, seedArtist].filter(Boolean);
   for (const art of sampleArtists.slice(0, 15)) {
     const g = detectTrackGenre({ artist: art });
     if (g && g !== 'Pop') preferredGenreSet.add(g);
   }
 
-  // Pre-seed exclusions (both IDs and normalized dedupe keys)
   const excludeIdSet = new Set();
   const excludeKeySet = new Set();
-
   if (excludeTrackIds) {
     const arr = excludeTrackIds instanceof Set ? Array.from(excludeTrackIds) : (Array.isArray(excludeTrackIds) ? excludeTrackIds : []);
     arr.forEach(val => {
       const s = String(val || '');
-      if (s.includes(':::')) {
-        excludeKeySet.add(s);
-      } else {
-        excludeIdSet.add(s);
-      }
+      if (s.includes(':::')) excludeKeySet.add(s); else excludeIdSet.add(s);
     });
   }
 
-  // Current playing track must ALWAYS be excluded from recommended queue
   if (currentTrack) {
     const curId = String(currentTrack._id || currentTrack.id || '');
     if (curId) excludeIdSet.add(curId);
@@ -186,10 +219,9 @@ export function getSmartTasteAndMoodTracks({
     if (curKey) excludeKeySet.add(curKey);
   }
 
-  // Step 1: Strict Pool Deduplication (eliminate multiple uploads/duplicates of the exact same song)
+  // Deduplicate pool
   const uniquePool = [];
   const poolKeyMap = new Map();
-
   for (const t of allTracks) {
     if (!t) continue;
     const key = getTrackDedupeKey(t);
@@ -197,7 +229,6 @@ export function getSmartTasteAndMoodTracks({
       poolKeyMap.set(key, t);
       uniquePool.push(t);
     } else {
-      // If duplicate exists, keep whichever entry has higher plays or valid duration
       const existing = poolKeyMap.get(key);
       const curScore = (Number(t.plays) || 0) + (Number(t.duration) > 0 ? 10 : 0);
       const exScore = (Number(existing.plays) || 0) + (Number(existing.duration) > 0 ? 10 : 0);
@@ -209,25 +240,32 @@ export function getSmartTasteAndMoodTracks({
     }
   }
 
-  // Step 2: Filter out excluded/already-played tracks
-  let candidates = uniquePool.filter(t => {
-    const id = String(t._id || t.id);
+  // Prioritize unplayed candidates
+  const unplayedCandidates = uniquePool.filter(t => {
+    const id = String(t._id || t.id || '');
     const key = getTrackDedupeKey(t);
     return !excludeIdSet.has(id) && !excludeKeySet.has(key);
   });
 
-  // If unplayed candidates are too few, relax historical exclusion but STRICTLY maintain current track exclusion
-  if (candidates.length < Math.min(limit, 8)) {
+  let candidates = [];
+  if (unplayedCandidates.length >= limit) {
+    candidates = unplayedCandidates;
+  } else {
     const curKey = currentTrack ? getTrackDedupeKey(currentTrack) : '';
-    const curId = currentTrack ? String(currentTrack._id || currentTrack.id) : '';
-    candidates = uniquePool.filter(t => {
-      const id = String(t._id || t.id);
-      const key = getTrackDedupeKey(t);
-      return id !== curId && key !== curKey;
-    });
+    const curId = currentTrack ? String(currentTrack._id || currentTrack.id || '') : '';
+    const unplayedKeys = new Set(unplayedCandidates.map(t => getTrackDedupeKey(t)));
+    const olderSupplements = uniquePool
+      .filter(t => {
+        const id = String(t._id || t.id || '');
+        const key = getTrackDedupeKey(t);
+        if (id === curId || key === curKey) return false;
+        return !unplayedKeys.has(key);
+      })
+      .map(t => ({ ...t, _wasExcluded: true }));
+    candidates = [...unplayedCandidates, ...olderSupplements];
   }
 
-  // Step 3: Score candidates intelligently
+  // Score candidates
   const scored = candidates.map(track => {
     let score = 0;
     const normTitle = normalizeString(track.title);
@@ -235,119 +273,109 @@ export function getSmartTasteAndMoodTracks({
     const dedupeKey = getTrackDedupeKey(track);
     const tGenre = detectTrackGenre(track);
     const tText = `${normTitle} ${primaryArt} ${tGenre}`.toLowerCase();
-    const tId = String(track._id || track.id);
+    const tId = String(track._id || track.id || '');
     const trackKey = String(track.id || track._id || dedupeKey);
 
-    // 1. Real Audio Listening History Match (+up to 85 pts)
     const realStat = trackStatsMap[trackKey] || trackStatsMap[tId] || trackStatsMap[String(track._id)] || trackStatsMap[String(track.id)];
     if (realStat) {
       const realPlays = Number(realStat.plays) || 0;
       const realSecs = Number(realStat.seconds) || 0;
       if (realPlays > 0 || realSecs >= 20) {
-        score += 45;
-        score += Math.min(25, Math.log2(realPlays + 1) * 8);
-        score += Math.min(15, Math.floor(realSecs / 120) * 3);
+        score += 8 + Math.min(6, Math.log2(realPlays + 1) * 2);
       }
     }
 
-    // 2. Real Listened Artist Affinity (+up to 40 pts)
     const artistListeningWeight = listenedArtistWeights.get(primaryArt) || 0;
     if (artistListeningWeight > 0) {
-      score += Math.min(40, 15 + Math.log10(artistListeningWeight + 1) * 10);
+      score += Math.min(12, 4 + Math.log10(artistListeningWeight + 1) * 3);
     }
 
-    // 3. Recent Playback Recency (+15 pts)
-    if (recentHistorySet.has(trackKey) || recentHistorySet.has(tId)) {
-      score += 15;
-    }
+    if (recentHistorySet.has(trackKey) || recentHistorySet.has(tId)) score -= 40;
+    if (recentSuggestionsCooldown.has(dedupeKey) || recentSuggestionsCooldown.has(tId)) score -= 35;
+    if (track._wasExcluded) score -= 55;
 
-    // 4. Followed Artist match (+45 pts)
     for (const followed of followedSet) {
       if (followed && (primaryArt.includes(followed) || followed.includes(primaryArt))) {
-        score += 45;
+        score += 20;
         break;
       }
     }
 
-    // 5. Liked song match (+40 pts)
-    if (likedSet.has(tId)) {
-      score += 40;
-    }
+    if (likedSet.has(tId)) score += 15;
+    if (likedArtistSet.has(primaryArt)) score += 12;
 
-    // 6. Artist taste similarity from liked songs (+30 pts)
-    if (likedArtistSet.has(primaryArt)) {
-      score += 30;
-    }
-
-    // 7. Seed Artist context bonus (balanced to prevent flooding)
     if (seedArtist && (primaryArt === seedArtist || primaryArt.includes(seedArtist) || seedArtist.includes(primaryArt))) {
-      score += 25;
+      score += 32;
     }
 
-    // 8. Similar-Vibe Genre Clustering Synergy (+35 pts)
-    if (preferredGenreSet.has(tGenre)) {
-      score += 35;
+    if (seedGenre) {
+      if (tGenre === seedGenre) score += 28;
+      else if (GENRE_COMPATIBILITY[seedGenre]?.compatible?.includes(tGenre)) score += 20;
+      else if (GENRE_COMPATIBILITY[seedGenre]?.incompatible?.includes(tGenre)) score -= 60;
+    } else if (preferredGenreSet.has(tGenre)) {
+      score += 28;
     }
 
-    // 9. Time-of-day mood keywords match (+25 pts)
+    if (isIndicTrack(track)) {
+      if (!userHasIndicAffinity) score -= 300;
+      else score += 20;
+    }
+
+    const candidateIsArabic = hasArabicScript(track.title) || hasArabicScript(track.artist) || ['Arabic Pop', 'Mahraganat', 'Classic / Tarab', 'Khaleeji'].includes(tGenre);
+    if (contextIsArabic && candidateIsArabic) score += 25;
+
     for (const kw of mood.keywords) {
-      if (tText.includes(kw.toLowerCase())) {
-        score += 25;
-        break;
-      }
+      if (tText.includes(kw.toLowerCase())) { score += 15; break; }
     }
 
-    // 10. Popularity / play count bonus (up to +15 pts)
     const plays = Number(track.plays || track.playCount || 0);
-    score += Math.min(15, Math.log10(plays + 1) * 4);
-
-    // 11. Dynamic micro-jitter for organic variety (+0 to 10 pts)
-    score += Math.random() * 10;
+    score += Math.min(10, Math.log10(plays + 1) * 3);
+    score += Math.random() * 5; // Controlled organic micro-jitter (0 to 5 pts)
+    if (!realStat && !track._wasExcluded) score += 15;
 
     return { track, score, primaryArt, dedupeKey, tGenre };
   });
 
   scored.sort((a, b) => b.score - a.score);
 
-  // Step 4: STRICT Artist Diversity Capping & Deduplication
-  // Strictly enforces max 2 songs per artist in the auto-generated queue to eliminate artist monopolization
-  const selected = [];
+  // Artist Diversity Capping & Selection
+  const candidatePool = [];
   const artistCounts = new Map();
   const selectedKeys = new Set();
-
-  // If there is a seed track, count its artist as 1 against the cap
-  if (seedArtist) {
-    artistCounts.set(seedArtist, 1);
-  }
+  if (seedArtist) artistCounts.set(seedArtist, 1);
 
   for (const item of scored) {
-    if (selected.length >= limit) break;
+    if (candidatePool.length >= limit * 2) break;
     if (selectedKeys.has(item.dedupeKey)) continue;
-
     const currentArtistCount = artistCounts.get(item.primaryArt) || 0;
     if (currentArtistCount < maxCap) {
-      selected.push(item);
+      candidatePool.push(item);
       selectedKeys.add(item.dedupeKey);
       artistCounts.set(item.primaryArt, currentArtistCount + 1);
     }
   }
 
-  // If we haven't reached the limit, allow a second pass up to maxCap + 1 (never exceeding 3 per artist)
-  if (selected.length < limit) {
+  if (candidatePool.length < limit) {
     for (const item of scored) {
-      if (selected.length >= limit) break;
+      if (candidatePool.length >= limit) break;
       if (selectedKeys.has(item.dedupeKey)) continue;
-
       const currentArtistCount = artistCounts.get(item.primaryArt) || 0;
       if (currentArtistCount < Math.min(maxCap + 1, 3)) {
-        selected.push(item);
+        candidatePool.push(item);
         selectedKeys.add(item.dedupeKey);
         artistCounts.set(item.primaryArt, currentArtistCount + 1);
       }
     }
   }
 
-  // Return unique tracks with authentic deduced genre
+  const selected = candidatePool.slice(0, limit);
+  const now = Date.now();
+  selected.forEach(item => {
+    if (item.dedupeKey) recentSuggestionsCooldown.set(item.dedupeKey, now);
+    const id = String(item.track?._id || item.track?.id || '');
+    if (id) recentSuggestionsCooldown.set(id, now);
+  });
+
   return selected.map(item => ({
     ...item.track,
     genre: item.tGenre || detectTrackGenre(item.track),

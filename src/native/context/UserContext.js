@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { deduplicateTrackList } from '../services/downloadManager';
@@ -31,6 +31,25 @@ export const UserProvider = ({ children }) => {
   const [playlists, setPlaylists] = useState([]);
   const [albums, setAlbums] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
+
+  const playlistSaveTimerRef = useRef(null);
+
+  const savePlaylistsDebounced = useCallback((playlistsToSave) => {
+    if (playlistSaveTimerRef.current) {
+      clearTimeout(playlistSaveTimerRef.current);
+    }
+    playlistSaveTimerRef.current = setTimeout(() => {
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(playlistsToSave)).catch(() => {});
+    }, 3500); // Debounce minimum 3-5 seconds per AGENTS.md
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (playlistSaveTimerRef.current) {
+        clearTimeout(playlistSaveTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     loadStoredAuth();
@@ -332,14 +351,69 @@ export const UserProvider = ({ children }) => {
     if (res.ok) await syncUserData();
   };
 
-  const addToPlaylist = async (playlistId, trackId) => {
-    if (!token) return;
-    const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ trackId }),
+  const addToPlaylist = async (playlistId, trackId, trackObj = null) => {
+    const plIdStr = String(playlistId);
+    const tIdStr = String(trackId);
+
+    if (trackObj && typeof trackObj === 'object' && trackObj.title) {
+      setTracks(prev => {
+        if (prev.some(t => String(t._id || t.id) === tIdStr)) return prev;
+        return [...prev, trackObj];
+      });
+    }
+
+    // 1. Instant optimistic update to playlists state
+    setPlaylists(prev => {
+      const next = prev.map(p => {
+        if (String(p.id || p._id) === plIdStr) {
+          const prevTrackIds = Array.isArray(p.trackIds) ? p.trackIds : [];
+          if (prevTrackIds.map(String).includes(tIdStr)) return p;
+          const nextTrackIds = [...prevTrackIds, tIdStr];
+
+          let nextTracks = Array.isArray(p.tracks) ? [...p.tracks] : [];
+          const foundTrack = (trackObj && typeof trackObj === 'object' && trackObj.title)
+            ? trackObj
+            : (tracks || []).find(t => String(t._id || t.id) === tIdStr);
+          if (foundTrack) {
+            nextTracks.push(foundTrack);
+          } else {
+            nextTracks.push(tIdStr);
+          }
+          return {
+            ...p,
+            trackIds: nextTrackIds,
+            tracks: nextTracks,
+          };
+        }
+        return p;
+      });
+      savePlaylistsDebounced(next);
+      return next;
     });
-    if (res.ok) await syncUserData();
+
+    if (!token) return { success: true };
+
+    // 2. Run POST in background without blocking syncUserData() waterfall
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trackId: tIdStr }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && Array.isArray(data.trackIds)) {
+        setPlaylists(prev => prev.map(p => {
+          if (String(p.id || p._id) === plIdStr) {
+            return { ...p, trackIds: data.trackIds };
+          }
+          return p;
+        }));
+      }
+      return data;
+    } catch (e) {
+      console.warn('[addToPlaylist background error]', e.message);
+      return { success: false, error: e.message };
+    }
   };
 
   const removeTrackFromPlaylist = async (playlistId, trackId) => {
@@ -356,7 +430,7 @@ export const UserProvider = ({ children }) => {
         }
         return p;
       });
-      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      savePlaylistsDebounced(next);
       return next;
     });
 
@@ -386,7 +460,7 @@ export const UserProvider = ({ children }) => {
         }
         return p;
       });
-      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      savePlaylistsDebounced(next);
       return next;
     });
 
@@ -420,7 +494,7 @@ export const UserProvider = ({ children }) => {
         }
         return p;
       });
-      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
+      savePlaylistsDebounced(next);
       return next;
     });
 

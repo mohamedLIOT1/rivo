@@ -5,7 +5,42 @@
 
 const { Track } = require('../../models');
 const { genAI, getGeminiModel, isQuranTrack } = require('./aiHelpers');
-const { getPrimaryArtistNormalized } = require('../../utils/artistAliases');
+const { getPrimaryArtistNormalized, CANONICAL_ARTIST_MAP } = require('../../utils/artistAliases');
+
+const RELATED_ARTIST_CLUSTERS = [
+  ['lege-cy', 'cairokee', 'wegz', 'marwan pablo', 'marwan moussa', 'abyusif', 'afroto', 'shabjdeed', 'ziad zaza', 'santa', 'abo el anwar', 'karim osama', 'mousa sam', 'shehab', 'flx', 'arsenic'],
+  ['cairokee', 'amir eid', 'massar egbari', 'sharmoofers', 'hamza namira', 'aziz maraka', 'autostrad', 'jadal', 'disco misr'],
+  ['amr diab', 'tamer hosny', 'hamaki', 'sherine', 'asala', 'elissa', 'nancy ajram', 'bahaa sultan', 'tamer ashoor', 'rami sabry'],
+  ['essam sasa', 'hamo bika', 'hassan shakosh', 'omar kamal', '3enba', 'double zuksh', 'houda bondok', 'reda el bahrawy', 'mahmoud el leithy', 'ahmed sheba']
+];
+
+function getEffectiveArtist(track) {
+  if (!track) return 'unknown';
+  const rawArtist = track.artist || '';
+  const normArt = getPrimaryArtistNormalized(rawArtist);
+  const GENERIC_UPLOADERS = new Set(['zk studios', 'dark side', 'sherif', 'official', 'records', 'music', 'unknown']);
+  if (GENERIC_UPLOADERS.has(normArt) || !normArt || normArt === 'unknown') {
+    const title = (track.title || '').toLowerCase();
+    for (const [alias, canonical] of Object.entries(CANONICAL_ARTIST_MAP)) {
+      if (title.includes(alias)) {
+        return canonical;
+      }
+    }
+  }
+  return normArt;
+}
+
+function getRelatedArtists(artists) {
+  const related = new Set();
+  for (const art of artists) {
+    for (const cluster of RELATED_ARTIST_CLUSTERS) {
+      if (cluster.includes(art)) {
+        cluster.forEach(a => { if (a !== art) related.add(a); });
+      }
+    }
+  }
+  return related;
+}
 
 async function getCuratedRecommendations({
   mood,
@@ -15,7 +50,9 @@ async function getCuratedRecommendations({
   availableTracks = [],
   isQuran = false,
   effectiveName = '',
-  trackIds = []
+  trackIds = [],
+  excludeTrackIds = [],
+  refresh = false
 }) {
   const isPlQuran = Boolean(isQuran);
   const rawSeeds = (recentTracks && recentTracks.length > 0) ? recentTracks : seedTracks;
@@ -30,6 +67,9 @@ async function getCuratedRecommendations({
       incomingIds.push(String(t.id || t._id));
     }
   });
+  (excludeTrackIds || []).forEach(id => {
+    if (id) incomingIds.push(String(id));
+  });
   const excludedIds = new Set(incomingIds);
 
   let pool = availableTracks;
@@ -42,13 +82,14 @@ async function getCuratedRecommendations({
           { genre: 'Quran' },
           { title: /سورة|سوره|قرآن|قران/i }
         ]
-      }).sort({ plays: -1 }).limit(200).lean();
+      }).sort(refresh ? { _id: -1 } : { plays: -1 }).limit(250).lean();
     } else {
+      const skipCount = refresh ? Math.floor(Math.random() * 40) : 0;
       pool = await Track.find({
         isQuran: { $ne: true },
         category: { $ne: 'quran' },
         genre: { $ne: 'Quran' }
-      }).sort({ plays: -1 }).limit(200).lean();
+      }).sort(refresh ? { createdAt: -1 } : { plays: -1 }).skip(skipCount).limit(250).lean();
     }
   }
 
@@ -63,7 +104,12 @@ async function getCuratedRecommendations({
     try {
       const model = getGeminiModel();
       if (model) {
-        const trackList = filteredPool.slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
+        // Diversely sample candidate tracks rather than a static slice(0, 50)
+        let candidatePoolForPrompt = [...filteredPool];
+        if (refresh || candidatePoolForPrompt.length > 50) {
+          candidatePoolForPrompt.sort(() => Math.random() - 0.5);
+        }
+        const trackList = candidatePoolForPrompt.slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
         const prompt = `You are an expert music and recitation curator. Given these available tracks: ${trackList}
 Context: ${isPlQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${effectiveName || 'My Playlist'}", User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Seed / Recent tracks: ${normalizedSeeds.slice(0, 5).join(', ')}.
 Select the 10 best matching tracks from the available list that fit the style and mood. Return ONLY a valid JSON array of track titles exactly as written. No markdown, no explanation.`;
@@ -90,14 +136,22 @@ Select the 10 best matching tracks from the available list that fit the style an
   if (finalRecs.length === 0) {
     const seedArtists = new Set();
     rawSeeds.forEach(t => {
-      if (typeof t === 'object' && t.artist) seedArtists.add(getPrimaryArtistNormalized(t.artist));
+      if (typeof t === 'object' && t.artist) seedArtists.add(getEffectiveArtist(t));
     });
+    const relatedArtists = getRelatedArtists(seedArtists);
 
     const scoredPool = filteredPool.map(t => {
-      let score = Math.random() * 15;
-      const art = getPrimaryArtistNormalized(t.artist);
-      if (seedArtists.has(art)) score += 30;
-      score += Math.min(20, Math.log10((Number(t.plays) || 0) + 1) * 5);
+      let score = Math.random() * 20;
+      const art = getEffectiveArtist(t);
+      if (seedArtists.has(art)) {
+        score += refresh ? 15 : 35;
+      } else if (relatedArtists.has(art)) {
+        score += refresh ? 35 : 20; // On refresh, boost similar artists over repeating seed artists!
+      }
+      if (refresh) {
+        score += Math.random() * 30; // Exploration bonus
+      }
+      score += Math.min(15, Math.log10((Number(t.plays) || 0) + 1) * 4);
       return { track: t, score };
     });
 
@@ -117,7 +171,7 @@ function capTracksByArtist(tracks, limit = 10, maxPerArtist = 2, preSeededCounts
     if (!t || selected.length >= limit) break;
     const tId = String(t._id || t.id);
     if (seenIds.has(tId)) continue;
-    const art = getPrimaryArtistNormalized(t.artist);
+    const art = getEffectiveArtist(t);
     const count = artistCounts.get(art) || 0;
     if (count < maxPerArtist) {
       selected.push(t);
@@ -131,9 +185,9 @@ function capTracksByArtist(tracks, limit = 10, maxPerArtist = 2, preSeededCounts
       if (!t || selected.length >= limit) break;
       const tId = String(t._id || t.id);
       if (seenIds.has(tId)) continue;
-      const art = getPrimaryArtistNormalized(t.artist);
+      const art = getEffectiveArtist(t);
       const count = artistCounts.get(art) || 0;
-      if (count < Math.min(maxPerArtist + 1, 3)) {
+      if (count < maxPerArtist + 1) {
         selected.push(t);
         seenIds.add(tId);
         artistCounts.set(art, count + 1);

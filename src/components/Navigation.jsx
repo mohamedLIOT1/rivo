@@ -1,9 +1,10 @@
 import { usePreferences } from '../context/PreferencesContext';
 import React, { useState, useMemo } from 'react';
-import { Home, Search, Disc, Plus, Heart, User, Radio, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
+import { Home, Search, Disc, Plus, Heart, User, Radio, Podcast, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
 import { buildUrl } from '../utils/router';
 import { FULL_VERSION, APP_VERSION } from '../version';
 import RivoLogo from './RivoLogo';
@@ -40,18 +41,17 @@ export default function Navigation({
   const filteredLikedCount = useMemo(() => {
     if (!likedTrackIds || likedTrackIds.length === 0) return 0;
     if (Array.isArray(tracks) && tracks.length > 0) {
-      const isQuran = (t) => {
-        const g = (t.genre || '').toLowerCase();
-        const a = (t.artist || '').toLowerCase();
-        return g.includes('quran') || g.includes('recitation') || a.includes('qari') || a.includes('reciter') || a.includes('القرآن') || a.includes('سورة');
-      };
       const likedSet = new Set(likedTrackIds.map(String));
       const matching = tracks.filter(t => likedSet.has(String(t.id || t._id)));
-      if (matching.length > 0) {
-        return matching.filter(t => libraryMode === 'quran' ? isQuran(t) : !isQuran(t)).length;
-      }
+      return matching.filter(t => {
+        const isQ = Boolean(t.isQuran || isQuranContent(t));
+        const isP = Boolean(t.isPodcast || isPodcastContent(t));
+        if (libraryMode === 'quran') return isQ && !isP;
+        if (libraryMode === 'podcasts') return isP && !isQ;
+        return !isQ && !isP;
+      }).length;
     }
-    return likedTrackIds.length;
+    return libraryMode === 'music' ? likedTrackIds.length : 0;
   }, [likedTrackIds, tracks, libraryMode]);
 
   const isInstalledClient = typeof window !== 'undefined' && Boolean(
@@ -62,13 +62,14 @@ export default function Navigation({
     (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
   );
 
-  const { showMusic, showQuran, t, isRTL } = usePreferences();
+  const { showMusic, showQuran, showPodcasts, t, isRTL } = usePreferences();
 
   const mainNavItems = [
     ...(showMusic ? [{ id: 'home', label: t('nav.home'), icon: Home }] : []),
     { id: 'search', label: t('nav.search'), icon: Search },
     { id: 'library', label: t('nav.library'), icon: Disc },
     ...(showQuran ? [{ id: 'quran', label: t('nav.quran'), icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: t('nav.podcasts') || 'Podcasts', icon: Podcast }] : []),
     ...(!isInstalledClient ? [
       { id: 'download', label: t('nav.download') || t('nav.downloadApp') || 'Download App', icon: DownloadCloud }
     ] : []),
@@ -81,12 +82,19 @@ export default function Navigation({
   const mobileNavItems = [
     ...(showMusic ? [{ id: 'home', label: t('nav.music'), icon: Music }] : []),
     ...(showQuran ? [{ id: 'quran', label: t('nav.quran'), icon: BookOpen }] : []),
+    ...(showPodcasts ? [{ id: 'podcasts', label: t('nav.podcasts') || 'Podcasts', icon: Podcast }] : []),
     { id: 'library', label: t('nav.library'), icon: Disc },
     { id: 'search', label: t('nav.search'), icon: Search },
   ];
 
   const safePlaylists = (Array.isArray(playlists) ? playlists : [])
-    .filter(pl => isQuranContent(pl) === (libraryMode === 'quran'))
+    .filter(pl => {
+      const isQ = Boolean(pl.isQuran || isQuranContent(pl));
+      const isP = Boolean(pl.isPodcast || isPodcastContent(pl));
+      if (libraryMode === 'quran') return isQ && !isP;
+      if (libraryMode === 'podcasts') return isP && !isQ;
+      return !isQ && !isP;
+    })
     .filter(pl => {
       const name = (pl.name || '').trim().toLowerCase();
       return name !== 'liked songs' && name !== 'liked prescriptions' && pl.id !== 'liked' && !pl.isLikedSongs;
@@ -178,16 +186,26 @@ export default function Navigation({
           }`}>
             <div className="flex items-center justify-between px-2 mb-2">
               <button
-                onClick={() => setCurrentScreen('library')}
+                onClick={() => {
+                  if (libraryMode === 'podcasts') setCurrentScreen('podcasts');
+                  else if (libraryMode === 'quran') setCurrentScreen('quran');
+                  else setCurrentScreen('library');
+                }}
                 className={`flex items-center gap-1.5 text-[11px] font-display font-bold hover:underline cursor-pointer ${
-                  currentScreen === 'library'
+                  (libraryMode === 'podcasts' ? currentScreen === 'podcasts' : libraryMode === 'quran' ? currentScreen === 'quran' : currentScreen === 'library')
                     ? 'text-[#17a398]'
                     : isDark ? 'text-zinc-200' : 'text-[#0b1110]'
                 }`}
                 title="View full library"
               >
                 <Disc size={15} className="text-[#17a398]" strokeWidth={2.5} />
-                <span>{libraryMode === 'quran' ? (t('nav.quranLibrary') || 'Quran Library') : (t('nav.yourLibrary') || 'Your Library')}</span>
+                <span>
+                  {libraryMode === 'quran' 
+                    ? (t('nav.quranLibrary') || 'Quran Library') 
+                    : libraryMode === 'podcasts'
+                    ? (t('nav.podcastsLibrary') || (isRTL ? 'مكتبة البودكاست' : 'Podcast Library'))
+                    : (t('nav.yourLibrary') || 'Your Library')}
+                </span>
               </button>
 
               <div className="flex items-center gap-1">
@@ -227,8 +245,8 @@ export default function Navigation({
             <div className="flex gap-1 mb-2 px-1">
               {[
                 { id: 'all', label: t('nav.all') || 'All' },
-                { id: 'playlists', label: t('nav.playlists') || 'Playlists' },
-                { id: 'artists', label: libraryMode === 'quran' ? (t('nav.reciters') || 'Reciters') : (t('nav.artists') || 'Artists') },
+                { id: 'playlists', label: libraryMode === 'podcasts' ? (isRTL ? 'البرامج' : 'Shows') : (t('nav.playlists') || 'Playlists') },
+                { id: 'artists', label: libraryMode === 'quran' ? (t('nav.reciters') || 'Reciters') : libraryMode === 'podcasts' ? (isRTL ? 'صناع المحتوى' : 'Creators') : (t('nav.artists') || 'Artists') },
               ].map(({ id: filterId, label: filterLabel }) => {
                 const active = libraryFilter === filterId;
                 return (
@@ -251,8 +269,8 @@ export default function Navigation({
 
             {/* Playlists List */}
             <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
-              {/* Liked Songs */}
-              {libraryMode === 'music' && (
+              {/* Liked Songs / Favorite Surahs */}
+              {libraryFilter !== 'artists' && (
                 <div
                   onClick={() => {
                     if (onSelectLikedSongs) {
@@ -275,14 +293,20 @@ export default function Navigation({
                     </div>
                     <div className="truncate flex-1 min-w-0">
                       <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
-                        {libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorite Surahs') : (t('library.likedSongs') || 'Liked Songs')}
+                        {libraryMode === 'quran' 
+                          ? (t('library.favoriteSurahs') || 'Favorite Surahs') 
+                          : libraryMode === 'podcasts'
+                          ? (t('library.likedPodcasts') || (isRTL ? 'الحلقات المعجب بها' : 'Liked Episodes'))
+                          : (t('library.likedSongs') || 'Liked Songs')}
                       </div>
                       <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
                         {filteredLikedCount > 0
                           ? `${filteredLikedCount} ${libraryMode === 'quran' 
                               ? (filteredLikedCount === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                              : libraryMode === 'podcasts'
+                              ? (filteredLikedCount === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
                               : (filteredLikedCount === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}`
-                          : (libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorites') : (t('library.likedSongs') || 'Favorites'))}
+                          : (libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorites') : libraryMode === 'podcasts' ? (t('library.likedPodcasts') || 'Favorites') : (t('library.likedSongs') || 'Favorites'))}
                       </span>
                     </div>
                   </div>
@@ -335,6 +359,8 @@ export default function Navigation({
                         <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
                           {count} {isQuranContent(pl) || libraryMode === 'quran' 
                             ? (count === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                            : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts')
+                            ? (count === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
                             : (count === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}
                         </span>
                       </div>
@@ -342,7 +368,7 @@ export default function Navigation({
                     <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${
                       isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
                     }`}>
-                      {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : 'LIST'}
+                      {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts') ? 'PODCAST' : 'LIST'}
                     </span>
                   </div>
                 );
@@ -353,13 +379,21 @@ export default function Navigation({
                   isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
                 }`}>
                   <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
-                    {libraryMode === 'quran' ? (t('library.noQuranPlaylistsYet') || 'No Quran playlists yet') : (t('library.noPlaylistsYet') || 'No playlists yet')}
+                    {libraryMode === 'quran' 
+                      ? (t('library.noQuranPlaylistsYet') || 'No Quran playlists yet') 
+                      : libraryMode === 'podcasts'
+                      ? (isRTL ? 'لا توجد قوائم بودكاست بعد' : 'No podcast playlists yet')
+                      : (t('library.noPlaylistsYet') || 'No playlists yet')}
                   </p>
                   <button
                     onClick={openCreatePlaylistModal}
                     className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
                   >
-                    {libraryMode === 'quran' ? (t('library.createQuranPlaylist') || '+ Create Quran Playlist') : (t('library.createPlaylist') || '+ Create Playlist')}
+                    {libraryMode === 'quran' 
+                      ? (t('library.createQuranPlaylist') || '+ Create Quran Playlist') 
+                      : libraryMode === 'podcasts'
+                      ? (isRTL ? '+ إنشاء قائمة بودكاست' : '+ Create Podcast Playlist')
+                      : (t('library.createPlaylist') || '+ Create Playlist')}
                   </button>
                 </div>
               )}

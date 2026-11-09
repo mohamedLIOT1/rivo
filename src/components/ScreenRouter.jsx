@@ -14,6 +14,7 @@ import StatsScreen from '../screens/StatsScreen';
 import PlaylistScreen from '../screens/PlaylistScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import QuranScreen from '../screens/QuranScreen';
+import PodcastScreen from '../screens/PodcastScreen';
 import AdminScreen from '../screens/AdminScreen';
 import DownloadScreen from '../screens/DownloadScreen';
 
@@ -59,6 +60,7 @@ export default function ScreenRouter({
     handleNavigateBack,
     handleSelectArtist,
     handleSelectPlaylistView,
+    libraryMode,
   } = useNavigation();
 
   const {
@@ -85,7 +87,13 @@ export default function ScreenRouter({
     setChatTargetUser,
     unreadChatCount,
   } = useUI();
-  const { showMusic } = usePreferences();
+  const { showMusic, showPodcasts } = usePreferences();
+
+  React.useEffect(() => {
+    if (currentScreen === 'podcasts' && !showPodcasts) {
+      goToScreen(showMusic ? 'home' : 'quran');
+    }
+  }, [currentScreen, showPodcasts, showMusic, goToScreen]);
 
   return (
     <>
@@ -199,6 +207,17 @@ export default function ScreenRouter({
         />
       )}
 
+      {currentScreen === 'podcasts' && showPodcasts && (
+        <PodcastScreen
+          onSelectTrack={playTrack}
+          currentTrack={currentTrack}
+          isPlaying={isPlaying}
+          toggleLike={toggleLike}
+          likedTrackIds={likedTrackIds}
+          globalTheme={globalTheme}
+        />
+      )}
+
 
       {currentScreen === 'playlist' && selectedPlaylist && (
         <PlaylistScreen
@@ -258,6 +277,7 @@ export default function ScreenRouter({
           onSavePlaylist={savePublicPlaylist}
           onUnsavePlaylist={unsavePublicPlaylist}
           userPlaylists={playlists}
+          libraryMode={libraryMode}
           globalTheme={globalTheme}
           onToast={showToast}
         />

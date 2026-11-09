@@ -473,6 +473,8 @@ function LibraryScreen({
       const plId = String(selectedView.id || selectedView._id || '');
       const currentPl = (playlists || []).find(p => String(p.id || p._id) === plId) || selectedView;
       const tIds = (currentPl.tracks || currentPl.trackIds || []).map(t => typeof t === 'object' ? (t._id || t.id) : t);
+      const currentRecIds = (aiRecommendations || []).map(r => String(r._id || r.id));
+      const seeds = (activePlaylistTracks || []).slice(0, 6);
       const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -481,6 +483,9 @@ function LibraryScreen({
           trackIds: tIds,
           name: currentPl.name,
           isQuran: isSelectedPlQuran,
+          excludeTrackIds: currentRecIds,
+          seedTracks: seeds,
+          refresh: true,
         }),
       });
       if (res.ok) {
@@ -501,7 +506,10 @@ function LibraryScreen({
     } catch {}
 
     // Fallback: smart recommendations mix strictly matching playlist category (Music vs Quran)
-    const existingIds = new Set((activePlaylistTracks || []).map(t => String(t._id || t.id)));
+    const existingIds = new Set([
+      ...(activePlaylistTracks || []).map(t => String(t._id || t.id)),
+      ...(aiRecommendations || []).map(r => String(r._id || r.id))
+    ]);
     const allAvailable = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
     const candidates = allAvailable.filter(t => {
       if (existingIds.has(String(t._id || t.id))) return false;
@@ -522,17 +530,31 @@ function LibraryScreen({
     }
   }, [selectedView]);
 
-  const handleQuickAddTrack = async (track) => {
+  const handleQuickAddTrack = (track) => {
     if (!selectedView || selectedView === 'liked' || !track) return;
     const plId = String(selectedView.id || selectedView._id || '');
     const tId = String(track._id || track.id);
     setJustAddedSongId(tId);
-    if (addToPlaylist) {
-      await addToPlaylist(plId, tId);
-    }
-    showToast(`Added "${track.title}" to crate! ✨`, 'success');
     setAiRecommendations(prev => prev.filter(r => String(r._id || r.id) !== tId));
+    showToast(`Added "${track.title}" to crate! ✨`, 'success');
     setTimeout(() => setJustAddedSongId(null), 1200);
+
+    if (setSelectedView && typeof selectedView === 'object') {
+      setSelectedView(prev => {
+        if (!prev || typeof prev !== 'object') return prev;
+        const curTracks = Array.isArray(prev.tracks) ? [...prev.tracks] : [];
+        if (curTracks.some(t => String(t._id || t.id) === tId)) return prev;
+        return {
+          ...prev,
+          tracks: [...curTracks, track],
+          trackIds: [...(prev.trackIds || []), tId],
+        };
+      });
+    }
+
+    if (addToPlaylist) {
+      addToPlaylist(plId, tId, track).catch(() => {});
+    }
   };
 
   const searchResultsForAdd = useMemo(() => {

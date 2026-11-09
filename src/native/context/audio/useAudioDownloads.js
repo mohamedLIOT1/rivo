@@ -71,19 +71,37 @@ export const useAudioDownloads = ({
   }, []);
 
   const downloadedTrackIds = useMemo(() => {
-    return new Set((downloadedTracks || []).map(t => String(t._id || t.id)).filter(Boolean));
+    const ids = new Set();
+    (downloadedTracks || []).forEach(t => {
+      if (!t) return;
+      if (t._id) ids.add(String(t._id));
+      if (t.id) ids.add(String(t.id));
+      if (t.youtubeId) ids.add(String(t.youtubeId));
+      const k = getTrackDedupeKey(t);
+      if (k) ids.add(k);
+    });
+    return ids;
   }, [downloadedTracks]);
 
   const isTrackDownloaded = useCallback((trackOrId) => {
     if (!trackOrId) return false;
-    const tId = (typeof trackOrId === 'object' && trackOrId !== null)
-      ? String(trackOrId._id || trackOrId.id || '')
-      : String(trackOrId);
     const dList = downloadedTracksRef.current || [];
-    if (tId && dList.some(t => String(t._id || t.id) === tId)) return true;
-    if (typeof trackOrId === 'object' && trackOrId !== null) {
+    if (typeof trackOrId === 'string' || typeof trackOrId === 'number') {
+      const s = String(trackOrId);
+      return dList.some(t => String(t._id || t.id) === s || t.youtubeId === s || getTrackDedupeKey(t) === s);
+    }
+    if (typeof trackOrId === 'object') {
+      if (trackOrId.isDownloaded && (trackOrId.localAudioUri || trackOrId.nativeAudioUri)) return true;
+      const tId = String(trackOrId._id || trackOrId.id || '');
+      const ytId = String(trackOrId.youtubeId || '');
       const curKey = getTrackDedupeKey(trackOrId);
-      if (curKey && dList.some(t => getTrackDedupeKey(t) === curKey)) return true;
+      return dList.some(t => {
+        const dId = String(t._id || t.id || '');
+        if (tId && dId && dId === tId) return true;
+        if (ytId && t.youtubeId && t.youtubeId === ytId) return true;
+        if (curKey && getTrackDedupeKey(t) === curKey) return true;
+        return false;
+      });
     }
     return false;
   }, []);
@@ -106,8 +124,11 @@ export const useAudioDownloads = ({
 
   const handleDownloadTrack = useCallback(async (t, isSilent = false) => {
     if (!t) return;
-    const id = String(t._id || t.id);
-    if (isTrackDownloaded(id)) {
+    const cleanTitle = (t.title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim();
+    const cleanArtist = (t.artist || 'Artist').replace(/[/\\?%*:|"<>]/g, '').trim();
+    const id = String(t._id || t.id || t.youtubeId || `tr_${cleanTitle}_${cleanArtist}`.replace(/\s+/g, '_'));
+
+    if (isTrackDownloaded(t)) {
       if (!isSilent) showToast(`"${t.title || 'Track'}" is already in offline vault`, 'info');
       return;
     }
@@ -122,13 +143,15 @@ export const useAudioDownloads = ({
       downloadingIdsRef.current[id] = 0;
       updateDownloadProgress(id, 0);
 
-      let trackToDownload = { ...t };
-      if (currentTrackRef.current && String(currentTrackRef.current._id || currentTrackRef.current.id) === id) {
-        if (currentTrackRef.current.resolvedAudioUrl) {
-          trackToDownload.resolvedAudioUrl = currentTrackRef.current.resolvedAudioUrl;
+      let trackToDownload = { ...t, _id: id, id };
+      const cur = currentTrackRef.current;
+      const curId = String(cur?._id || cur?.id || '');
+      if (cur && (curId === id || (cur.title && cur.artist && cur.title === t.title && cur.artist === t.artist))) {
+        if (cur.resolvedAudioUrl) {
+          trackToDownload.resolvedAudioUrl = cur.resolvedAudioUrl;
         }
-        if (currentTrackRef.current.duration) {
-          trackToDownload.duration = currentTrackRef.current.duration;
+        if (cur.duration) {
+          trackToDownload.duration = cur.duration;
         }
       }
 
@@ -138,8 +161,9 @@ export const useAudioDownloads = ({
       });
 
       await refreshDownloadedTracks();
-      if (!isSilent) showToast(`"${t.title || 'Track'}" saved to offline vault`, 'success');
+      showToast(`"${t.title || 'Track'}" saved to offline vault`, 'success');
     } catch (err) {
+      console.warn('[AutoDownload] Download error:', t?.title, err?.message);
       if (!isSilent) showToast(`Download failed: ${err?.message || 'Could not save track'}`, 'error');
     } finally {
       delete downloadingIdsRef.current[id];

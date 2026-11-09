@@ -143,7 +143,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     }
   }
 
-  const rawUrl = track.audioUrl || '';
+  const rawUrl = track.audioUrl || (track.youtubeId ? `https://www.youtube.com/watch?v=${track.youtubeId}` : '');
   const rawTitle = (track.title || '').trim();
   const rawArtist = (track.artist || '').trim();
   const { cleanTitle, cleanArtist } = getCleanQueries(rawTitle, rawArtist);
@@ -361,8 +361,11 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
 
   // 2. Direct radio / live stream URL or direct MP3/M4A/AAC stream URL (non-YouTube)
   if (
+    !track.isRetry &&
     rawUrl.startsWith('http') &&
     !rawUrl.includes('youtube.com') &&
+    !rawUrl.includes('freesound.org') &&
+    !rawUrl.includes('example.com') &&
     !rawUrl.includes('youtu.be') &&
     !rawUrl.includes('soundcloud.com') &&
     !rawUrl.includes('sndcdn.com') &&
@@ -467,6 +470,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
 
   // 4. Client-side YouTube Audio Stream Resolution Fallback
   let ytId = extractYouTubeId(rawUrl) ||
+             (track.youtubeId ? extractYouTubeId(track.youtubeId) : null) ||
              (track.source === 'YouTube' ? extractYouTubeId(trackId) : null);
 
   // If no direct ytId, search YouTube client-side directly (<300ms)

@@ -272,6 +272,15 @@ public partial class Form1 : Form
                 string title = root.GetProperty("title").GetString() ?? "Rivo";
                 string artist = root.GetProperty("artist").GetString() ?? "Rivo Music";
                 string album = root.GetProperty("album").GetString() ?? "Rivo";
+                bool isRealAlbum = !string.IsNullOrWhiteSpace(album) &&
+                    !album.Trim().Equals("YouTube", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals("Single", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals("Rivo", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals("Rivo Music", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals("None", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals("Unknown", StringComparison.OrdinalIgnoreCase) &&
+                    !album.Trim().Equals(title.Trim(), StringComparison.OrdinalIgnoreCase);
+
                 string artwork = root.GetProperty("artwork").GetString() ?? "";
                 double curTime = root.GetProperty("currentTime").GetDouble();
                 double duration = root.GetProperty("duration").GetDouble();
@@ -280,6 +289,17 @@ public partial class Form1 : Form
                 DateTime? end = duration > 0 ? DateTime.UtcNow.AddSeconds(duration - curTime) : null;
 
                 string coverUrl = artwork.StartsWith("http") ? artwork : "https://rivo-m.duckdns.org/discord-badge.png";
+
+                var presenceAssets = new Assets()
+                {
+                    LargeImageKey = coverUrl,
+                    SmallImageKey = "https://rivo-m.duckdns.org/discord-badge.png",
+                    SmallImageText = "Rivo Hi-Fi"
+                };
+                if (isRealAlbum)
+                {
+                    presenceAssets.LargeImageText = album.Trim();
+                }
 
                 _discord.SetPresence(new RichPresence()
                 {
@@ -291,13 +311,7 @@ public partial class Form1 : Form
                         Start = start,
                         End = end
                     },
-                    Assets = new Assets()
-                    {
-                        LargeImageKey = coverUrl,
-                        LargeImageText = album,
-                        SmallImageKey = "https://rivo-m.duckdns.org/discord-badge.png",
-                        SmallImageText = "Rivo Hi-Fi"
-                    },
+                    Assets = presenceAssets,
                     Buttons = new DiscordRPC.Button[]
                     {
                         new DiscordRPC.Button()

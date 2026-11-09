@@ -260,6 +260,14 @@ export const styles = StyleSheet.create({
     borderColor: colors.mint,
     marginBottom: 8,
     backgroundColor: '#041d1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reciterCardCoverFallbackText: {
+    fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif',
+    fontWeight: '900',
+    fontSize: 16,
+    color: '#d4af37',
   },
   reciterCardInfo: {
     alignItems: 'center',

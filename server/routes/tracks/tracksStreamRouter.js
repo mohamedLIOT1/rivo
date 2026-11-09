@@ -28,6 +28,7 @@ const handleTrackStream = async (req, res) => {
     let rawUrl = req.query.url || track?.audioUrl || '';
     let title = req.query.title || track?.title || '';
     let artist = req.query.artist || track?.artist || '';
+    const isRetryAlt = req.query.retryAlt === '1' || req.query.retryAlt === 'true';
 
     if (!track && (title || artist)) {
       try {
@@ -79,7 +80,7 @@ const handleTrackStream = async (req, res) => {
       (typeof targetCandidate === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(targetCandidate.trim()) && !mongoose.isValidObjectId(targetCandidate.trim()) ? [null, targetCandidate.trim()] : null);
     const videoId = vidMatch?.[1] || null;
 
-    if (videoId) {
+    if (videoId && !isRetryAlt) {
       const cachedM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
       if (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a)) {
         return res.json({
@@ -142,13 +143,26 @@ const handleTrackStream = async (req, res) => {
     const duration = Number(req.query.duration || track?.duration) || null;
     const albumName = req.query.album || track?.album || '';
     const streamTarget = rawUrl || id || '';
-    const streamUrl = await resolveOfficialYouTubeAudioStream(streamTarget, title, artist, { duration, album: albumName });
+    const streamUrl = await resolveOfficialYouTubeAudioStream(
+      isRetryAlt ? '' : streamTarget,
+      title,
+      artist,
+      {
+        duration,
+        album: albumName,
+        retryAlt: isRetryAlt,
+        excludeVideoId: isRetryAlt ? videoId : null,
+        bypassCache: isRetryAlt
+      }
+    );
     if (streamUrl) {
       const resolvedPath = streamUrl.url || String(streamUrl);
       const vidCandidate = streamUrl.videoId || (rawUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i)?.[1]) || null;
       const isLocalUpload = resolvedPath.startsWith('/uploads/');
       const vidParam = vidCandidate ? `&videoId=${encodeURIComponent(vidCandidate)}` : '';
-      const finalUrl = isLocalUpload ? resolvedPath : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}`;
+      const finalUrl = isLocalUpload
+        ? resolvedPath
+        : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}&title=${encodeURIComponent(title || '')}&artist=${encodeURIComponent(artist || '')}`;
       const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
       const finalDur = (streamUrl.duration && streamUrl.duration > 0) ? streamUrl.duration : (duration || track?.duration || 210);
       if (track?._id && finalDur > 0 && Math.abs((track.duration || 0) - finalDur) > 3) {

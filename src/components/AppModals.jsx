@@ -3,6 +3,7 @@ import { useUI } from '../context/UIContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useJam } from '../context/JamContext';
 import { isQuranContent, getQuranReciterName } from '../utils/quranUtils';
+import { API_BASE_URL } from '../config';
 
 import FullPlayerModal from './FullPlayerModal';
 import CreatePlaylistModal from './CreatePlaylistModal';
@@ -91,6 +92,7 @@ export default function AppModals({
     isSleepTimerOpen,
     setIsSleepTimerOpen,
     showToast,
+    setUnreadChatCount,
   } = useUI();
 
   const {
@@ -143,6 +145,21 @@ export default function AppModals({
   const handleCloseChat = () => {
     setIsChatOpen(false);
     setChatTargetUser(null);
+    try {
+      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      if (token && setUnreadChatCount) {
+        fetch(`${API_BASE_URL}/api/chat/unread-count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data && typeof data.count === 'number') {
+              setUnreadChatCount(data.count);
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {}
   };
 
   const handleCloseJam = () => {
