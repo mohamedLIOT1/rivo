@@ -20,7 +20,10 @@ export default function SettingsModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+    >
       <div className={`brutal-border-thick brutal-shadow-lg max-w-md w-full p-6 relative max-h-[92vh] overflow-y-auto ${
         isDark ? 'bg-[#121917] text-white border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] border-[#0b1110]'
       }`}>

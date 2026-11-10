@@ -32,7 +32,10 @@ export default function SleepTimerModal({ isOpen, onClose, activeTimer, setSleep
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+    >
       <div className={`brutal-border-thick brutal-shadow-lg max-w-sm w-full p-6 relative transition-colors ${
         isDark ? 'bg-[#0e1715] text-[#fdfbf7] border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
       }`}>

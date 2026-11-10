@@ -267,7 +267,10 @@ export default function AddSongModal({ isOpen, onClose, onAddSong }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+    >
       <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 md:p-5 border-b-2 border-[#0b1110] bg-[#ede5d3]">

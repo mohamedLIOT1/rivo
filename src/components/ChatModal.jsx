@@ -147,7 +147,12 @@ export default function ChatModal({
   return (
     <div
       dir={isRTL ? 'rtl' : 'ltr'}
-      onClick={markCurrentChatAsRead}
+      onClick={(e) => {
+        markCurrentChatAsRead?.();
+        if (e.target === e.currentTarget) {
+          onClose?.();
+        }
+      }}
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 select-none"
     >
       <div

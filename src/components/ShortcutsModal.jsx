@@ -12,15 +12,13 @@ export default function ShortcutsModal({ isOpen, onClose }) {
     {
       category: 'Playback Controls',
       items: [
-        { keys: ['F5'], desc: 'Play / Pause', icon: Play },
+        { keys: ['Space', 'K'], desc: 'Play / Pause', icon: Play },
         { keys: ['F6'], desc: 'Next Track', icon: SkipForward },
         { keys: ['F4'], desc: 'Previous Track', icon: SkipBack },
-        { keys: ['Space'], desc: 'Play / Pause', icon: Play },
         { keys: ['Ctrl', '→'], desc: 'Next Track', icon: SkipForward },
         { keys: ['Ctrl', '←'], desc: 'Previous Track', icon: SkipBack },
         { keys: ['→'], desc: 'Seek forward 5s (Shift + → for 10s)' },
         { keys: ['←'], desc: 'Seek backward 5s (Shift + ← for 10s)' },
-        { keys: ['K'], desc: 'Toggle playback' },
         { keys: ['J'], desc: 'Rewind 10s' },
       ],
     },
@@ -44,7 +42,10 @@ export default function ShortcutsModal({ isOpen, onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none animate-in fade-in duration-150"
+    >
       <div className={`brutal-border-thick brutal-shadow-lg w-full max-w-lg overflow-hidden relative transition-colors ${
         isDark ? 'bg-[#0e1715] text-[#fdfbf7] border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
       }`}>

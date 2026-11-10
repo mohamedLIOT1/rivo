@@ -84,7 +84,10 @@ export default function JamRoomModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 select-none">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 select-none"
+    >
       <div className={`rounded-2xl w-full max-w-lg md:max-w-2xl lg:max-w-3xl landscape:max-w-3xl p-4 sm:p-6 max-h-[95vh] flex flex-col overflow-hidden relative brutal-shadow-lg ${
         isDark ? 'bg-[#121212] text-white border-2 border-zinc-800' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
       }`}>

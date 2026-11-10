@@ -47,7 +47,10 @@ export default function AddToPlaylistModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-[500] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 select-none"
+    >
       <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg max-w-sm w-full p-6 relative">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">

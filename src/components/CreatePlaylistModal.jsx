@@ -160,7 +160,10 @@ export default function CreatePlaylistModal({ isOpen, onClose, onCreatePlaylist,
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 select-none">
+    <div
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 select-none"
+    >
       <div className={`bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg w-full relative transition-all ${
         step === 'form' && playlistType === 'mix' ? 'max-w-xl' : 'max-w-md'
       } p-6 max-h-[92vh] flex flex-col`}>

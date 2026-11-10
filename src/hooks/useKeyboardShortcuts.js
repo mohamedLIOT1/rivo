@@ -100,9 +100,8 @@ export function useKeyboardShortcuts({
       }
 
       // 1.1 Hardware Media Keys & Function Keys:
-      // F5 / MediaPlayPause: Play / Pause
+      // MediaPlayPause / F8: Play / Pause
       if (
-        e.code === 'F5' || e.key === 'F5' || e.key === 'f5' || e.keyCode === 116 || e.which === 116 ||
         e.code === 'MediaPlayPause' || e.key === 'MediaPlayPause' || e.keyCode === 179 || e.which === 179 ||
         e.code === 'F8' || e.key === 'F8' || e.keyCode === 119 || e.which === 119
       ) {
@@ -273,19 +272,9 @@ export function useKeyboardShortcuts({
       }
     };
 
-    const handleKeyUp = (e) => {
-      if (e.code === 'F5' || e.key === 'F5' || e.keyCode === 116 || e.which === 116) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-      }
-    };
-
     window.addEventListener('keydown', handleKeyDown, { capture: true });
-    window.addEventListener('keyup', handleKeyUp, { capture: true });
     return () => {
       window.removeEventListener('keydown', handleKeyDown, { capture: true });
-      window.removeEventListener('keyup', handleKeyUp, { capture: true });
     };
   }, [
     togglePlay,
