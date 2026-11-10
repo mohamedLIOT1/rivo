@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
+import { applyStandardAudioMode } from './audioModeConfig';
 import NetInfo from '@react-native-community/netinfo';
 import { API_BASE_URL } from '../../config';
 import { resolveAudioStream, clearStreamCache } from '../../services/youtubeResolver';
@@ -228,13 +229,7 @@ export const createAudioSound = async ({
   let activeUri = uri;
 
   try {
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => {});
+    await applyStandardAudioMode();
 
     const result = await Audio.Sound.createAsync(
       { uri: activeUri },

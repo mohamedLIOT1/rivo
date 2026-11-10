@@ -28,6 +28,7 @@ import {
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
+import { applyStandardAudioMode } from '../context/audio/audioModeConfig';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
@@ -107,12 +108,7 @@ export default function SongRadarModal({
       recordingRef.current = null;
     }
 
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
-    } catch {}
+    await applyStandardAudioMode();
   };
 
   const resetModal = () => {

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import { applyStandardAudioMode } from './audioModeConfig';
 import {
   subscribeToMediaActions,
   checkNotificationPermission,
@@ -8,15 +8,7 @@ import {
 
 export const useAudioMediaSession = ({ playbackRef, queueRef }) => {
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      playThroughEarpieceAndroid: false,
-    }).catch(() => {});
+    applyStandardAudioMode();
 
     // Ensure notification permission is requested gracefully for Lock Screen & Dynamic Island
     checkNotificationPermission().then((allowed) => {

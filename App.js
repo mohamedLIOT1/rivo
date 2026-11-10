@@ -53,7 +53,7 @@ import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import { applyStandardAudioMode } from './src/native/context/audio/audioModeConfig';
 import * as FileSystem from 'expo-file-system';
 import {
   installApk,
@@ -121,15 +121,7 @@ function MainAppShell() {
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      shouldDuckAndroid: false,
-      playThroughEarpieceAndroid: false
-    }).catch(() => {});
+    applyStandardAudioMode();
 
     getCurrentOtaVersion().then(v => {
       if (v) setActiveOtaVersion(v);
@@ -751,15 +743,7 @@ function NativeAppShell() {
   const [activeOtaVersion, setActiveOtaVersion] = useState(null);
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      shouldDuckAndroid: false,
-      playThroughEarpieceAndroid: false
-    }).catch(() => {});
+    applyStandardAudioMode();
 
     getCurrentOtaVersion().then(v => {
       if (v) setActiveOtaVersion(v);

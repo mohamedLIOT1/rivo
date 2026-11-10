@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { updateMediaNotification } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
@@ -7,6 +6,7 @@ import { useToast } from './ToastContext';
 import { SleepTimerProvider } from './SleepTimerContext';
 import { useUser } from './UserContext';
 import { AudioProgressProvider } from './AudioProgressContext';
+import { applyStandardAudioMode } from './audio/audioModeConfig';
 
 import { useAudioQueue } from './audio/useAudioQueue';
 import { useDjCrossfade } from './audio/useDjCrossfade';
@@ -32,15 +32,7 @@ export const AudioProvider = ({ children }) => {
   const { token, currentUser, likedTrackIds = [], tracks: userTracks = [] } = userCtx;
 
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
-      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
-      shouldDuckAndroid: false,
-      playThroughEarpieceAndroid: false
-    }).catch(() => {});
+    applyStandardAudioMode();
   }, []);
 
   const tokenRef = useRef(token);
