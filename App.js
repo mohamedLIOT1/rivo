@@ -62,6 +62,7 @@ import {
 } from './src/native/services/mediaControls';
 
 import ErrorBoundary from './src/native/components/ErrorBoundary';
+import { getCurrentOtaVersion } from './src/native/services/otaService';
 import { UpdateProvider } from './src/native/context/UpdateContext';
 import UpdateModals from './src/native/components/UpdateModals';
 
