@@ -4,9 +4,14 @@ import {
   subscribeToMediaActions,
   checkNotificationPermission,
   requestNotificationPermission,
+  updateLockScreenLyrics,
 } from '../../services/mediaControls';
 
-export const useAudioMediaSession = ({ playbackRef, queueRef }) => {
+export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
+  useEffect(() => {
+    updateLockScreenLyrics(lyrics);
+  }, [lyrics]);
+
   useEffect(() => {
     applyStandardAudioMode();
 

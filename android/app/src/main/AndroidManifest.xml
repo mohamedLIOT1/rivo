@@ -78,11 +78,18 @@
         android:exported="true">
         <intent-filter>
             <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            <action android:name="com.rivo.app.ACTION_PLAY_QUEUE_INDEX" />
         </intent-filter>
         <meta-data
             android:name="android.appwidget.provider"
             android:resource="@xml/widget_4x2_info" />
     </receiver>
+
+    <!-- RemoteViews Service for 4x2 Widget Scrollable Queue -->
+    <service
+        android:name=".RivoWidgetQueueService"
+        android:permission="android.permission.BIND_REMOTEVIEWS"
+        android:exported="false" />
 
     <provider
         android:name="androidx.core.content.FileProvider"

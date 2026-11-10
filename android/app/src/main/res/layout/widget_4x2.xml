@@ -72,10 +72,33 @@
             android:contentDescription="Favorite" />
     </LinearLayout>
 
+    <!-- Scrollable Queue List -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="6dp">
+
+        <ListView
+            android:id="@+id/widget_42_queue"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:scrollbars="none"
+            android:nestedScrollingEnabled="true" />
+
+        <TextView
+            android:id="@+id/widget_42_empty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="No tracks in queue"
+            android:textColor="#64748b"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <!-- Playback Controls Row -->
     <LinearLayout

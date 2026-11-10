@@ -11,6 +11,7 @@ import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.Dynamic
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -115,15 +116,20 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         val intent = Intent(context, MediaNotificationService::class.java).apply {
             action = MediaNotificationService.ACTION_HIDE
         }
-        try {
-            context.startService(intent)
-        } catch (_: Throwable) {}
+        try { context.startService(intent) } catch (_: Throwable) {}
     }
 
     @ReactMethod
     fun updateQueue(queueArray: ReadableArray?, currentTrackId: String?) {
         LockScreenQueueStore.updateFromBridge(queueArray, currentTrackId)
         LockScreenActivity.notifyPlaybackChanged()
+        try { RivoWidgetManager.notifyQueueChanged(reactContext.applicationContext) } catch (_: Throwable) {}
+    }
+
+    @ReactMethod
+    fun updateLyrics(lyrics: Dynamic) {
+        LockScreenLyricsStore.updateFromBridge(lyrics)
+        LockScreenActivity.notifyLyricsChanged()
     }
 
     @ReactMethod
@@ -250,11 +256,8 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
-    @ReactMethod
-    fun addListener(eventName: String) {}
-
-    @ReactMethod
-    fun removeListeners(count: Int) {}
+    @ReactMethod fun addListener(eventName: String) {}
+    @ReactMethod fun removeListeners(count: Int) {}
 
     private fun createChatNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -380,19 +383,14 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     // OTA & APK Installation Delegations to RivoOtaHelper
     @ReactMethod
     fun installApk(filePath: String, promise: Promise) = RivoOtaHelper.installApk(reactContext, filePath, promise)
-
     @ReactMethod
     fun applyOtaBundle(tempFilePath: String, promise: Promise) = RivoOtaHelper.applyOtaBundle(reactContext, tempFilePath, promise)
-
     @ReactMethod
     fun reloadApp(promise: Promise) = RivoOtaHelper.reloadApp(reactContext, promise)
-
     @ReactMethod
     fun exitAndRemoveTask(promise: Promise) = RivoOtaHelper.exitAndRemoveTask(reactContext, promise)
-
     @ReactMethod
     fun clearOtaBundle(promise: Promise) = RivoOtaHelper.clearOtaBundle(reactContext, promise)
-
     @ReactMethod
     fun getOtaInfo(promise: Promise) = RivoOtaHelper.getOtaInfo(reactContext, promise)
 }

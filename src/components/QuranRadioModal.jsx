@@ -34,22 +34,22 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
       <div className="relative w-full max-w-3xl max-h-[90vh] flex flex-col bg-[#070e0c] border border-emerald-500/30 shadow-[0_0_60px_rgba(16,185,129,0.18)] rounded-2xl overflow-hidden font-sans">
         
         {/* ── RETRO HI-FI DECK HEADER ── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-emerald-500/25 bg-gradient-to-r from-[#040f0c] via-[#091f1a] to-[#040f0c]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+        <div className="relative flex items-center justify-between px-5 py-4 border-b border-emerald-500/25 bg-gradient-to-r from-[#040f0c] via-[#091f1a] to-[#040f0c]">
+          <div className="flex items-center gap-3 min-w-0 flex-1 mr-3 rtl:mr-0 rtl:ml-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.3)] shrink-0">
               <Radio size={20} className="animate-pulse" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-white font-display">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-black text-white font-display truncate">
                   {t('quran.radioLive')}
                 </h2>
-                <span className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/40 text-red-400 font-bold">
+                <span className="flex items-center gap-1.5 text-[10px] font-mono px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/40 text-red-400 font-bold shrink-0">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
                   {t('quran.liveBadge')}
                 </span>
               </div>
-              <p className="text-xs text-emerald-300/80 font-mono mt-0.5">
+              <p className="text-xs text-emerald-300/80 font-mono mt-0.5 truncate">
                 {t('quran.radioSub')}
               </p>
             </div>
@@ -57,8 +57,9 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/40 flex items-center justify-center text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-700/40 flex items-center justify-center text-zinc-300 hover:text-white transition-colors cursor-pointer shrink-0 z-10"
             title={t('common.close')}
+            aria-label={t('common.close')}
           >
             <X size={18} />
           </button>
@@ -87,6 +88,11 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
                       src={station.cover} 
                       alt={station.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                      loading="lazy"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = 'https://upload.wikimedia.org/wikipedia/commons/5/50/FirstSurahKoran.jpg';
+                      }}
                     />
                     {isCurrentPlaying ? (
                       <div className="absolute inset-0 bg-black/60 flex items-center justify-center gap-0.5">

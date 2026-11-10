@@ -18,6 +18,7 @@ import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import FeaturedAlbumCard from '../components/home/FeaturedAlbumCard';
+import UpdateBanner from '../components/home/UpdateBanner';
 import AlbumDetailModal from '../components/AlbumDetailModal';
 import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
@@ -211,6 +212,9 @@ function HomeScreen({
 
   const renderHeader = useCallback(() => (
     <View>
+      {/* ─── IN-APP UPDATE BANNER (Only shows when an update is available) ─── */}
+      <UpdateBanner />
+
       {/* ─────────────────────────────────────────
           HERO BANNER (MUSIC STREAMING LAB)
           Matching exact website layout

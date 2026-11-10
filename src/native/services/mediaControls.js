@@ -87,6 +87,30 @@ export const updateMediaQueue = (queue = [], currentTrack = null) => {
   } catch (e) {}
 };
 
+export const updateLockScreenLyrics = (lyrics) => {
+  if (!RivoMediaControls || typeof RivoMediaControls.updateLyrics !== 'function') return;
+  try {
+    if (!lyrics) {
+      RivoMediaControls.updateLyrics(null);
+      return;
+    }
+    if (Array.isArray(lyrics)) {
+      const sanitized = lyrics
+        .slice(0, 300)
+        .map((item, idx) => ({
+          time: typeof item?.time === 'number' && !isNaN(item.time) ? item.time : idx * 5,
+          text: String(item?.text || '').trim(),
+        }))
+        .filter((item) => item.text.length > 0);
+      RivoMediaControls.updateLyrics(sanitized);
+    } else if (typeof lyrics === 'string') {
+      RivoMediaControls.updateLyrics(lyrics);
+    } else {
+      RivoMediaControls.updateLyrics(null);
+    }
+  } catch (e) {}
+};
+
 export const subscribeToMediaActions = (callbackOrHandlers) => {
   const noop = () => {};
   noop.remove = noop;
@@ -311,34 +335,18 @@ export const subscribeToChatNotification = (callback) => {
   }
 };
 
-export const applyOtaBundle = async (filePath) => {
-  if (!RivoMediaControls || !RivoMediaControls.applyOtaBundle) return null;
-  return RivoMediaControls.applyOtaBundle(filePath);
-};
-
-export const reloadApp = async () => {
-  if (!RivoMediaControls || !RivoMediaControls.reloadApp) return false;
-  return RivoMediaControls.reloadApp();
-};
-
-export const clearOtaBundle = async () => {
-  if (!RivoMediaControls || !RivoMediaControls.clearOtaBundle) return false;
-  return RivoMediaControls.clearOtaBundle();
-};
-
-export const getOtaInfo = async () => {
-  if (!RivoMediaControls || !RivoMediaControls.getOtaInfo) return { exists: false, size: 0 };
-  return RivoMediaControls.getOtaInfo();
-};
+export const applyOtaBundle = async (filePath) => RivoMediaControls?.applyOtaBundle?.(filePath) ?? null;
+export const reloadApp = async () => RivoMediaControls?.reloadApp?.() ?? false;
+export const clearOtaBundle = async () => RivoMediaControls?.clearOtaBundle?.() ?? false;
+export const getOtaInfo = async () => RivoMediaControls?.getOtaInfo?.() ?? { exists: false, size: 0 };
 
 export const exitAndRemoveTask = async () => {
-  if (RivoMediaControls && RivoMediaControls.exitAndRemoveTask) {
-    try {
-      await RivoMediaControls.exitAndRemoveTask();
-      return true;
-    } catch (e) {}
+  try {
+    await RivoMediaControls?.exitAndRemoveTask?.();
+    return true;
+  } catch (e) {
+    return false;
   }
-  return false;
 };
 
 export const hasNativeProcessRestart = () => {
@@ -346,42 +354,33 @@ export const hasNativeProcessRestart = () => {
 };
 
 export const setLockScreenEnabled = (enabled) => {
-  if (RivoMediaControls && typeof RivoMediaControls.setLockScreenEnabled === 'function') {
-    try {
-      RivoMediaControls.setLockScreenEnabled(Boolean(enabled));
-    } catch (e) {}
-  }
+  try {
+    RivoMediaControls?.setLockScreenEnabled?.(Boolean(enabled));
+  } catch (e) {}
 };
 
 export const isLockScreenEnabled = async () => {
-  if (RivoMediaControls && typeof RivoMediaControls.isLockScreenEnabled === 'function') {
-    try {
-      return await RivoMediaControls.isLockScreenEnabled();
-    } catch (e) {}
+  try {
+    return (await RivoMediaControls?.isLockScreenEnabled?.()) ?? true;
+  } catch (e) {
+    return true;
   }
-  return true;
 };
 
 export const canDrawOverlays = async () => {
   if (Platform.OS !== 'android') return true;
-  if (RivoMediaControls && typeof RivoMediaControls.canDrawOverlays === 'function') {
-    try {
-      return await RivoMediaControls.canDrawOverlays();
-    } catch (e) {}
+  try {
+    return (await RivoMediaControls?.canDrawOverlays?.()) ?? true;
+  } catch (e) {
+    return true;
   }
-  return true;
 };
 
 export const requestOverlayPermission = async () => {
   if (Platform.OS !== 'android') return true;
-  if (RivoMediaControls && typeof RivoMediaControls.requestOverlayPermission === 'function') {
-    try {
-      const res = await RivoMediaControls.requestOverlayPermission();
-      if (res) return true;
-    } catch (e) {}
-  }
   try {
-    if (Linking && typeof Linking.openSettings === 'function') {
+    if (await RivoMediaControls?.requestOverlayPermission?.()) return true;
+    if (Linking?.openSettings) {
       await Linking.openSettings();
       return true;
     }

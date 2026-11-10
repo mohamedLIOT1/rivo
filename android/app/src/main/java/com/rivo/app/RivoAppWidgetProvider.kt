@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
@@ -26,6 +27,24 @@ object RivoWidgetManager {
         updateWidgetGroup(context, appWidgetManager, RivoAppWidget4x2::class.java, ::build4x2Views)
     }
 
+    fun notifyQueueChanged(context: Context) {
+        val appWidgetManager = try {
+            AppWidgetManager.getInstance(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire AppWidgetManager", e)
+            return
+        } ?: return
+
+        try {
+            val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, RivoAppWidget4x2::class.java))
+            if (ids.isNotEmpty()) {
+                appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.widget_42_queue)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to notify queue view data changed", e)
+        }
+    }
+
     private fun updateWidgetGroup(
         context: Context,
         appWidgetManager: AppWidgetManager,
@@ -38,6 +57,9 @@ object RivoWidgetManager {
             val views = builder(context)
             for (id in ids) {
                 appWidgetManager.updateAppWidget(id, views)
+            }
+            if (providerClass == RivoAppWidget4x2::class.java) {
+                appWidgetManager.notifyAppWidgetViewDataChanged(ids, R.id.widget_42_queue)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update ${providerClass.simpleName}", e)
@@ -140,6 +162,30 @@ object RivoWidgetManager {
                 else R.drawable.ic_widget_like_off
             )
 
+            // Scrollable Queue RemoteViews Adapter
+            val serviceIntent = Intent(context, RivoWidgetQueueService::class.java).apply {
+                data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME))
+            }
+            views.setRemoteAdapter(R.id.widget_42_queue, serviceIntent)
+            views.setEmptyView(R.id.widget_42_queue, R.id.widget_42_empty)
+
+            // PendingIntent Template for Queue Item Clicks
+            val itemClickIntent = Intent(context, RivoAppWidget4x2::class.java).apply {
+                action = RivoAppWidget4x2.ACTION_PLAY_QUEUE_INDEX
+            }
+            val itemClickFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val itemClickPendingIntent = PendingIntent.getBroadcast(
+                context,
+                210,
+                itemClickIntent,
+                itemClickFlags
+            )
+            views.setPendingIntentTemplate(R.id.widget_42_queue, itemClickPendingIntent)
+
             views.setOnClickPendingIntent(R.id.widget_42_art, getOpenAppIntent(context))
             views.setOnClickPendingIntent(R.id.widget_42_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 201))
             views.setOnClickPendingIntent(R.id.widget_42_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 202))
@@ -162,6 +208,26 @@ class RivoAppWidget4x1 : AppWidgetProvider() {
 }
 
 class RivoAppWidget4x2 : AppWidgetProvider() {
+    companion object {
+        const val ACTION_PLAY_QUEUE_INDEX = "com.rivo.app.ACTION_PLAY_QUEUE_INDEX"
+        const val EXTRA_QUEUE_INDEX = "extra_queue_index"
+        const val EXTRA_TRACK_ID = "extra_track_id"
+    }
+
+    override fun onReceive(context: Context, intent: Intent) {
+        super.onReceive(context, intent)
+        if (intent.action == ACTION_PLAY_QUEUE_INDEX) {
+            val index = intent.getIntExtra(EXTRA_QUEUE_INDEX, -1)
+            if (index >= 0) {
+                MediaControlsModule.sendEvent("play_queue_index:$index")
+                LockScreenQueueStore.items = LockScreenQueueStore.items.map { entry ->
+                    entry.copy(isCurrent = entry.index == index)
+                }
+                RivoWidgetManager.updateAll(context)
+            }
+        }
+    }
+
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         RivoWidgetManager.updateAll(context)
     }

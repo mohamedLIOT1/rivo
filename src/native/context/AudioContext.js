@@ -222,7 +222,11 @@ export const AudioProvider = ({ children }) => {
   queueRef.current = queue;
 
   // Initialize Audio hardware session once on mount & handle lockscreen/notification actions
-  useAudioMediaSession({ playbackRef, queueRef });
+  useAudioMediaSession({
+    playbackRef,
+    queueRef,
+    lyrics: lyricsState?.lyrics,
+  });
 
   useEffect(() => {
     updateMediaQueue(queue.queue, playback.currentTrack);

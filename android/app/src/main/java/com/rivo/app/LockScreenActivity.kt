@@ -31,6 +31,12 @@ class LockScreenActivity : Activity() {
             }
         }
 
+        fun notifyLyricsChanged() {
+            activeInstance?.runOnUiThread {
+                activeInstance?.updateLyricsUi()
+            }
+        }
+
         fun dismissIfShowing() {
             activeInstance?.runOnUiThread {
                 activeInstance?.finish()
@@ -42,6 +48,8 @@ class LockScreenActivity : Activity() {
     private var imgCoverArt: ImageView? = null
     private var txtTitle: TextView? = null
     private var txtArtist: TextView? = null
+    private var txtLyrics: TextView? = null
+    private var lastLyricLine: String? = null
     private var txtTimeCurrent: TextView? = null
     private var txtTimeTotal: TextView? = null
     private var seekProgress: SeekBar? = null
@@ -159,6 +167,7 @@ class LockScreenActivity : Activity() {
         imgCoverArt = findViewById(R.id.lock_cover_art)
         txtTitle = findViewById(R.id.lock_title)
         txtArtist = findViewById(R.id.lock_artist)
+        txtLyrics = findViewById(R.id.lock_lyrics_line)
         txtTimeCurrent = findViewById(R.id.lock_time_current)
         txtTimeTotal = findViewById(R.id.lock_time_total)
         seekProgress = findViewById(R.id.lock_seekbar)
@@ -244,6 +253,7 @@ class LockScreenActivity : Activity() {
                 if (fromUser && MediaNotificationService.currentDurationMs > 0) {
                     val pos = (prog.toDouble() / 1000.0 * MediaNotificationService.currentDurationMs).toLong()
                     txtTimeCurrent?.text = formatTime(pos)
+                    updateLyricsUi(pos)
                 }
             }
 
@@ -325,6 +335,32 @@ class LockScreenActivity : Activity() {
         if (!isUserSeeking && dur > 0) {
             val pct = ((pos.toDouble() / dur.toDouble()) * 1000.0).toInt().coerceIn(0, 1000)
             seekProgress?.progress = pct
+        }
+
+        updateLyricsUi(pos)
+    }
+
+    fun updateLyricsUi(pos: Long = MediaNotificationService.getEstimatedPositionMs()) {
+        val lyricView = txtLyrics ?: return
+        val activeLine = LockScreenLyricsStore.getActiveLyric(pos)
+
+        if (activeLine.isNullOrBlank()) {
+            if (lyricView.visibility != View.GONE) {
+                lyricView.visibility = View.GONE
+                lyricView.text = ""
+                lastLyricLine = null
+            }
+            return
+        }
+
+        if (activeLine != lastLyricLine) {
+            lastLyricLine = activeLine
+            lyricView.text = activeLine
+            if (lyricView.visibility != View.VISIBLE) {
+                lyricView.alpha = 0f
+                lyricView.visibility = View.VISIBLE
+                lyricView.animate().alpha(1f).setDuration(220).start()
+            }
         }
     }
 

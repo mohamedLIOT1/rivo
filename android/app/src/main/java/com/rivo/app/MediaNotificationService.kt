@@ -25,7 +25,6 @@ class MediaNotificationService : Service() {
     companion object {
         const val CHANNEL_ID = MediaNotificationBuilder.CHANNEL_ID
         const val NOTIFICATION_ID = MediaNotificationBuilder.NOTIFICATION_ID
-
         const val ACTION_SHOW = "com.rivo.app.ACTION_SHOW"
         const val ACTION_UPDATE = "com.rivo.app.ACTION_UPDATE"
         const val ACTION_HIDE = "com.rivo.app.ACTION_HIDE"
@@ -38,7 +37,6 @@ class MediaNotificationService : Service() {
         const val ACTION_SHUFFLE = "com.rivo.app.ACTION_SHUFFLE"
         const val ACTION_LIKE = "com.rivo.app.ACTION_LIKE"
         const val ACTION_FORWARD = "com.rivo.app.ACTION_FORWARD"
-
         var currentTitle: String = "Rivo Music"
         var currentArtist: String = "Playing in Background"
         var currentCoverUrl: String? = null
@@ -51,6 +49,7 @@ class MediaNotificationService : Service() {
         @Volatile var lastPositionUpdateElapsedRealtime: Long = SystemClock.elapsedRealtime()
         var currentBitmap: Bitmap? = null
         var instance: MediaNotificationService? = null
+        val currentLyrics: List<LyricEntry> get() = LockScreenLyricsStore.currentLyrics
 
         fun dispatchMediaActionStatic(action: String) = instance?.dispatchMediaAction(action)
 
@@ -272,16 +271,12 @@ class MediaNotificationService : Service() {
         val now = SystemClock.elapsedRealtime()
         val incomingTitle = intent.getStringExtra("title")
         val isTitleChanged = !incomingTitle.isNullOrBlank() && incomingTitle != currentTitle && currentTitle != "Rivo Music"
-        if (!incomingTitle.isNullOrBlank() && incomingTitle != "Unknown Track") {
-            currentTitle = incomingTitle
-        } else if (currentTitle == "Rivo Music" && !incomingTitle.isNullOrBlank()) {
+        if (!incomingTitle.isNullOrBlank() && (incomingTitle != "Unknown Track" || currentTitle == "Rivo Music")) {
             currentTitle = incomingTitle
         }
 
         val incomingArtist = intent.getStringExtra("artist")
-        if (!incomingArtist.isNullOrBlank() && incomingArtist != "Unknown Artist") {
-            currentArtist = incomingArtist
-        } else if (currentArtist == "Playing in Background" && !incomingArtist.isNullOrBlank()) {
+        if (!incomingArtist.isNullOrBlank() && (incomingArtist != "Unknown Artist" || currentArtist == "Playing in Background")) {
             currentArtist = incomingArtist
         }
 
@@ -328,6 +323,7 @@ class MediaNotificationService : Service() {
         } else if (isTitleChanged) {
             currentPositionMs = 0L
             lastPositionUpdateElapsedRealtime = SystemClock.elapsedRealtime()
+            LockScreenLyricsStore.clear()
         }
     }
 
@@ -355,8 +351,10 @@ class MediaNotificationService : Service() {
     }
 
     private fun notifyLockScreen() {
-        try { LockScreenActivity.notifyPlaybackChanged() } catch (_: Throwable) {}
-        try { RivoWidgetManager.updateAll(this) } catch (_: Throwable) {}
+        try {
+            LockScreenActivity.notifyPlaybackChanged()
+            RivoWidgetManager.updateAll(this)
+        } catch (_: Throwable) {}
     }
 
     private fun startForegroundWithNotification() {

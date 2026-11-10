@@ -13,15 +13,40 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Compare two semver-like strings (e.g. "2.3.7" vs "2.3.3")
+ * Normalize version strings to handle legacy OTA numbering schemes.
+ * In Rivo 2.4.x, OTAs were auto-incremented as 2.4.14, 2.4.15, 2.4.16 where:
+ *   - 2.4.14 corresponds to patch 4 (base APK 2.4.4 / 2.4.1.4)
+ *   - 2.4.15 corresponds to patch 5 (base APK 2.4.5)
+ *   - 2.4.16 corresponds to patch 6 (base APK 2.4.6)
+ * Mapping 2.4.1X to 2.4.X guarantees that a newer APK (e.g. 2.4.6) is recognized
+ * as >= 2.4.16 and > 2.4.15, preventing stale older OTAs from being offered.
+ */
+export const normalizeVersion = (v) => {
+  if (!v) return '0.0.0';
+  let str = String(v).trim().replace(/^v/i, '');
+  if (/^2\.4\.(1[4-9]|2\d)(\.|$)/.test(str)) {
+    const match = str.match(/^2\.4\.(1[4-9]|2\d)(.*)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      const patch = num - 10;
+      str = `2.4.${patch}${match[2] || ''}`;
+    }
+  }
+  return str;
+};
+
+/**
+ * Compare two semver-like strings (e.g. "2.4.6" vs "2.4.15")
  * Returns >0 if v1 > v2, <0 if v1 < v2, 0 if equal
  */
 export const compareVersions = (v1, v2) => {
   if (!v1 && !v2) return 0;
   if (!v1) return -1;
   if (!v2) return 1;
-  const p1 = String(v1).replace(/[^0-9.]/g, '').split('.').map(Number);
-  const p2 = String(v2).replace(/[^0-9.]/g, '').split('.').map(Number);
+  const s1 = normalizeVersion(v1);
+  const s2 = normalizeVersion(v2);
+  const p1 = s1.replace(/[^0-9.]/g, '').split('.').map(Number);
+  const p2 = s2.replace(/[^0-9.]/g, '').split('.').map(Number);
   const maxLen = Math.max(p1.length, p2.length);
   for (let i = 0; i < maxLen; i++) {
     const num1 = p1[i] || 0;
@@ -47,11 +72,24 @@ export const getBaseAppVersion = () => {
 
 /**
  * Get current installed OTA version (or null if running default APK bundle)
+ * If the installed base APK is >= stored OTA version, the stale stored OTA
+ * record is purged and null is returned.
  */
 export const getCurrentOtaVersion = async () => {
   try {
     const stored = await AsyncStorage.getItem(STORAGE_KEYS.OTA_VERSION);
     if (!stored) return null;
+
+    const baseVersion = getBaseAppVersion();
+    // Guard: If base APK version is >= stored OTA version, the stored OTA is obsolete!
+    if (baseVersion && compareVersions(baseVersion, stored) >= 0) {
+      await AsyncStorage.removeItem(STORAGE_KEYS.OTA_VERSION).catch(() => {});
+      if (Platform.OS === 'android') {
+        await clearOtaBundle().catch(() => {});
+      }
+      return null;
+    }
+
     if (Platform.OS === 'android') {
       const info = await getOtaInfo().catch(() => null);
       if (info && info.exists === false) {
@@ -72,10 +110,20 @@ export const isOtaUpdateAvailable = (otaManifest, currentOta, baseVersion = getB
   if (Platform.OS !== 'android') return false;
   if (!otaManifest || otaManifest.enabled === false || !otaManifest.version) return false;
   const base = APP_VERSION || baseVersion;
+
+  // 1. If base APK is already newer than or equal to the OTA release, NEVER offer it!
+  // (e.g. Base APK 2.4.6 must NOT be offered OTA 2.4.15 or 2.4.16)
+  if (base && compareVersions(base, otaManifest.version) >= 0) {
+    return false;
+  }
+
+  // 2. Active version check: if running an OTA that is already >= manifest version
   const activeVer = (currentOta && compareVersions(currentOta, base) > 0) ? currentOta : base;
   if (activeVer && compareVersions(activeVer, otaManifest.version) >= 0) {
     return false;
   }
+
+  // 3. Binary compatibility check: APK must satisfy minimum required binary version
   const minRequired = otaManifest.minAppVersion || '1.0.0';
   if (compareVersions(base, minRequired) < 0) {
     return false;
@@ -108,6 +156,9 @@ export const fetchOtaManifest = async () => {
 export const initOtaCrashGuard = async () => {
   if (Platform.OS !== 'android') return;
   try {
+    // Proactively verify & purge stale stored OTA if newer base APK was installed
+    await getCurrentOtaVersion().catch(() => {});
+
     const bootFlag = await AsyncStorage.getItem(STORAGE_KEYS.OTA_BOOT_FLAG);
     if (bootFlag === 'booting') {
       let crashCount = parseInt((await AsyncStorage.getItem(STORAGE_KEYS.OTA_CRASH_COUNT)) || '0', 10) + 1;
@@ -151,6 +202,11 @@ export const checkAndDownloadOta = async (otaManifest, onProgress) => {
   }
 
   const baseVersion = APP_VERSION || getBaseAppVersion();
+
+  // Guard: If base APK is already newer than or equal to the OTA release, no update needed!
+  if (baseVersion && compareVersions(baseVersion, otaManifest.version) >= 0) {
+    return { available: false, reason: 'already_up_to_date' };
+  }
 
   // Check minimum binary compatibility
   const minRequired = otaManifest.minAppVersion || '1.0.0';
