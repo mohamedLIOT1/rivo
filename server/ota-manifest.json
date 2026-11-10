@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.16",
+  "version": "2.4.17",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث سريع v2.4.16 • إصلاح تشغيل الألبومات المميزة ومزامنة قائمة الانتظار",
-  "notesEn": "Fast OTA v2.4.16 • Fix Featured Album play button & lockscreen queue sync",
+  "notes": "تحديث سريع v2.4.17 • إضافة كلمات الأغاني على شاشة القفل وقائمة الانتظار في الويدجت وتحديث الراديو",
+  "notesEn": "Fast OTA v2.4.17 • Lockscreen lyrics, 4x2 widget queue & radio improvements",
   "bundleSize": 5132874,
   "sizeMb": "4.90 MB",
-  "updatedAt": "2026-11-10T08:39:49.241Z"
+  "updatedAt": "2026-11-10T10:46:00.000Z"
 }
