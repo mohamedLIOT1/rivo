@@ -403,7 +403,13 @@ router.post('/api/deploy-webhook', (req, res) => {
   const nodeBinDir = path.dirname(process.execPath);
   const fullPath = `${nodeBinDir}:/usr/local/bin:/usr/bin:/bin:${process.env.PATH || ''}`;
 
-  const deployCmd = 'git config --global --add safe.directory "*" 2>/dev/null || true; (cd /home/ubuntu && git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true && git fetch origin main --force && git reset --hard origin/main && cp -rf server/* /home/ubuntu/rivo/server/ 2>/dev/null || true && cp -rf public/* /home/ubuntu/rivo/public/ 2>/dev/null || true && (cp -rf dist/* /home/ubuntu/dist/ 2>/dev/null || true) && (cp -rf dist/* /var/www/html/ 2>/dev/null || true) && (cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true)); (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true; git fetch origin main --force && git reset --hard origin/main) 2>/dev/null || true';
+  const deployCmd = [
+    'git config --global --add safe.directory "*" 2>/dev/null || true',
+    'if [ -d /home/ubuntu/.git ]; then cd /home/ubuntu && (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main && if [ -d /home/ubuntu/rivo ] && [ ! /home/ubuntu -ef /home/ubuntu/rivo ]; then cp -rf src server public package.json vite.config.js index.html /home/ubuntu/rivo/ 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; fi; fi',
+    `cd "${projectRoot}" && if [ -d .git ]; then (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main; fi`,
+    `if [ -d "${projectRoot}/node_modules" ]; then (cd "${projectRoot}" && npm run build); elif [ -d /home/ubuntu/node_modules ]; then (cd /home/ubuntu && npm run build && mkdir -p "${projectRoot}/dist" && cp -rf /home/ubuntu/dist/* "${projectRoot}/dist/" 2>/dev/null || true); fi`,
+    `SRC_DIST="${projectRoot}/dist"; [ -d "$SRC_DIST" ] || SRC_DIST="/home/ubuntu/dist"; if [ -d "$SRC_DIST" ]; then mkdir -p /home/ubuntu/dist /home/ubuntu/rivo/dist 2>/dev/null || true; cp -rf "$SRC_DIST"/* /home/ubuntu/dist/ 2>/dev/null || true; cp -rf "$SRC_DIST"/* /home/ubuntu/rivo/dist/ 2>/dev/null || true; cp -rf "$SRC_DIST"/* /var/www/html/ 2>/dev/null || sudo -n cp -rf "$SRC_DIST"/* /var/www/html/ 2>/dev/null || true; fi`
+  ].join(' ; ');
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 
