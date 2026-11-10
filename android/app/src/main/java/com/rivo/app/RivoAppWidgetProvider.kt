@@ -105,6 +105,10 @@ object RivoWidgetManager {
             if (MediaNotificationService.isPlaying) R.drawable.ic_notification_pause
             else R.drawable.ic_notification_play
         )
+        // Set tints programmatically (android:tint not supported in RemoteViews)
+        views.setInt(R.id.widget_42_btn_play_pause, "setColorFilter", 0xFF042f2e.toInt())
+        views.setInt(R.id.widget_42_btn_prev, "setColorFilter", 0xFFFFFFFF.toInt())
+        views.setInt(R.id.widget_42_btn_next, "setColorFilter", 0xFFFFFFFF.toInt())
 
         // Visual states for Shuffle, Repeat, and Like
         views.setInt(

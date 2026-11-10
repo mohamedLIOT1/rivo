@@ -69,7 +69,6 @@
             android:layout_height="36dp"
             android:src="@drawable/ic_notification_like"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:tint="#94a3b8"
             android:contentDescription="Favorite" />
     </LinearLayout>
 
@@ -92,7 +91,6 @@
             android:layout_height="36dp"
             android:src="@drawable/ic_notification_shuffle"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:tint="#94a3b8"
             android:contentDescription="Shuffle" />
 
         <Space
@@ -106,7 +104,6 @@
             android:layout_height="40dp"
             android:src="@drawable/ic_notification_prev"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:tint="#FFFFFF"
             android:contentDescription="Previous" />
 
         <Space
@@ -120,7 +117,6 @@
             android:layout_height="48dp"
             android:src="@drawable/ic_notification_pause"
             android:background="@drawable/lock_play_circle"
-            android:tint="#042f2e"
             android:contentDescription="Play/Pause" />
 
         <Space
@@ -134,7 +130,6 @@
             android:layout_height="40dp"
             android:src="@drawable/ic_notification_next"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:tint="#FFFFFF"
             android:contentDescription="Next" />
 
         <Space
@@ -148,7 +143,6 @@
             android:layout_height="36dp"
             android:src="@drawable/ic_notification_repeat"
             android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:tint="#94a3b8"
             android:contentDescription="Repeat" />
     </LinearLayout>
 
