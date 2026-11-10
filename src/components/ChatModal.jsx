@@ -8,18 +8,11 @@ import ChatMessageItem from './chat/ChatMessageItem';
 import ChatHubView from './chat/ChatHubView';
 import ChatEmptyState from './chat/ChatEmptyState';
 import { useChatMessages, getToken } from './chat/useChatMessages';
+import { getNotificationPermission, requestWebNotificationPermission } from '../utils/webNotification';
 
 export default function ChatModal({
-  isOpen,
-  onClose,
-  targetUser,
-  currentUser,
-  socket,
-  onStartJamWithUser,
-  onJoinJam,
-  onPlayTrack,
-  globalTheme = 'dark',
-  onViewProfile
+  isOpen, onClose, targetUser, currentUser, socket,
+  onStartJamWithUser, onJoinJam, onPlayTrack, globalTheme = 'dark', onViewProfile
 }) {
   const { isRTL = false } = usePreferences() || {};
   const { setUnreadChatCount, setChatTargetUser } = useUI() || {};
@@ -33,6 +26,23 @@ export default function ChatModal({
   const [loadingHub, setLoadingHub] = useState(false);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const [activeTab, setActiveTab] = useState('chats');
+  const [notifPerm, setNotifPerm] = useState(() => getNotificationPermission());
+  const [notifDismissed, setNotifDismissed] = useState(() => {
+    try { return sessionStorage.getItem('rivo_notif_banner_dismissed') === '1'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    if (isOpen) setNotifPerm(getNotificationPermission());
+  }, [isOpen]);
+
+  const handleEnableNotif = useCallback(async () => {
+    setNotifPerm(await requestWebNotificationPermission());
+  }, []);
+
+  const handleDismissNotif = useCallback(() => {
+    setNotifDismissed(true);
+    try { sessionStorage.setItem('rivo_notif_banner_dismissed', '1'); } catch {}
+  }, []);
 
   // Sync activeUser if targetUser prop changes
   useEffect(() => {
@@ -116,31 +126,10 @@ export default function ChatModal({
   }, [searchQuery, currentUser?.id, currentUser?._id]);
 
   const {
-    messages,
-    inputText,
-    setInputText,
-    loading,
-    sending,
-    isOtherTyping,
-    hasMore,
-    loadingEarlier,
-    messagesEndRef,
-    messagesContainerRef,
-    myTypingTimeoutRef,
-    markCurrentChatAsRead,
-    loadEarlierMessages,
-    toggleReaction,
-    handleSendMessage,
-    handleSendJamInvite
-  } = useChatMessages({
-    isOpen,
-    activeUser,
-    currentUser,
-    socket,
-    setUnreadChatCount,
-    onStartJamWithUser,
-    fetchHubData
-  });
+    messages, inputText, setInputText, loading, sending, isOtherTyping, hasMore, loadingEarlier,
+    messagesEndRef, messagesContainerRef, myTypingTimeoutRef, markCurrentChatAsRead,
+    loadEarlierMessages, toggleReaction, handleSendMessage, handleSendJamInvite
+  } = useChatMessages({ isOpen, activeUser, currentUser, socket, setUnreadChatCount, onStartJamWithUser, fetchHubData });
 
   if (!isOpen) return null;
 
@@ -258,15 +247,41 @@ export default function ChatModal({
           </div>
         </div>
 
+        {/* Notification Permission Banner */}
+        {notifPerm === 'default' && !notifDismissed && (
+          <div className={`px-3.5 py-2 border-b-2 flex items-center justify-between gap-2 text-[11px] font-bold shrink-0 ${
+            isDark ? 'bg-zinc-900/95 border-zinc-800 text-zinc-200' : 'bg-[#ede5d3] border-black text-[#0b1110]'
+          }`}>
+            <span className="truncate">
+              {isRTL ? '🔔 فعّل إشعارات المتصفح للرسائل الجديدة' : '🔔 Turn on desktop notifications for new messages'}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleEnableNotif}
+                className="px-2.5 py-0.5 rounded bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-black text-[10px] brutal-border cursor-pointer"
+              >
+                {isRTL ? 'تفعيل' : 'Enable'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDismissNotif}
+                aria-label={isRTL ? 'إخفاء' : 'Dismiss'}
+                className="w-5 h-5 rounded flex items-center justify-center opacity-70 hover:opacity-100 cursor-pointer"
+              >
+                <X size={13} strokeWidth={2.5} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Body */}
         {activeUser ? (
           <>
             {/* Messages Stream */}
             <div
               ref={messagesContainerRef}
-              className={`flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 ${
-                isDark ? 'bg-[#121212]' : 'bg-[#fdfbf7] paper-texture'
-              }`}
+              className={`flex-1 p-3.5 sm:p-4 overflow-y-auto space-y-3 ${isDark ? 'bg-[#121212]' : 'bg-[#fdfbf7] paper-texture'}`}
             >
               {hasMore && (
                 <div className="flex justify-center py-1">
@@ -275,16 +290,10 @@ export default function ChatModal({
                     onClick={loadEarlierMessages}
                     disabled={loadingEarlier}
                     className={`px-3 py-1 rounded-full text-xs font-mono font-bold flex items-center gap-1.5 transition brutal-border cursor-pointer shadow-sm ${
-                      isDark
-                        ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border-zinc-700'
-                        : 'bg-[#ede5d3] text-[#0b1110] hover:bg-[#ded2bb] border-black'
+                      isDark ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] hover:bg-[#ded2bb] border-black'
                     }`}
                   >
-                    {loadingEarlier ? (
-                      <Loader2 size={12} className="animate-spin text-[#17a398]" />
-                    ) : (
-                      <ChevronUp size={12} />
-                    )}
+                    {loadingEarlier ? <Loader2 size={12} className="animate-spin text-[#17a398]" /> : <ChevronUp size={12} />}
                     <span>{isRTL ? 'تحميل رسائل سابقة' : 'Load earlier messages'}</span>
                   </button>
                 </div>
@@ -301,17 +310,9 @@ export default function ChatModal({
                   const isMe = String(msg.sender) === String(currentUser?.id || currentUser?._id);
                   return (
                     <ChatMessageItem
-                      key={msg._id || idx}
-                      msg={msg}
-                      currentUser={currentUser}
-                      activeUser={activeUser}
-                      isMe={isMe}
-                      isDark={isDark}
-                      isRTL={isRTL}
-                      onPlayTrack={onPlayTrack}
-                      onJoinJam={onJoinJam}
-                      onClose={onClose}
-                      onToggleReaction={toggleReaction}
+                      key={msg._id || idx} msg={msg} currentUser={currentUser} activeUser={activeUser}
+                      isMe={isMe} isDark={isDark} isRTL={isRTL} onPlayTrack={onPlayTrack}
+                      onJoinJam={onJoinJam} onClose={onClose} onToggleReaction={toggleReaction}
                     />
                   );
                 })
@@ -380,17 +381,9 @@ export default function ChatModal({
           </>
         ) : (
           <ChatHubView
-            isDark={isDark}
-            isRTL={isRTL}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            conversations={conversations}
-            friends={friends}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            searchResults={searchResults}
-            isSearchingUsers={isSearchingUsers}
-            loadingHub={loadingHub}
+            isDark={isDark} isRTL={isRTL} activeTab={activeTab} setActiveTab={setActiveTab}
+            conversations={conversations} friends={friends} searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            searchResults={searchResults} isSearchingUsers={isSearchingUsers} loadingHub={loadingHub}
             onSelectUser={handleSelectPartner}
           />
         )}

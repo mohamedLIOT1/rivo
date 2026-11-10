@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { INITIAL_TRACKS } from '../data/initialTracks';
-import { updateMediaNotification } from '../services/mediaControls';
+import { updateMediaNotification, updateMediaQueue } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
 import { useToast } from './ToastContext';
 import { SleepTimerProvider } from './SleepTimerContext';
@@ -223,6 +223,10 @@ export const AudioProvider = ({ children }) => {
 
   // Initialize Audio hardware session once on mount & handle lockscreen/notification actions
   useAudioMediaSession({ playbackRef, queueRef });
+
+  useEffect(() => {
+    updateMediaQueue(queue.queue, playback.currentTrack);
+  }, [queue.queue, playback.currentTrack]);
 
   const stopPlaybackForSleepTimer = useCallback(async () => {
     if (playback.soundRef.current) {

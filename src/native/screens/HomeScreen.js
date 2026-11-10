@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  Image,
   useWindowDimensions,
 } from 'react-native';
 import { Play, Plus, Disc } from 'lucide-react-native';
@@ -18,70 +17,16 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
+import FeaturedAlbumCard from '../components/home/FeaturedAlbumCard';
 import AlbumDetailModal from '../components/AlbumDetailModal';
 import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
-import { normalizeCoverUri } from '../utils/coverUtils';
+import { resolveAlbumTracks } from '../utils/resolveAlbumTracks';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { deduplicateTrackList } from '../services/downloadManager';
 
 const keyExtractor = (item, index) => String(item._id || item.id || index);
-
-const AlbumCard = React.memo(function AlbumCard({
-  album,
-  isDark,
-  width,
-  onSelect,
-  onPlay,
-}) {
-  const coverUri = album.cover || album.coverUrl || album.tracks?.[0]?.cover || album.tracks?.[0]?.coverUrl;
-  const normalizedCover = useMemo(() => normalizeCoverUri(coverUri), [coverUri]);
-
-  const handleSelect = useCallback(() => {
-    onSelect(album);
-  }, [album, onSelect]);
-
-  const handlePlay = useCallback((e) => {
-    e?.stopPropagation?.();
-    onPlay(album);
-  }, [album, onPlay]);
-
-  return (
-    <TouchableOpacity
-      style={[styles.albumCard, !isDark && styles.albumCardLight, { width }]}
-      onPress={handleSelect}
-      activeOpacity={0.85}
-    >
-      <View style={styles.albumCoverWrap}>
-        <View style={styles.albumCoverPlaceholder}>
-          <Disc size={36} color="#1f3630" strokeWidth={1.5} />
-        </View>
-        <Image
-          source={{ uri: normalizedCover }}
-          style={styles.albumCover}
-          resizeMode="cover"
-          fadeDuration={0}
-        />
-        <TouchableOpacity
-          style={styles.albumPlayOverlay}
-          onPress={handlePlay}
-          activeOpacity={0.8}
-        >
-          <View style={styles.albumPlayPill}>
-            <Play size={11} color="#0b1110" fill="#0b1110" style={{ marginLeft: 2 }} />
-          </View>
-        </TouchableOpacity>
-      </View>
-      <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
-        {album.name}
-      </Text>
-      <Text style={styles.albumArtist} numberOfLines={1}>
-        {album.artist || 'Various Artists'}
-      </Text>
-    </TouchableOpacity>
-  );
-});
 
 function HomeScreen({
   onOpenAddSong,
@@ -117,6 +62,14 @@ function HomeScreen({
   const [visibleCount, setVisibleCount] = useState(30);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
+  const [loadingAlbumId, setLoadingAlbumId] = useState(null);
+  const albumPlayAbortRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      albumPlayAbortRef.current?.abort();
+    };
+  }, []);
 
   // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
   const displayTracks = useMemo(() => {
@@ -164,20 +117,33 @@ function HomeScreen({
     }
   }, [onSelectAlbum]);
 
-  const handlePlayAlbum = useCallback((album) => {
-    let albTracks = [];
-    if (Array.isArray(album.tracks) && album.tracks.length > 0) {
-      albTracks = album.tracks;
-    } else {
-      albTracks = (userTracks || []).filter(t => 
-        (t.album && t.album.toLowerCase().trim() === (album.name || '').toLowerCase().trim()) ||
-        (album.trackIds && album.trackIds.map(String).includes(String(t.id || t._id)))
-      );
+  const handlePlayAlbum = useCallback(async (album) => {
+    if (!album) return;
+    const albKey = String(album._id || album.id || album.name || '');
+    albumPlayAbortRef.current?.abort();
+    const controller = new AbortController();
+    albumPlayAbortRef.current = controller;
+
+    setLoadingAlbumId(albKey);
+    try {
+      const localPool = [
+        ...(Array.isArray(userTracks) ? userTracks : []),
+        ...(Array.isArray(downloadedTracks) ? downloadedTracks : []),
+      ];
+      const albTracks = await resolveAlbumTracks(album, localPool, controller.signal);
+      if (controller.signal.aborted) return;
+      if (albTracks.length > 0) {
+        playTrack(albTracks[0], albTracks);
+      } else {
+        // Fallback: open album details if no playable tracks could be resolved
+        handleSelectAlbumCard(album);
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoadingAlbumId(null);
+      }
     }
-    if (albTracks.length > 0) {
-      playTrack(albTracks[0], albTracks);
-    }
-  }, [userTracks, playTrack]);
+  }, [userTracks, downloadedTracks, playTrack, handleSelectAlbumCard]);
 
   const visibleTracks = useMemo(() => {
     return displayTracks.slice(0, visibleCount);
@@ -320,16 +286,20 @@ function HomeScreen({
 
           {/* 2-Column Grid */}
           <View style={styles.albumsGrid}>
-            {displayAlbums.slice(0, 8).map((alb, index) => (
-              <AlbumCard
-                key={alb._id || alb.id || alb.name || `album-${index}`}
-                album={alb}
-                isDark={isDark}
-                width={albumCardWidth}
-                onSelect={handleSelectAlbumCard}
-                onPlay={handlePlayAlbum}
-              />
-            ))}
+            {displayAlbums.slice(0, 8).map((alb, index) => {
+              const albKey = String(alb._id || alb.id || alb.name || `album-${index}`);
+              return (
+                <FeaturedAlbumCard
+                  key={albKey}
+                  album={alb}
+                  isDark={isDark}
+                  width={albumCardWidth}
+                  isLoading={loadingAlbumId === albKey}
+                  onSelect={handleSelectAlbumCard}
+                  onPlay={handlePlayAlbum}
+                />
+              );
+            })}
           </View>
         </View>
       )}
@@ -379,7 +349,7 @@ function HomeScreen({
         )}
       </View>
     </View>
-  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
+  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -679,69 +649,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-  },
-  albumCard: {
-    backgroundColor: '#141d1b',
-    borderWidth: 1.5,
-    borderColor: '#263330',
-    borderRadius: 14,
-    padding: 10,
-  },
-  albumCardLight: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
-  },
-  albumCoverWrap: {
-    width: '100%',
-    aspectRatio: 1,
-    borderRadius: 10,
-    overflow: 'hidden',
-    backgroundColor: '#0b1110',
-    marginBottom: 8,
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: '#263330',
-  },
-  albumCover: {
-    width: '100%',
-    height: '100%',
-  },
-  albumCoverPlaceholder: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#101c19',
-  },
-  albumPlayOverlay: {
-    position: 'absolute',
-    right: 6,
-    bottom: 6,
-  },
-  albumPlayPill: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#f59e0b',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-  },
-  albumTitle: {
-    color: '#ffffff',
-    fontSize: 12.5,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  albumTitleLight: {
-    color: '#0b1110',
-  },
-  albumArtist: {
-    color: '#94a3b8',
-    fontSize: 10.5,
-    fontWeight: '600',
   },
   sectionHeaderRow: {
     flexDirection: 'row',

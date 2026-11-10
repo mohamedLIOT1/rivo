@@ -51,17 +51,21 @@ class LockScreenActivity : Activity() {
     private var btnNext: ImageButton? = null
     private var btnRepeat: ImageButton? = null
     private var btnClose: ImageButton? = null
+    private var btnQueue: ImageButton? = null
+    private var queueSheet: LockScreenQueueSheet? = null
     private var gestureDetector: GestureDetector? = null
 
     private val progressHandler = Handler(Looper.getMainLooper())
     private var isUserSeeking = false
+    private var touchDownX = 0f
+    private var touchDownY = 0f
 
     private val progressRunnable = object : Runnable {
         override fun run() {
             if (!isUserSeeking && MediaNotificationService.isPlaying) {
                 updateProgressUi()
             }
-            progressHandler.postDelayed(this, 1000L)
+            progressHandler.postDelayed(this, 500L)
         }
     }
 
@@ -92,6 +96,7 @@ class LockScreenActivity : Activity() {
             return
         }
         updateUi()
+        progressHandler.removeCallbacks(progressRunnable)
         progressHandler.post(progressRunnable)
     }
 
@@ -103,7 +108,30 @@ class LockScreenActivity : Activity() {
     override fun onDestroy() {
         if (activeInstance == this) activeInstance = null
         progressHandler.removeCallbacks(progressRunnable)
+        queueSheet = null
         super.onDestroy()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (queueSheet?.isOpen() != true && !isUserSeeking) {
+            gestureDetector?.onTouchEvent(ev)
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchDownX = ev.rawX
+                    touchDownY = ev.rawY
+                }
+                MotionEvent.ACTION_UP -> {
+                    val diffY = touchDownY - ev.rawY
+                    val diffX = abs(touchDownX - ev.rawX)
+                    // Support slow deliberate upward swipe anywhere on screen in addition to fast flings
+                    if (diffY > 200f && diffY > diffX * 1.4f) {
+                        dismissAndUnlock()
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 
     private fun setupLockScreenWindow() {
@@ -115,9 +143,7 @@ class LockScreenActivity : Activity() {
         @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
 
         @Suppress("DEPRECATION")
@@ -142,11 +168,22 @@ class LockScreenActivity : Activity() {
         btnNext = findViewById(R.id.btn_lock_next)
         btnRepeat = findViewById(R.id.btn_lock_repeat)
         btnClose = findViewById(R.id.btn_lock_close)
+        btnQueue = findViewById(R.id.btn_lock_queue)
+
+        queueSheet = LockScreenQueueSheet(
+            this,
+            findViewById(R.id.lock_queue_sheet),
+            findViewById(R.id.lock_queue_list),
+            findViewById(R.id.lock_queue_count),
+            findViewById(R.id.btn_lock_queue_close)
+        )
 
         txtTitle?.isSelected = true // Enable marquee horizontal scroll
 
         // Swipe up or swipe down gesture to unlock / dismiss
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent): Boolean = true
+
             override fun onFling(
                 e1: MotionEvent?,
                 e2: MotionEvent,
@@ -156,7 +193,7 @@ class LockScreenActivity : Activity() {
                 if (e1 != null) {
                     val diffY = e2.y - e1.y
                     val diffX = e2.x - e1.x
-                    if (abs(diffY) > abs(diffX) && abs(diffY) > 120 && abs(velocityY) > 200) {
+                    if (abs(diffY) > abs(diffX) && abs(diffY) > 80 && abs(velocityY) > 150) {
                         dismissAndUnlock()
                         return true
                     }
@@ -164,15 +201,15 @@ class LockScreenActivity : Activity() {
                 return false
             }
         })
-
-        findViewById<View>(android.R.id.content)?.setOnTouchListener { _, event ->
-            gestureDetector?.onTouchEvent(event) ?: false
-        }
     }
 
     private fun setupListeners() {
         btnClose?.setOnClickListener {
             dismissAndUnlock()
+        }
+
+        btnQueue?.setOnClickListener {
+            queueSheet?.show()
         }
 
         btnPlayPause?.setOnClickListener {
@@ -220,6 +257,7 @@ class LockScreenActivity : Activity() {
                 if (MediaNotificationService.currentDurationMs > 0) {
                     val posMs = (prog.toDouble() / 1000.0 * MediaNotificationService.currentDurationMs).toLong()
                     val posSeconds = posMs / 1000.0
+                    MediaNotificationService.notifyLocalSeek(posMs)
                     // Dispatch seek event with seconds parameter to React Native
                     MediaControlsModule.sendEvent("seek:$posSeconds")
                 }
@@ -273,12 +311,13 @@ class LockScreenActivity : Activity() {
             imgBgArt?.setImageResource(R.drawable.logo)
         }
 
+        queueSheet?.refresh()
         updateProgressUi()
     }
 
     private fun updateProgressUi() {
         val dur = MediaNotificationService.currentDurationMs
-        val pos = MediaNotificationService.currentPositionMs
+        val pos = MediaNotificationService.getEstimatedPositionMs()
 
         txtTimeCurrent?.text = formatTime(pos)
         txtTimeTotal?.text = formatTime(dur)
@@ -298,6 +337,10 @@ class LockScreenActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (queueSheet?.isOpen() == true) {
+            queueSheet?.hide()
+            return
+        }
         super.onBackPressed()
         finish()
     }

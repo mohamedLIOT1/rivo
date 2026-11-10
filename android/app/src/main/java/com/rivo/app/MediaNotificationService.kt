@@ -48,10 +48,30 @@ class MediaNotificationService : Service() {
         var isLiked: Boolean = false
         var currentDurationMs: Long = 0L
         var currentPositionMs: Long = 0L
+        @Volatile var lastPositionUpdateElapsedRealtime: Long = SystemClock.elapsedRealtime()
         var currentBitmap: Bitmap? = null
         var instance: MediaNotificationService? = null
 
         fun dispatchMediaActionStatic(action: String) = instance?.dispatchMediaAction(action)
+
+        fun getEstimatedPositionMs(): Long {
+            if (!isPlaying) return currentPositionMs
+            val elapsed = (SystemClock.elapsedRealtime() - lastPositionUpdateElapsedRealtime).coerceAtLeast(0L)
+            val estimated = currentPositionMs + elapsed
+            return if (currentDurationMs > 0L) estimated.coerceAtMost(currentDurationMs) else estimated
+        }
+
+        private fun updateSeekState(posMs: Long) {
+            val now = SystemClock.elapsedRealtime()
+            currentPositionMs = posMs.coerceAtLeast(0L)
+            lastPositionUpdateElapsedRealtime = now
+            lastUserSeekTimeMs = now
+        }
+
+        fun notifyLocalSeek(posMs: Long) {
+            updateSeekState(posMs)
+            instance?.updateNotification()
+        }
 
         private var lastLoadedCoverUrl: String? = null
         private var lastUserSeekTimeMs: Long = 0L
@@ -195,10 +215,10 @@ class MediaNotificationService : Service() {
                 override fun onRewind() = dispatchMediaAction("rewind")
                 override fun onSetRepeatMode(repeatMode: Int) = dispatchMediaAction("repeat")
                 override fun onSeekTo(pos: Long) {
-                    currentPositionMs = pos
-                    lastUserSeekTimeMs = SystemClock.elapsedRealtime()
+                    updateSeekState(pos)
                     updateNotification()
                     MediaControlsModule.sendEvent("seek:${pos / 1000.0}")
+                    notifyLockScreen()
                 }
                 override fun onCustomAction(action: String?, extras: Bundle?) {
                     when (action) {
@@ -226,6 +246,7 @@ class MediaNotificationService : Service() {
                     wakeLockHandler.postDelayed(wakeLockReleaseRunnable, 15000L)
                     updateNotification()
                 }
+                notifyLockScreen()
             }
             ACTION_HIDE -> {
                 dismissLockscreenNotification()
@@ -272,6 +293,7 @@ class MediaNotificationService : Service() {
                 MediaArtworkHelper.loadCoverBitmapAsync(incomingCover) { bmp ->
                     currentBitmap = bmp
                     updateNotification()
+                    notifyLockScreen()
                 }
             }
         } else {
@@ -280,7 +302,14 @@ class MediaNotificationService : Service() {
             currentBitmap = null
         }
 
-        if (intent.hasExtra("isPlaying")) isPlaying = intent.getBooleanExtra("isPlaying", isPlaying)
+        if (intent.hasExtra("isPlaying")) {
+            val newIsPlaying = intent.getBooleanExtra("isPlaying", isPlaying)
+            if (newIsPlaying != isPlaying) {
+                if (!newIsPlaying) currentPositionMs = getEstimatedPositionMs()
+                lastPositionUpdateElapsedRealtime = SystemClock.elapsedRealtime()
+                isPlaying = newIsPlaying
+            }
+        }
         if (now - lastUserRepeatTimeMs > 4000L) {
             val incomingRepeatMode = intent.getStringExtra("repeatMode")
             if (!incomingRepeatMode.isNullOrBlank()) repeatMode = incomingRepeatMode
@@ -292,19 +321,27 @@ class MediaNotificationService : Service() {
             val dSec = intent.getDoubleExtra("duration", 0.0)
             if (dSec > 0) currentDurationMs = (dSec * 1000).toLong()
         }
-        if (intent.hasExtra("currentTime") && (now - lastUserSeekTimeMs > 3000L)) {
-            val cSec = intent.getDoubleExtra("currentTime", 0.0)
-            if (cSec >= 0) currentPositionMs = (cSec * 1000).toLong()
+        val incomingTimeSec = if (intent.hasExtra("currentTime")) intent.getDoubleExtra("currentTime", -1.0) else -1.0
+        if (incomingTimeSec >= 0.0 && (now - lastUserSeekTimeMs > 3000L)) {
+            currentPositionMs = (incomingTimeSec * 1000).toLong()
+            lastPositionUpdateElapsedRealtime = SystemClock.elapsedRealtime()
         } else if (isTitleChanged) {
             currentPositionMs = 0L
+            lastPositionUpdateElapsedRealtime = SystemClock.elapsedRealtime()
         }
     }
 
     private fun dispatchMediaAction(action: String) {
         val now = SystemClock.elapsedRealtime()
         when (action) {
-            "play" -> { isPlaying = true; acquireWakeLock(); startForegroundWithNotification() }
-            "pause" -> { isPlaying = false; releaseWakeLock() }
+            "play" -> {
+                if (!isPlaying) lastPositionUpdateElapsedRealtime = now
+                isPlaying = true; acquireWakeLock(); startForegroundWithNotification()
+            }
+            "pause" -> {
+                if (isPlaying) { currentPositionMs = getEstimatedPositionMs(); lastPositionUpdateElapsedRealtime = now }
+                isPlaying = false; releaseWakeLock()
+            }
             "repeat" -> {
                 repeatMode = when (repeatMode) { "off" -> "all"; "all" -> "one"; else -> "off" }
                 lastUserRepeatTimeMs = now
@@ -314,10 +351,12 @@ class MediaNotificationService : Service() {
         }
         updateNotification()
         MediaControlsModule.sendEvent(action)
-        try {
-            LockScreenActivity.notifyPlaybackChanged()
-            RivoWidgetManager.updateAll(this)
-        } catch (_: Throwable) {}
+        notifyLockScreen()
+    }
+
+    private fun notifyLockScreen() {
+        try { LockScreenActivity.notifyPlaybackChanged() } catch (_: Throwable) {}
+        try { RivoWidgetManager.updateAll(this) } catch (_: Throwable) {}
     }
 
     private fun startForegroundWithNotification() {
@@ -353,7 +392,7 @@ class MediaNotificationService : Service() {
             isPlaying = isPlaying,
             repeatMode = repeatMode,
             isLiked = isLiked,
-            positionMs = currentPositionMs,
+            positionMs = getEstimatedPositionMs(),
             durationMs = currentDurationMs,
             withFullScreenLock = withFullScreenLock
         )

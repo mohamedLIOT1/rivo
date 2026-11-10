@@ -1,5 +1,5 @@
-// Rivo Service Worker v31 — iOS PWA & Offline Support
-const CACHE_VER = 'rivo-v45';
+// Rivo Service Worker v46 — iOS PWA & Offline Support
+const CACHE_VER = 'rivo-v46';
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
 
 // ── Install ──────────────────────────────────────────
@@ -105,4 +105,24 @@ self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (const client of windowClients) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          if (data && data.senderId) {
+            client.postMessage({ type: 'OPEN_CHAT_FROM_NOTIFICATION', data });
+          }
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
 });

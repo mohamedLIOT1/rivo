@@ -75,6 +75,17 @@
                     android:textAllCaps="true"
                     android:letterSpacing="0.06" />
             </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btn_lock_queue"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_lock_queue"
+                app:tint="#CCFFFFFF"
+                android:contentDescription="Playing Queue" />
         </RelativeLayout>
 
         <!-- Center Viewport: Album Artwork with CardView -->
@@ -266,6 +277,84 @@
             android:letterSpacing="0.08"
             android:paddingTop="6dp" />
 
+    </LinearLayout>
+
+    <!-- Slide-up Queue Drawer Overlay -->
+    <LinearLayout
+        android:id="@+id/lock_queue_sheet"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_marginTop="90dp"
+        android:background="#F20A1210"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="20dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/lock_queue_header_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="UPCOMING QUEUE"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#17A398"
+                    android:letterSpacing="0.08" />
+
+                <TextView
+                    android:id="@+id/lock_queue_count"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 tracks"
+                    android:textSize="11sp"
+                    android:textColor="#94A3B8"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btn_lock_queue_close"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_notification_prev"
+                android:rotation="270"
+                app:tint="#FFFFFF"
+                android:contentDescription="Close Queue" />
+        </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#1AFFFFFF" />
+
+        <ListView
+            android:id="@+id/lock_queue_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:divider="#14FFFFFF"
+            android:dividerHeight="1dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:clipToPadding="false" />
     </LinearLayout>
 
 </RelativeLayout>

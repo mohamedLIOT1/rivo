@@ -15,6 +15,7 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import com.facebook.react.bridge.ReadableArray
 import com.facebook.react.bridge.ReadableMap
 import com.facebook.react.bridge.WritableMap
 import com.facebook.react.modules.core.DeviceEventManagerModule
@@ -117,6 +118,12 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         try {
             context.startService(intent)
         } catch (_: Throwable) {}
+    }
+
+    @ReactMethod
+    fun updateQueue(queueArray: ReadableArray?, currentTrackId: String?) {
+        LockScreenQueueStore.updateFromBridge(queueArray, currentTrackId)
+        LockScreenActivity.notifyPlaybackChanged()
     }
 
     @ReactMethod

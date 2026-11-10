@@ -73,6 +73,20 @@ export const hideMediaNotification = () => {
   } catch (e) {}
 };
 
+export const updateMediaQueue = (queue = [], currentTrack = null) => {
+  if (!RivoMediaControls || typeof RivoMediaControls.updateQueue !== 'function') return;
+  try {
+    const safeQueue = Array.isArray(queue) ? queue.slice(0, 100) : [];
+    const sanitized = safeQueue.map((t, idx) => ({
+      id: String(t?._id || t?.id || idx),
+      title: String(t?.title || 'Unknown Track'),
+      artist: String(t?.artist || 'Unknown Artist'),
+    }));
+    const currentId = currentTrack ? String(currentTrack._id || currentTrack.id || '') : '';
+    RivoMediaControls.updateQueue(sanitized, currentId);
+  } catch (e) {}
+};
+
 export const subscribeToMediaActions = (callbackOrHandlers) => {
   const noop = () => {};
   noop.remove = noop;

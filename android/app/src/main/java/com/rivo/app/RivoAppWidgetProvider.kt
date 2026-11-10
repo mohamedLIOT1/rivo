@@ -8,28 +8,47 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Build
+import android.util.Log
 import android.widget.RemoteViews
 
 object RivoWidgetManager {
+    private const val TAG = "RivoWidgetManager"
+
     fun updateAll(context: Context) {
-        val appWidgetManager = AppWidgetManager.getInstance(context)
+        val appWidgetManager = try {
+            AppWidgetManager.getInstance(context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire AppWidgetManager", e)
+            return
+        } ?: return
 
-        // Update 4x1 Widgets
-        val ids4x1 = appWidgetManager.getAppWidgetIds(ComponentName(context, RivoAppWidget4x1::class.java))
-        if (ids4x1.isNotEmpty()) {
-            val views4x1 = build4x1Views(context)
-            for (id in ids4x1) {
-                appWidgetManager.updateAppWidget(id, views4x1)
+        updateWidgetGroup(context, appWidgetManager, RivoAppWidget4x1::class.java, ::build4x1Views)
+        updateWidgetGroup(context, appWidgetManager, RivoAppWidget4x2::class.java, ::build4x2Views)
+    }
+
+    private fun updateWidgetGroup(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        providerClass: Class<out AppWidgetProvider>,
+        builder: (Context) -> RemoteViews
+    ) {
+        try {
+            val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, providerClass))
+            if (ids.isEmpty()) return
+            val views = builder(context)
+            for (id in ids) {
+                appWidgetManager.updateAppWidget(id, views)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update ${providerClass.simpleName}", e)
         }
+    }
 
-        // Update 4x2 Widgets
-        val ids4x2 = appWidgetManager.getAppWidgetIds(ComponentName(context, RivoAppWidget4x2::class.java))
-        if (ids4x2.isNotEmpty()) {
-            val views4x2 = build4x2Views(context)
-            for (id in ids4x2) {
-                appWidgetManager.updateAppWidget(id, views4x2)
-            }
+    private fun applyArtwork(views: RemoteViews, viewId: Int, bmp: Bitmap?) {
+        if (bmp != null && !bmp.isRecycled) {
+            views.setImageViewBitmap(viewId, bmp)
+        } else {
+            views.setImageViewResource(viewId, R.drawable.logo)
         }
     }
 
@@ -60,29 +79,28 @@ object RivoWidgetManager {
     private fun build4x1Views(context: Context): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_4x1)
 
-        views.setTextViewText(R.id.widget_41_title, MediaNotificationService.currentTitle)
-        views.setTextViewText(R.id.widget_41_artist, MediaNotificationService.currentArtist)
+        try {
+            views.setTextViewText(R.id.widget_41_title, MediaNotificationService.currentTitle)
+            views.setTextViewText(R.id.widget_41_artist, MediaNotificationService.currentArtist)
 
-        // Artwork
-        val bmp: Bitmap? = MediaNotificationService.currentBitmap
-        if (bmp != null) {
-            views.setImageViewBitmap(R.id.widget_41_art, bmp)
-        } else {
-            views.setImageViewResource(R.id.widget_41_art, R.drawable.logo)
+            // Artwork
+            applyArtwork(views, R.id.widget_41_art, MediaNotificationService.currentBitmap)
+
+            // Play/Pause icon
+            views.setImageViewResource(
+                R.id.widget_41_btn_play_pause,
+                if (MediaNotificationService.isPlaying) R.drawable.ic_notification_pause
+                else R.drawable.ic_notification_play
+            )
+
+            // PendingIntents
+            views.setOnClickPendingIntent(R.id.widget_41_art, getOpenAppIntent(context))
+            views.setOnClickPendingIntent(R.id.widget_41_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 101))
+            views.setOnClickPendingIntent(R.id.widget_41_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 102))
+            views.setOnClickPendingIntent(R.id.widget_41_btn_prev, getPendingServiceIntent(context, MediaNotificationService.ACTION_PREV, 103))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to populate 4x1 widget views", e)
         }
-
-        // Play/Pause icon
-        views.setImageViewResource(
-            R.id.widget_41_btn_play_pause,
-            if (MediaNotificationService.isPlaying) R.drawable.ic_notification_pause
-            else R.drawable.ic_notification_play
-        )
-
-        // PendingIntents
-        views.setOnClickPendingIntent(R.id.widget_41_art, getOpenAppIntent(context))
-        views.setOnClickPendingIntent(R.id.widget_41_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 101))
-        views.setOnClickPendingIntent(R.id.widget_41_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 102))
-        views.setOnClickPendingIntent(R.id.widget_41_btn_prev, getPendingServiceIntent(context, MediaNotificationService.ACTION_PREV, 103))
 
         return views
     }
@@ -90,62 +108,48 @@ object RivoWidgetManager {
     private fun build4x2Views(context: Context): RemoteViews {
         val views = RemoteViews(context.packageName, R.layout.widget_4x2)
 
-        views.setTextViewText(R.id.widget_42_title, MediaNotificationService.currentTitle)
-        views.setTextViewText(R.id.widget_42_artist, MediaNotificationService.currentArtist)
+        try {
+            views.setTextViewText(R.id.widget_42_title, MediaNotificationService.currentTitle)
+            views.setTextViewText(R.id.widget_42_artist, MediaNotificationService.currentArtist)
 
-        val bmp: Bitmap? = MediaNotificationService.currentBitmap
-        if (bmp != null) {
-            views.setImageViewBitmap(R.id.widget_42_art, bmp)
-        } else {
-            views.setImageViewResource(R.id.widget_42_art, R.drawable.logo)
+            applyArtwork(views, R.id.widget_42_art, MediaNotificationService.currentBitmap)
+
+            views.setImageViewResource(
+                R.id.widget_42_btn_play_pause,
+                if (MediaNotificationService.isPlaying) R.drawable.ic_widget_pause_dark
+                else R.drawable.ic_widget_play_dark
+            )
+
+            // Visual states for Shuffle, Repeat, and Like using pre-tinted vector drawables (no RemoteViews reflection)
+            views.setImageViewResource(
+                R.id.widget_42_btn_shuffle,
+                if (MediaNotificationService.isShuffle) R.drawable.ic_widget_shuffle_on
+                else R.drawable.ic_widget_shuffle_off
+            )
+
+            val repeatRes = when (MediaNotificationService.repeatMode) {
+                "one" -> R.drawable.ic_widget_repeat_one
+                "all" -> R.drawable.ic_widget_repeat_all
+                else -> R.drawable.ic_widget_repeat_off
+            }
+            views.setImageViewResource(R.id.widget_42_btn_repeat, repeatRes)
+
+            views.setImageViewResource(
+                R.id.widget_42_btn_like,
+                if (MediaNotificationService.isLiked) R.drawable.ic_notification_liked
+                else R.drawable.ic_widget_like_off
+            )
+
+            views.setOnClickPendingIntent(R.id.widget_42_art, getOpenAppIntent(context))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 201))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 202))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_prev, getPendingServiceIntent(context, MediaNotificationService.ACTION_PREV, 203))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_shuffle, getPendingServiceIntent(context, MediaNotificationService.ACTION_SHUFFLE, 204))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_repeat, getPendingServiceIntent(context, MediaNotificationService.ACTION_REPEAT, 205))
+            views.setOnClickPendingIntent(R.id.widget_42_btn_like, getPendingServiceIntent(context, MediaNotificationService.ACTION_LIKE, 206))
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to populate 4x2 widget views", e)
         }
-
-        views.setImageViewResource(
-            R.id.widget_42_btn_play_pause,
-            if (MediaNotificationService.isPlaying) R.drawable.ic_notification_pause
-            else R.drawable.ic_notification_play
-        )
-        // Set tints programmatically (android:tint not supported in RemoteViews)
-        views.setInt(R.id.widget_42_btn_play_pause, "setColorFilter", 0xFF042f2e.toInt())
-        views.setInt(R.id.widget_42_btn_prev, "setColorFilter", 0xFFFFFFFF.toInt())
-        views.setInt(R.id.widget_42_btn_next, "setColorFilter", 0xFFFFFFFF.toInt())
-
-        // Visual states for Shuffle, Repeat, and Like
-        views.setInt(
-            R.id.widget_42_btn_shuffle,
-            "setColorFilter",
-            if (MediaNotificationService.isShuffle) 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
-        )
-
-        val repeatRes = when (MediaNotificationService.repeatMode) {
-            "one" -> R.drawable.ic_notification_repeat_on
-            "all" -> R.drawable.ic_notification_repeat_all
-            else -> R.drawable.ic_notification_repeat
-        }
-        views.setImageViewResource(R.id.widget_42_btn_repeat, repeatRes)
-        views.setInt(
-            R.id.widget_42_btn_repeat,
-            "setColorFilter",
-            if (MediaNotificationService.repeatMode != "off") 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
-        )
-
-        views.setImageViewResource(
-            R.id.widget_42_btn_like,
-            if (MediaNotificationService.isLiked) R.drawable.ic_notification_liked else R.drawable.ic_notification_like
-        )
-        views.setInt(
-            R.id.widget_42_btn_like,
-            "setColorFilter",
-            if (MediaNotificationService.isLiked) 0xFFE11D48.toInt() else 0xFF94A3B8.toInt()
-        )
-
-        views.setOnClickPendingIntent(R.id.widget_42_art, getOpenAppIntent(context))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_play_pause, getPendingServiceIntent(context, MediaNotificationService.ACTION_PLAY_PAUSE, 201))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_next, getPendingServiceIntent(context, MediaNotificationService.ACTION_NEXT, 202))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_prev, getPendingServiceIntent(context, MediaNotificationService.ACTION_PREV, 203))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_shuffle, getPendingServiceIntent(context, MediaNotificationService.ACTION_SHUFFLE, 204))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_repeat, getPendingServiceIntent(context, MediaNotificationService.ACTION_REPEAT, 205))
-        views.setOnClickPendingIntent(R.id.widget_42_btn_like, getPendingServiceIntent(context, MediaNotificationService.ACTION_LIKE, 206))
 
         return views
     }

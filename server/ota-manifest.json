@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.15",
+  "version": "2.4.16",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري (4.89 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (4.89 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5123584,
-  "sizeMb": "4.89 MB",
-  "updatedAt": "2026-11-10T06:59:44.759Z"
+  "notes": "تحديث سريع v2.4.16 • إصلاح تشغيل الألبومات المميزة ومزامنة قائمة الانتظار",
+  "notesEn": "Fast OTA v2.4.16 • Fix Featured Album play button & lockscreen queue sync",
+  "bundleSize": 5132874,
+  "sizeMb": "4.90 MB",
+  "updatedAt": "2026-11-10T08:39:49.241Z"
 }

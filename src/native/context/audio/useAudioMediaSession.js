@@ -37,6 +37,12 @@ export const useAudioMediaSession = ({ playbackRef, queueRef }) => {
         } else if (act.startsWith('seek:') || act === 'seek') {
           const pos = payload ?? (act.startsWith('seek:') ? parseFloat(act.slice(5)) : 0);
           playbackRef.current?.seekTo?.(pos);
+        } else if (act.startsWith('play_queue_index:')) {
+          const idx = parseInt(act.slice('play_queue_index:'.length), 10);
+          const q = queueRef.current?.queueRef?.current;
+          if (!isNaN(idx) && idx >= 0 && Array.isArray(q) && q[idx]) {
+            playbackRef.current?.playTrack?.(q[idx], q);
+          }
         }
       } catch (_err) {}
     };

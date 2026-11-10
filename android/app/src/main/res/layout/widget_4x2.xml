@@ -67,12 +67,12 @@
             android:id="@+id/widget_42_btn_like"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:src="@drawable/ic_notification_like"
+            android:src="@drawable/ic_widget_like_off"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Favorite" />
     </LinearLayout>
 
-    <Space
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
@@ -89,11 +89,11 @@
             android:id="@+id/widget_42_btn_shuffle"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:src="@drawable/ic_notification_shuffle"
+            android:src="@drawable/ic_widget_shuffle_off"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Shuffle" />
 
-        <Space
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
@@ -106,7 +106,7 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Previous" />
 
-        <Space
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
@@ -115,11 +115,11 @@
             android:id="@+id/widget_42_btn_play_pause"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:src="@drawable/ic_notification_pause"
+            android:src="@drawable/ic_widget_pause_dark"
             android:background="@drawable/lock_play_circle"
             android:contentDescription="Play/Pause" />
 
-        <Space
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
@@ -132,7 +132,7 @@
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Next" />
 
-        <Space
+        <FrameLayout
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
@@ -141,7 +141,7 @@
             android:id="@+id/widget_42_btn_repeat"
             android:layout_width="36dp"
             android:layout_height="36dp"
-            android:src="@drawable/ic_notification_repeat"
+            android:src="@drawable/ic_widget_repeat_off"
             android:background="?android:attr/selectableItemBackgroundBorderless"
             android:contentDescription="Repeat" />
     </LinearLayout>
