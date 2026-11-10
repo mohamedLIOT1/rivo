@@ -43,7 +43,7 @@ export const MUSIC_PLACEHOLDER_SVG = `data:image/svg+xml;charset=utf-8,${encodeU
 
 export const DEFAULT_COVER_FALLBACK = MUSIC_PLACEHOLDER_SVG;
 export const DEFAULT_COVER = MUSIC_PLACEHOLDER_SVG;
-export const QURAN_COVER_FALLBACK = 'https://images.weserv.nl/?url=upload.wikimedia.org/wikipedia/commons/5/50/FirstSurahKoran.jpg&w=300';
+export const QURAN_COVER_FALLBACK = 'https://rivo-m.duckdns.org/public/assets/quran/tarateel.jpg';
 
 /**
  * Reusable bulletproof onError handler for <img> elements.
