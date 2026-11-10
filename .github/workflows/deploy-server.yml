@@ -13,12 +13,42 @@ on:
       - '.github/workflows/deploy-server.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   deploy:
-    name: Trigger VPS Auto-Deploy
+    name: Build Web Bundle & Trigger VPS Auto-Deploy
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build Web Bundle
+        run: |
+          npm run build
+          tar -czf web-dist.tar.gz -C dist --exclude='downloads' .
+
+      - name: Publish Web Bundle to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: web-latest
+          name: Rivo Web Dist (Latest)
+          prerelease: true
+          make_latest: false
+          files: |
+            web-dist.tar.gz
+
       - name: Ping VPS Deploy Webhook
         run: |
           echo "Pinging VPS webhook to trigger auto-deploy..."

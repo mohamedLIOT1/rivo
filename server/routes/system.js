@@ -373,6 +373,7 @@ router.get(['/downloads/:filename', '/api/downloads/:filename'], async (req, res
 // Secure Webhook for automated deployment on GitHub push
 const DEPLOY_SECRET = process.env.DEPLOY_SECRET || "rivo-deploy-sec-2026";
 let isDeploying = false;
+let deployStartedAt = 0;
 
 router.post('/api/deploy-webhook', (req, res) => {
   if (!DEPLOY_SECRET) {
@@ -391,11 +392,12 @@ router.post('/api/deploy-webhook', (req, res) => {
     return res.status(403).json({ error: 'Unauthorized: Invalid deploy secret' });
   }
 
-  if (isDeploying) {
+  if (isDeploying && Date.now() - deployStartedAt < 120000) {
     return res.status(429).json({ message: 'Deployment already in progress' });
   }
 
   isDeploying = true;
+  deployStartedAt = Date.now();
   res.json({ success: true, message: 'Deployment started in background' });
 
   const { exec } = require('child_process');
@@ -407,14 +409,14 @@ router.post('/api/deploy-webhook', (req, res) => {
     'git config --global --add safe.directory "*" 2>/dev/null || true',
     'if [ -d /home/ubuntu/.git ]; then cd /home/ubuntu && (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main && if [ -d /home/ubuntu/rivo ] && [ ! /home/ubuntu -ef /home/ubuntu/rivo ]; then cp -rf src server public package.json vite.config.js index.html /home/ubuntu/rivo/ 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; fi; fi',
     `cd "${projectRoot}" && if [ -d .git ]; then (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main; fi`,
-    `if [ -d "${projectRoot}/node_modules" ]; then (cd "${projectRoot}" && npm run build); elif [ -d /home/ubuntu/node_modules ]; then (cd /home/ubuntu && npm run build && mkdir -p "${projectRoot}/dist" && cp -rf /home/ubuntu/dist/* "${projectRoot}/dist/" 2>/dev/null || true); fi`,
-    `SRC_DIST="${projectRoot}/dist"; [ -d "$SRC_DIST" ] || SRC_DIST="/home/ubuntu/dist"; if [ -d "$SRC_DIST" ]; then mkdir -p /home/ubuntu/dist /home/ubuntu/rivo/dist 2>/dev/null || true; cp -rf "$SRC_DIST"/* /home/ubuntu/dist/ 2>/dev/null || true; cp -rf "$SRC_DIST"/* /home/ubuntu/rivo/dist/ 2>/dev/null || true; cp -rf "$SRC_DIST"/* /var/www/html/ 2>/dev/null || sudo -n cp -rf "$SRC_DIST"/* /var/www/html/ 2>/dev/null || true; fi`
+    'if curl -fsSL -L "https://github.com/mohamedLIOT1/rivo/releases/download/web-latest/web-dist.tar.gz" -o /tmp/web-dist.tar.gz && [ -s /tmp/web-dist.tar.gz ]; then mkdir -p /home/ubuntu/dist /home/ubuntu/rivo/dist && rm -rf /home/ubuntu/dist/assets /home/ubuntu/rivo/dist/assets && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/dist && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/rivo/dist && (tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || sudo -n tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || true) && rm -f /tmp/web-dist.tar.gz; fi'
   ].join(' ; ');
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');
   exec(deployCmd, { 
     cwd: projectRoot, 
-    timeout: 300000, 
+    timeout: 90000,
+    killSignal: 'SIGKILL',
     shell: '/bin/bash',
     env: { ...process.env, PATH: fullPath }
   }, (error, stdout, stderr) => {
