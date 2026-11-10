@@ -121,9 +121,6 @@ function MainAppShell() {
     </SafeAreaView>
   );
 }
-    </SafeAreaView>
-  );
-}
 
 /**
  * NativeAppShell
