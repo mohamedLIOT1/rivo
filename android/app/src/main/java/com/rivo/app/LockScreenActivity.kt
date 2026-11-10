@@ -16,7 +16,6 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import kotlin.math.abs
 import java.util.Locale
 
@@ -26,21 +25,18 @@ class LockScreenActivity : Activity() {
         var activeInstance: LockScreenActivity? = null
 
         fun notifyPlaybackChanged() {
-            activeInstance?.runOnUiThread {
-                activeInstance?.updateUi()
-            }
+            activeInstance?.runOnUiThread { activeInstance?.updateUi() }
         }
 
         fun notifyLyricsChanged() {
             activeInstance?.runOnUiThread {
                 activeInstance?.updateLyricsUi()
+                activeInstance?.lyricsSheet?.refresh()
             }
         }
 
         fun dismissIfShowing() {
-            activeInstance?.runOnUiThread {
-                activeInstance?.finish()
-            }
+            activeInstance?.runOnUiThread { activeInstance?.finish() }
         }
     }
 
@@ -60,7 +56,9 @@ class LockScreenActivity : Activity() {
     private var btnRepeat: ImageButton? = null
     private var btnClose: ImageButton? = null
     private var btnQueue: ImageButton? = null
+    private var btnLyrics: ImageButton? = null
     private var queueSheet: LockScreenQueueSheet? = null
+    private var lyricsSheet: LockScreenLyricsSheet? = null
     private var gestureDetector: GestureDetector? = null
 
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -80,10 +78,8 @@ class LockScreenActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         activeInstance = this
-
         setupLockScreenWindow()
         setContentView(R.layout.activity_lock_screen)
-
         initViews()
         setupListeners()
         updateUi()
@@ -92,13 +88,10 @@ class LockScreenActivity : Activity() {
     override fun onResume() {
         super.onResume()
         activeInstance = this
-
-        // Clear the launcher notification once the activity is in foreground
         try {
             MediaNotificationService.instance?.dismissLockscreenNotification()
         } catch (_: Throwable) {}
 
-        // If playback stopped while locked, dismiss activity
         if (!MediaNotificationService.isPlaying) {
             finish()
             return
@@ -117,11 +110,12 @@ class LockScreenActivity : Activity() {
         if (activeInstance == this) activeInstance = null
         progressHandler.removeCallbacks(progressRunnable)
         queueSheet = null
+        lyricsSheet = null
         super.onDestroy()
     }
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (queueSheet?.isOpen() != true && !isUserSeeking) {
+        if (queueSheet?.isOpen() != true && lyricsSheet?.isOpen() != true && !isUserSeeking) {
             gestureDetector?.onTouchEvent(ev)
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -131,7 +125,6 @@ class LockScreenActivity : Activity() {
                 MotionEvent.ACTION_UP -> {
                     val diffY = touchDownY - ev.rawY
                     val diffX = abs(touchDownX - ev.rawX)
-                    // Support slow deliberate upward swipe anywhere on screen in addition to fast flings
                     if (diffY > 200f && diffY > diffX * 1.4f) {
                         dismissAndUnlock()
                         return true
@@ -147,13 +140,11 @@ class LockScreenActivity : Activity() {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         }
-
         @Suppress("DEPRECATION")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
             WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
-
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
@@ -178,6 +169,7 @@ class LockScreenActivity : Activity() {
         btnRepeat = findViewById(R.id.btn_lock_repeat)
         btnClose = findViewById(R.id.btn_lock_close)
         btnQueue = findViewById(R.id.btn_lock_queue)
+        btnLyrics = findViewById(R.id.btn_lock_lyrics)
 
         queueSheet = LockScreenQueueSheet(
             this,
@@ -187,18 +179,20 @@ class LockScreenActivity : Activity() {
             findViewById(R.id.btn_lock_queue_close)
         )
 
-        txtTitle?.isSelected = true // Enable marquee horizontal scroll
+        lyricsSheet = LockScreenLyricsSheet(
+            this,
+            findViewById(R.id.lock_lyrics_sheet),
+            findViewById(R.id.lock_lyrics_list),
+            findViewById(R.id.lock_lyrics_sync_status),
+            findViewById(R.id.lock_lyrics_empty),
+            findViewById(R.id.btn_lock_lyrics_close)
+        )
 
-        // Swipe up or swipe down gesture to unlock / dismiss
+        txtTitle?.isSelected = true
+
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
-
-            override fun onFling(
-                e1: MotionEvent?,
-                e2: MotionEvent,
-                velocityX: Float,
-                velocityY: Float
-            ): Boolean {
+            override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (e1 != null) {
                     val diffY = e2.y - e1.y
                     val diffX = e2.x - e1.x
@@ -213,13 +207,10 @@ class LockScreenActivity : Activity() {
     }
 
     private fun setupListeners() {
-        btnClose?.setOnClickListener {
-            dismissAndUnlock()
-        }
-
-        btnQueue?.setOnClickListener {
-            queueSheet?.show()
-        }
+        btnClose?.setOnClickListener { dismissAndUnlock() }
+        btnQueue?.setOnClickListener { lyricsSheet?.hide(); queueSheet?.show() }
+        btnLyrics?.setOnClickListener { queueSheet?.hide(); lyricsSheet?.show() }
+        txtLyrics?.setOnClickListener { queueSheet?.hide(); lyricsSheet?.show() }
 
         btnPlayPause?.setOnClickListener {
             MediaNotificationService.dispatchMediaActionStatic(
@@ -227,26 +218,10 @@ class LockScreenActivity : Activity() {
             )
             updateUi()
         }
-
-        btnNext?.setOnClickListener {
-            MediaNotificationService.dispatchMediaActionStatic("next")
-            updateUi()
-        }
-
-        btnPrev?.setOnClickListener {
-            MediaNotificationService.dispatchMediaActionStatic("prev")
-            updateUi()
-        }
-
-        btnShuffle?.setOnClickListener {
-            MediaNotificationService.dispatchMediaActionStatic("shuffle")
-            updateUi()
-        }
-
-        btnRepeat?.setOnClickListener {
-            MediaNotificationService.dispatchMediaActionStatic("repeat")
-            updateUi()
-        }
+        btnNext?.setOnClickListener { MediaNotificationService.dispatchMediaActionStatic("next"); updateUi() }
+        btnPrev?.setOnClickListener { MediaNotificationService.dispatchMediaActionStatic("prev"); updateUi() }
+        btnShuffle?.setOnClickListener { MediaNotificationService.dispatchMediaActionStatic("shuffle"); updateUi() }
+        btnRepeat?.setOnClickListener { MediaNotificationService.dispatchMediaActionStatic("repeat"); updateUi() }
 
         seekProgress?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, prog: Int, fromUser: Boolean) {
@@ -266,10 +241,8 @@ class LockScreenActivity : Activity() {
                 val prog = sb?.progress ?: 0
                 if (MediaNotificationService.currentDurationMs > 0) {
                     val posMs = (prog.toDouble() / 1000.0 * MediaNotificationService.currentDurationMs).toLong()
-                    val posSeconds = posMs / 1000.0
                     MediaNotificationService.notifyLocalSeek(posMs)
-                    // Dispatch seek event with seconds parameter to React Native
-                    MediaControlsModule.sendEvent("seek:$posSeconds")
+                    MediaControlsModule.sendEvent("seek:${posMs / 1000.0}")
                 }
             }
         })
@@ -289,29 +262,23 @@ class LockScreenActivity : Activity() {
         txtTitle?.text = MediaNotificationService.currentTitle
         txtArtist?.text = MediaNotificationService.currentArtist
 
-        // Update Play / Pause Icon
         btnPlayPause?.setImageResource(
             if (MediaNotificationService.isPlaying) R.drawable.ic_notification_pause
             else R.drawable.ic_notification_play
         )
 
-        // Update Shuffle Tint (Teal active vs Slate inactive)
         btnShuffle?.setColorFilter(
             if (MediaNotificationService.isShuffle) 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
         )
 
-        // Update Repeat Icon & Tint
-        val repeatRes = when (MediaNotificationService.repeatMode) {
-            "one" -> R.drawable.ic_notification_repeat_on
-            "all" -> R.drawable.ic_notification_repeat_all
-            else -> R.drawable.ic_notification_repeat
+        val (repeatRes, repeatColor) = when (MediaNotificationService.repeatMode) {
+            "one" -> Pair(R.drawable.ic_notification_repeat_on, 0xFF17A398.toInt())
+            "all" -> Pair(R.drawable.ic_notification_repeat_all, 0xFF17A398.toInt())
+            else -> Pair(R.drawable.ic_notification_repeat, 0xFF94A3B8.toInt())
         }
         btnRepeat?.setImageResource(repeatRes)
-        btnRepeat?.setColorFilter(
-            if (MediaNotificationService.repeatMode != "off") 0xFF17A398.toInt() else 0xFF94A3B8.toInt()
-        )
+        btnRepeat?.setColorFilter(repeatColor)
 
-        // Artwork
         val bmp: Bitmap? = MediaNotificationService.currentBitmap
         if (bmp != null) {
             imgCoverArt?.setImageBitmap(bmp)
@@ -322,6 +289,7 @@ class LockScreenActivity : Activity() {
         }
 
         queueSheet?.refresh()
+        lyricsSheet?.refresh()
         updateProgressUi()
     }
 
@@ -341,6 +309,8 @@ class LockScreenActivity : Activity() {
     }
 
     fun updateLyricsUi(pos: Long = MediaNotificationService.getEstimatedPositionMs()) {
+        lyricsSheet?.updateActivePosition(pos)
+
         val lyricView = txtLyrics ?: return
         val activeLine = LockScreenLyricsStore.getActiveLyric(pos)
 
@@ -373,6 +343,10 @@ class LockScreenActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        if (lyricsSheet?.isOpen() == true) {
+            lyricsSheet?.hide()
+            return
+        }
         if (queueSheet?.isOpen() == true) {
             queueSheet?.hide()
             return

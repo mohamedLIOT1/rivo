@@ -43,6 +43,7 @@ export const MUSIC_PLACEHOLDER_SVG = `data:image/svg+xml;charset=utf-8,${encodeU
 
 export const DEFAULT_COVER_FALLBACK = MUSIC_PLACEHOLDER_SVG;
 export const DEFAULT_COVER = MUSIC_PLACEHOLDER_SVG;
+export const QURAN_COVER_FALLBACK = 'https://images.weserv.nl/?url=upload.wikimedia.org/wikipedia/commons/5/50/FirstSurahKoran.jpg&w=300';
 
 /**
  * Reusable bulletproof onError handler for <img> elements.
@@ -107,6 +108,12 @@ function _computeNormalizeCoverUrl(cover, track = null) {
     // Replace maxresdefault with hqdefault because YouTube returns 404 for maxresdefault on non-1080p uploads
     if (trimmed.includes('maxresdefault.jpg')) {
       trimmed = trimmed.replace('maxresdefault.jpg', 'hqdefault.jpg');
+    }
+
+    // Proxy Wikimedia & Assabile hotlinked images through images.weserv.nl CDN to prevent HTTP 403 Forbidden
+    if ((trimmed.includes('upload.wikimedia.org') || trimmed.includes('commons.wikimedia.org') || trimmed.includes('assabile.com')) && !trimmed.includes('images.weserv.nl')) {
+      const stripped = trimmed.replace(/^https?:\/\//, '');
+      return `https://images.weserv.nl/?url=${stripped}&w=300`;
     }
 
     if (trimmed.length > 0 && trimmed !== 'null' && trimmed !== 'undefined') {

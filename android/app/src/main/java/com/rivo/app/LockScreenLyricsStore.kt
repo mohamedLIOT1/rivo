@@ -18,6 +18,10 @@ object LockScreenLyricsStore {
         currentLyrics = emptyList()
     }
 
+    fun hasSyncedLyrics(): Boolean {
+        return currentLyrics.any { it.timeMs >= 0L }
+    }
+
     fun updateFromBridge(input: Dynamic?) {
         if (input == null || input.isNull) {
             currentLyrics = emptyList()
@@ -58,11 +62,11 @@ object LockScreenLyricsStore {
                 timeMs = map.getDouble("timeMs").toLong()
             }
 
-            if (timeMs >= 0) {
-                list.add(LyricEntry(timeMs, text))
-            }
+            list.add(LyricEntry(timeMs, text))
         }
-        list.sortBy { it.timeMs }
+        if (list.any { it.timeMs >= 0L }) {
+            list.sortBy { it.timeMs }
+        }
         currentLyrics = list
     }
 
@@ -93,26 +97,33 @@ object LockScreenLyricsStore {
                 }
             }
         }
-        list.sortBy { it.timeMs }
-        currentLyrics = list
+        if (list.isNotEmpty()) {
+            list.sortBy { it.timeMs }
+            currentLyrics = list
+        } else {
+            currentLyrics = lines
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .map { LyricEntry(-1L, it) }
+        }
     }
 
     fun getActiveLyric(posMs: Long): String? {
         val list = currentLyrics
         if (list.isEmpty()) return null
 
-        val first = list.first()
-        if (posMs < first.timeMs) return null
+        val firstSynced = list.firstOrNull { it.timeMs >= 0L } ?: return null
+        if (posMs < firstSynced.timeMs) return null
 
         var active: LyricEntry? = null
         var nextTimeMs = Long.MAX_VALUE
 
         for (i in list.indices) {
             val entry = list[i]
-            if (entry.timeMs <= posMs) {
+            if (entry.timeMs in 0..posMs) {
                 active = entry
                 nextTimeMs = if (i + 1 < list.size) list[i + 1].timeMs else Long.MAX_VALUE
-            } else {
+            } else if (entry.timeMs > posMs) {
                 break
             }
         }
@@ -124,5 +135,21 @@ object LockScreenLyricsStore {
             return active.text
         }
         return null
+    }
+
+    fun getActiveLyricIndex(posMs: Long): Int {
+        val list = currentLyrics
+        if (list.isEmpty()) return -1
+
+        var activeIndex = -1
+        for (i in list.indices) {
+            val entry = list[i]
+            if (entry.timeMs in 0..posMs) {
+                activeIndex = i
+            } else if (entry.timeMs > posMs) {
+                break
+            }
+        }
+        return activeIndex
     }
 }

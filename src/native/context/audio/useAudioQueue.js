@@ -6,6 +6,12 @@ import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { getTrackDedupeKey } from '../../services/downloadManager';
 import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
 import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
+import {
+  isMatchingContentType,
+  handleQuranRadioNext,
+  handleQuranContentNext,
+  handleQuranPrev
+} from './quranQueueHelper';
 
 export const useAudioQueue = ({
   userTracks = [],
@@ -45,15 +51,7 @@ export const useAudioQueue = ({
   const addToQueue = useCallback((track) => {
     if (!track) return;
     const cur = currentTrackRef.current;
-    if (cur) {
-      const isCurRadio = isRadioTrack(cur);
-      const isCurQuran = !isCurRadio && isQuranContent(cur);
-      const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
-      const isTrackMatch = isCurRadio
-        ? isRadioTrack(track)
-        : (isCurQuran ? isQuranContent(track) : (isCurPodcast ? isPodcastContent(track) : (!isRadioTrack(track) && !isQuranContent(track) && !isPodcastContent(track))));
-      if (!isTrackMatch) return;
-    }
+    if (cur && !isMatchingContentType(cur, track)) return;
     const newQ = [...queueRef.current, track];
     setQueue(newQ);
     showToast(`Added to queue: ${track.title}`, 'info');
@@ -62,16 +60,7 @@ export const useAudioQueue = ({
   const addMultipleToQueue = useCallback((tracksToAdd) => {
     if (!Array.isArray(tracksToAdd) || tracksToAdd.length === 0) return;
     const cur = currentTrackRef.current;
-    let allowedTracks = tracksToAdd;
-    if (cur) {
-      const isCurRadio = isRadioTrack(cur);
-      const isCurQuran = !isCurRadio && isQuranContent(cur);
-      const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
-      allowedTracks = tracksToAdd.filter(t => isCurRadio
-        ? isRadioTrack(t)
-        : (isCurQuran ? isQuranContent(t) : (isCurPodcast ? isPodcastContent(t) : (!isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t))))
-      );
-    }
+    const allowedTracks = cur ? tracksToAdd.filter(t => isMatchingContentType(cur, t)) : tracksToAdd;
     if (allowedTracks.length === 0) return;
     const newQ = [...queueRef.current, ...allowedTracks];
     setQueue(newQ);
@@ -163,17 +152,13 @@ export const useAudioQueue = ({
 
     // Strict Quran Radio isolation & continuous wrap-around loop
     if (cur && isRadioTrack(cur)) {
-      const q = queueRef.current;
-      const radioPool = (Array.isArray(q) && q.length > 0 && q.some(isRadioTrack))
-        ? q.filter(isRadioTrack)
-        : QURAN_LIVE_STATIONS;
-      const currentId = String(cur._id || cur.id || '');
-      let idx = radioPool.findIndex(t => String(t._id || t.id) === currentId);
-      const nextIdx = (idx >= 0 && idx < radioPool.length - 1) ? idx + 1 : 0;
-      setQueue(radioPool);
-      if (playTrackCallbackRef.current) {
-        playTrackCallbackRef.current(radioPool[nextIdx], radioPool);
-      }
+      handleQuranRadioNext(cur, queueRef.current, playTrackCallbackRef.current, setQueue);
+      return;
+    }
+
+    // Strict Holy Quran Recitation isolation
+    if (cur && isQuranContent(cur)) {
+      handleQuranContentNext(cur, queueRef.current, userTracks, downloadedTracks, playTrackCallbackRef.current, setQueue);
       return;
     }
 
@@ -223,7 +208,7 @@ export const useAudioQueue = ({
         });
 
         const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
-          .filter(t => (isCurQuran ? isQuranContent(t) : (!isQuranContent(t) && !isPodcastContent(t))));
+          .filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
 
         let nextBatch = getSmartTasteAndMoodTracks({
           allTracks: pool,
@@ -317,19 +302,9 @@ export const useAudioQueue = ({
 
     const cur = currentTrackRef.current;
 
-    // Strict Quran Radio isolation & continuous wrap-around loop (wrapping backwards from first to last)
-    if (cur && isRadioTrack(cur)) {
-      const q = queueRef.current;
-      const radioPool = (Array.isArray(q) && q.length > 0 && q.some(isRadioTrack))
-        ? q.filter(isRadioTrack)
-        : QURAN_LIVE_STATIONS;
-      const currentId = String(cur._id || cur.id || '');
-      let idx = radioPool.findIndex(t => String(t._id || t.id) === currentId);
-      const prevIdx = idx > 0 ? idx - 1 : radioPool.length - 1;
-      setQueue(radioPool);
-      if (playTrackCallbackRef.current) {
-        playTrackCallbackRef.current(radioPool[prevIdx], radioPool);
-      }
+    // Strict Quran Radio & Quran Recitation backwards loop
+    if (cur && (isRadioTrack(cur) || isQuranContent(cur))) {
+      handleQuranPrev(cur, queueRef.current, playTrackCallbackRef.current, setQueue);
       return;
     }
 

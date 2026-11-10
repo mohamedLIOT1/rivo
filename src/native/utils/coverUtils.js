@@ -40,6 +40,7 @@ export const MUSIC_PLACEHOLDER_SVG = `data:image/svg+xml;charset=utf-8,${encodeU
 )}`;
 
 export const DEFAULT_COVER_FALLBACK = MUSIC_PLACEHOLDER_SVG;
+export const QURAN_COVER_FALLBACK = 'https://images.weserv.nl/?url=upload.wikimedia.org/wikipedia/commons/5/50/FirstSurahKoran.jpg&w=300';
 
 /**
  * Downscales remote cover URLs to lightweight thumbnail sizes (200-320px)
@@ -61,6 +62,10 @@ export function downscaleCoverUri(uri) {
   }
   if (Platform.OS === 'android' && uri.includes('hqdefault.jpg')) {
     return uri.replace('hqdefault.jpg', 'mqdefault.jpg');
+  }
+  if ((uri.includes('upload.wikimedia.org') || uri.includes('commons.wikimedia.org') || uri.includes('assabile.com')) && !uri.includes('images.weserv.nl')) {
+    const stripped = uri.replace(/^https?:\/\//, '');
+    return `https://images.weserv.nl/?url=${stripped}&w=300`;
   }
   return uri;
 }

@@ -141,7 +141,34 @@ async function _skip_rest(track, signal) {
 async function doResolvePlayableAudioStream(track, signal = null, isVocalOnly = false, isPrefetch = false, isRetryAlt = false) {
   if (!track) return null;
   const trackId = String(track.id || track._id || '');
-  let targetUrl = isRetryAlt ? '' : (track.resolvedAudioUrl || track.audioUrl || (track.youtubeId ? `https://www.youtube.com/watch?v=${track.youtubeId}` : ''));
+  let targetUrl = track.resolvedAudioUrl || track.audioUrl || (track.youtubeId ? `https://www.youtube.com/watch?v=${track.youtubeId}` : '');
+  if (isRetryAlt) {
+    if (track.fallbackUrl) {
+      targetUrl = track.fallbackUrl;
+    } else if (targetUrl.includes('qurango.net/radio')) {
+      targetUrl = targetUrl.replace('qurango.net/radio', 'backup.qurango.net/radio');
+    } else if (targetUrl.includes('backup.qurango.net/radio')) {
+      targetUrl = targetUrl.replace('backup.qurango.net/radio', 'qurango.net/radio');
+    } else {
+      targetUrl = '';
+    }
+  }
+
+  // Direct Live / Quran Radio stream handling
+  if (track.isRadio || track.isLive || isRadioTrack(track)) {
+    const radioStream = (isRetryAlt && track.fallbackUrl) ? track.fallbackUrl : (targetUrl || track.audioUrl);
+    if (radioStream) {
+      const fullUrl = radioStream.startsWith('/') ? `${API_BASE_URL}${radioStream}` : radioStream;
+      return {
+        url: fullUrl,
+        duration: Infinity,
+        cover: normalizeCoverUrl(track.cover || track.coverUrl),
+        isLive: true,
+        isRadio: true,
+        isQuran: true
+      };
+    }
+  }
 
   // Vocal-Only Mode: check and stream isolated vocal stem
   const isQuran = isQuranContent(track);
@@ -2366,11 +2393,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
 
     // ── STRICT QUEUE ISOLATION (Quran vs Music vs Podcast vs Radio) & RELEVANT BATCHING ──
     const isTargetRadio = isRadioTrack(trackToPlay);
-    const isTargetQuran = !isTargetRadio && isQuranContent(trackToPlay);
-    const isTargetPodcast = !isTargetRadio && !isTargetQuran && isPodcastContent(trackToPlay);
+    const isTargetQuran = isQuranContent(trackToPlay) || isTargetRadio;
+    const isTargetPodcast = !isTargetQuran && isPodcastContent(trackToPlay);
     const matchTargetType = (t) => {
+      if (!t) return false;
       if (isTargetRadio) return isRadioTrack(t);
-      if (isTargetQuran) return isQuranContent(t);
+      if (isTargetQuran) return isQuranContent(t) || isRadioTrack(t);
       if (isTargetPodcast) return isPodcastContent(t);
       return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
     };
@@ -2407,7 +2435,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueue(resolvedQueue);
       isSmartMoodQueueRef.current = false;
     } else if (isTargetQuran) {
-      if (isExplicitPlaylist) {
+      if (newQueue && Array.isArray(newQueue) && newQueue.length > 0) {
         const sanitized = newQueue.filter(matchTargetType);
         resolvedQueue = sanitized.length > 0 ? sanitized : [trackToPlay];
       } else {
@@ -2430,8 +2458,11 @@ export function AudioProvider({ children, tracks, setTracks }) {
       setCurrentQueue(resolvedQueue);
       isSmartMoodQueueRef.current = Boolean(isSmartMood || newQueue?.some(t => t.isSmartMoodQueue) || trackToPlay.isSmartMoodQueue);
     } else if (isQueueNavigation) {
-      // User tapped a specific row inside the existing playback queue
-      resolvedQueue = currentQueueRef.current;
+      // User tapped a specific row inside the existing playback queue - guarantee genre isolation
+      const sanitized = (currentQueueRef.current || []).filter(matchTargetType);
+      resolvedQueue = sanitized.length > 0 ? sanitized : [trackToPlay];
+      currentQueueRef.current = resolvedQueue;
+      setCurrentQueue(resolvedQueue);
     } else {
       // DIRECT TRACK SELECTION (from search results, recommendations, home screen, or single track tap)
       // Even if trackToPlay was already in curQ, NEVER freeze queue: generate 20 fresh dynamic upcoming suggestions!
@@ -2995,12 +3026,13 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     const isCurRadio = isRadioTrack(cur);
-    const isCurQuran = !isCurRadio && isQuranContent(cur);
-    const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
+    const isCurQuran = isQuranContent(cur) || isCurRadio;
+    const isCurPodcast = !isCurQuran && isPodcastContent(cur);
 
     const matchQueueType = (t) => {
+      if (!t) return false;
       if (isCurRadio) return isRadioTrack(t);
-      if (isCurQuran) return isQuranContent(t);
+      if (isCurQuran) return isQuranContent(t) || isRadioTrack(t);
       if (isCurPodcast) return isPodcastContent(t);
       return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
     };
@@ -3058,6 +3090,52 @@ export function AudioProvider({ children, tracks, setTracks }) {
       return;
     }
 
+    // ── STRICT HOLY QURAN QUEUE ENGINE: Never pollute or recommend secular music when playing Quran! ──
+    if (isCurQuran) {
+      if (curIdx >= 0 && curIdx < activeList.length - 1) {
+        const nextIdx = curIdx + 1;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+
+      // Check for unplayed Quran recitations in tracks library
+      const quranPool = tracksRef.current.filter(t => isQuranContent(t) || isRadioTrack(t));
+      const unplayedQuran = quranPool.filter(t => String(t.id || t._id) !== curId);
+      if (unplayedQuran.length > 0) {
+        const newQuranQueue = cur ? [cur, ...unplayedQuran] : unplayedQuran;
+        currentQueueRef.current = newQuranQueue;
+        setCurrentQueue(newQuranQueue);
+        const nextIdx = cur ? 1 : 0;
+        currentQueueIndexRef.current = nextIdx;
+        setCurrentQueueIndex(nextIdx);
+        playTrack(newQuranQueue[nextIdx], newQuranQueue, false, nextIdx, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+
+      // If activeList has multiple Quran tracks, loop back to the first track
+      if (activeList.length > 1) {
+        currentQueueIndexRef.current = 0;
+        setCurrentQueueIndex(0);
+        playTrack(activeList[0], activeList, false, 0, false, isAutoAdvance);
+        setIsPlaying(true);
+        return;
+      }
+
+      // Seamlessly transition to 24/7 Quran Live Stations - strictly NEVER secular music!
+      const stations = QURAN_LIVE_STATIONS;
+      currentQueueRef.current = stations;
+      setCurrentQueue(stations);
+      currentQueueIndexRef.current = 0;
+      setCurrentQueueIndex(0);
+      playTrack(stations[0], stations, false, 0, false, isAutoAdvance);
+      setIsPlaying(true);
+      return;
+    }
+
     // ── SMART MOOD / TASTE QUEUE ROTATION ──
     const isSmartQueue = isSmartMoodQueueRef.current || activeList.some(t => t.isSmartMoodQueue);
     if (isSmartQueue) {
@@ -3085,7 +3163,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
         if (raw) followed = JSON.parse(raw);
       } catch {}
 
-      const allAvailable = tracksRef.current && tracksRef.current.length > 0 ? tracksRef.current : activeList;
+      const allAvailable = (tracksRef.current && tracksRef.current.length > 0 ? tracksRef.current : activeList).filter(matchQueueType);
       let nextBatch = getSmartTasteAndMoodTracks({
         allTracks: allAvailable,
         currentUser: currentUserRef.current,
@@ -3423,10 +3501,43 @@ export function AudioProvider({ children, tracks, setTracks }) {
       return;
     }
 
+    const isCurRadio = isRadioTrack(cur);
+    const isCurQuran = isQuranContent(cur) || isCurRadio;
+    const isCurPodcast = !isCurQuran && isPodcastContent(cur);
+
+    const matchPrevType = (t) => {
+      if (!t) return false;
+      if (isCurRadio) return isRadioTrack(t);
+      if (isCurQuran) return isQuranContent(t) || isRadioTrack(t);
+      if (isCurPodcast) return isPodcastContent(t);
+      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
+    };
+
+    // Strict Quran backwards navigation
+    if (isCurQuran) {
+      if (audioRef.current) audioRef.current.pause();
+      const q = (currentQueueRef.current || []).filter(matchPrevType);
+      const curId = String(cur?.id || cur?._id || '');
+      let idx = q.findIndex(t => String(t.id || t._id) === curId);
+      if (idx < 0 && currentQueueIndexRef.current >= 0 && currentQueueIndexRef.current < q.length) {
+        idx = currentQueueIndexRef.current;
+      }
+      const prevIdx = idx > 0 ? idx - 1 : (q.length > 1 ? q.length - 1 : 0);
+      currentQueueRef.current = q;
+      setCurrentQueue(q);
+      currentQueueIndexRef.current = prevIdx;
+      setCurrentQueueIndex(prevIdx);
+      if (q[prevIdx]) {
+        playTrack(q[prevIdx], q, false, prevIdx, false, false);
+      }
+      setIsPlaying(true);
+      return;
+    }
+
     // 1. True Playback History: Pop and play previously played track (essential for Shuffle & skip navigation)
     if (historyStackRef.current.length > 0) {
       const prevItem = historyStackRef.current.pop();
-      if (prevItem && prevItem.track) {
+      if (prevItem && prevItem.track && matchPrevType(prevItem.track)) {
         isHistoryNavRef.current = true;
         try {
           playTrack(prevItem.track, currentQueueRef.current, false, prevItem.queueIndex);
@@ -3440,16 +3551,6 @@ export function AudioProvider({ children, tracks, setTracks }) {
     }
 
     // 2. Fallback: linear queue backwards
-    const isCurRadio = isRadioTrack(cur);
-    const isCurQuran = !isCurRadio && isQuranContent(cur);
-    const isCurPodcast = !isCurRadio && !isCurQuran && isPodcastContent(cur);
-
-    const matchPrevType = (t) => {
-      if (isCurRadio) return isRadioTrack(t);
-      if (isCurQuran) return isQuranContent(t);
-      if (isCurPodcast) return isPodcastContent(t);
-      return !isRadioTrack(t) && !isQuranContent(t) && !isPodcastContent(t);
-    };
 
     const rawQueue = currentQueueRef.current.length > 0 ? currentQueueRef.current : tracksRef.current;
     if (!rawQueue?.length) return;

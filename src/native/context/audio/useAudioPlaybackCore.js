@@ -9,6 +9,7 @@ import { resolveTrackPlaybackUri, createAudioSound } from './streamResolverHelpe
 import { saveLastPlayedState } from './useAudioPersistence';
 import { buildSmartSeedQueue } from '../../utils/tasteAlgorithm';
 import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
+import { QURAN_LIVE_STATIONS } from '../../data/quranLiveStations';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
 import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
@@ -254,8 +255,9 @@ export const useAudioPlaybackCore = ({
     }
 
     try {
+      const isQuran = isQuranContent(track) || isRadioTrack(track);
       if (Array.isArray(trackList) && trackList.length > 0) {
-        if (trackList.length === 1 && !isRadioTrack(track) && !isQuranContent(track)) {
+        if (trackList.length === 1 && !isQuran) {
           if (isPodcastContent(track)) {
             const podcastPool = ((userTracks?.length > 0) ? userTracks : []).filter(t => isPodcastContent(t));
             const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
@@ -265,7 +267,29 @@ export const useAudioPlaybackCore = ({
             setQueue(buildSmartSeedQueue(track, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
           }
         } else {
-          setQueue(trackList);
+          // Strictly isolate queue according to playing content type
+          if (isQuran) {
+            const quranList = trackList.filter(t => isQuranContent(t) || isRadioTrack(t));
+            setQueue(quranList.length > 0 ? quranList : [track]);
+          } else if (isPodcastContent(track)) {
+            const podcastList = trackList.filter(isPodcastContent);
+            setQueue(podcastList.length > 0 ? podcastList : [track]);
+          } else {
+            const musicList = trackList.filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
+            setQueue(musicList.length > 0 ? musicList : [track]);
+          }
+        }
+      } else {
+        // No trackList provided: ensure existing queue is strictly segregated
+        if (isQuran) {
+          const quranQueue = (queueRef.current || []).filter(t => isQuranContent(t) || isRadioTrack(t));
+          setQueue(quranQueue.length > 0 ? quranQueue : (isRadioTrack(track) ? QURAN_LIVE_STATIONS : [track]));
+        } else if (isPodcastContent(track)) {
+          const podcastQueue = (queueRef.current || []).filter(isPodcastContent);
+          setQueue(podcastQueue.length > 0 ? podcastQueue : [track]);
+        } else {
+          const musicQueue = (queueRef.current || []).filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
+          setQueue(musicQueue.length > 0 ? musicQueue : [track]);
         }
       }
 

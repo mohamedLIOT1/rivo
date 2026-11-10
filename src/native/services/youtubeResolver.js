@@ -360,6 +360,15 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
   }
 
   // 2. Direct radio / live stream URL or direct MP3/M4A/AAC stream URL (non-YouTube)
+  if (track.isRadio || track.isLive || isRadioTrack(track)) {
+    const radioUrl = (track.isRetry && track.fallbackUrl) ? track.fallbackUrl : (rawUrl || track.audioUrl);
+    if (radioUrl && radioUrl.startsWith('http')) {
+      const full = radioUrl.startsWith('/') ? `${API_BASE_URL}${radioUrl}` : radioUrl;
+      if (trackId) setStreamInCache(trackId, full);
+      return full;
+    }
+  }
+
   if (
     !track.isRetry &&
     rawUrl.startsWith('http') &&
@@ -370,9 +379,6 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
     !rawUrl.includes('soundcloud.com') &&
     !rawUrl.includes('sndcdn.com') &&
     (
-      track.isRadio ||
-      track.isLive ||
-      isRadioTrack(track) ||
       rawUrl.endsWith('.mp3') ||
       rawUrl.endsWith('.m4a') ||
       rawUrl.endsWith('.aac') ||

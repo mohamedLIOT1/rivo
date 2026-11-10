@@ -6,6 +6,7 @@ import {
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTranslation } from '../context/PreferencesContext';
+import { QURAN_COVER_FALLBACK } from '../utils/coverUtils';
 
 export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' }) {
   const { currentTrack, isPlaying, playTrack, togglePlay } = useAudioPlayer();
@@ -91,7 +92,7 @@ export default function QuranRadioModal({ isOpen, onClose, globalTheme = 'dark' 
                       loading="lazy"
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = 'https://upload.wikimedia.org/wikipedia/commons/5/50/FirstSurahKoran.jpg';
+                        e.currentTarget.src = QURAN_COVER_FALLBACK;
                       }}
                     />
                     {isCurrentPlaying ? (

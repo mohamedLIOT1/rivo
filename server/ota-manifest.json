@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.17",
+  "version": "2.4.18",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث سريع v2.4.17 • إضافة كلمات الأغاني على شاشة القفل وقائمة الانتظار في الويدجت وتحديث الراديو",
-  "notesEn": "Fast OTA v2.4.17 • Lockscreen lyrics, 4x2 widget queue & radio improvements",
+  "notes": "تحديث سريع v2.4.18 • إضافة شيت الكلمات الكاملة بشاشة القفل وإصلاح صور الشيوخ وعزل كيو القرآن",
+  "notesEn": "Fast OTA v2.4.18 • Full lockscreen lyrics sheet, radio portraits 403 fix & strict Quran queue isolation",
   "bundleSize": 5132874,
   "sizeMb": "4.90 MB",
-  "updatedAt": "2026-11-10T10:46:00.000Z"
+  "updatedAt": "2026-11-10T12:34:00.000Z"
 }
