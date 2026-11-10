@@ -112,9 +112,14 @@ export const exportTrackAudioFile = async (track) => {
             cleanFileName,
             ext === 'm4a' ? 'audio/mp4' : 'audio/mpeg'
           );
-          const base64 = await FileSystem.readAsStringAsync(targetUri, { encoding: FileSystem.EncodingType.Base64 });
-          await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
-          return { success: true, uri: newFileUri, method: 'saf' };
+          try {
+            await FileSystem.copyAsync({ from: targetUri, to: newFileUri });
+            return { success: true, uri: newFileUri, method: 'copy' };
+          } catch {
+            const base64 = await FileSystem.readAsStringAsync(targetUri, { encoding: FileSystem.EncodingType.Base64 });
+            await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+            return { success: true, uri: newFileUri, method: 'saf' };
+          }
         }
       }
     } catch {}

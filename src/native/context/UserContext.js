@@ -239,7 +239,7 @@ export const UserProvider = ({ children }) => {
           setLikedTrackIds(data.user.likedTrackIds || []);
           setPlaylists(normalized);
           AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user)).catch(() => {});
-          AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(normalized)).catch(() => {});
+          savePlaylistsDebounced(normalized);
         }
       }
     } catch {}

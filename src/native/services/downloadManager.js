@@ -120,7 +120,7 @@ export const downloadTrack = async (track, onProgress) => {
       downloadedAt: new Date().toISOString(),
     };
     const cleaned = deduplicateTrackList([record, ...existing]);
-    await saveDownloadedTracks(cleaned, { immediate: true });
+    await saveDownloadedTracks(cleaned);
     return record;
   }
 
@@ -284,7 +284,7 @@ export const downloadTrack = async (track, onProgress) => {
   };
 
   const updated = deduplicateTrackList([record, ...existing]);
-  await saveDownloadedTracks(updated, { immediate: true });
+  await saveDownloadedTracks(updated);
   return record;
 };
 
@@ -307,7 +307,7 @@ export const removeDownloadedTrack = async (trackOrId) => {
   await FileSystem.deleteAsync(`${TRACKS_DIR}${targetId}.m4a`, { idempotent: true }).catch(() => {});
   await FileSystem.deleteAsync(`${COVERS_DIR}${targetId}.jpg`, { idempotent: true }).catch(() => {});
 
-  await saveDownloadedTracks(remaining, { immediate: true });
+  await saveDownloadedTracks(remaining);
   return remaining;
 };
 
@@ -329,6 +329,6 @@ export const removeDownloadedTracksBatch = async (tracksOrIds = []) => {
     await FileSystem.deleteAsync(`${COVERS_DIR}${id}.jpg`, { idempotent: true }).catch(() => {});
   }
 
-  await saveDownloadedTracks(remaining, { immediate: true });
+  await saveDownloadedTracks(remaining);
   return remaining;
 };

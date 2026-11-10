@@ -967,10 +967,10 @@ export function AudioProvider({ children, tracks, setTracks }) {
           const runFrame = () => {
             if (!isTransitionRunningRef.current) return;
 
-            // Preserve crossfade progress if user paused
+            // Preserve crossfade progress if user paused (throttle check while paused to stop 120fps rAF loop)
             if (!isPlayingRef.current) {
               if (pauseStart === 0) pauseStart = performance.now();
-              transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
+              transitionAnimFrameRef.current = setTimeout(runFrame, 300);
               return;
             }
             if (pauseStart > 0) {

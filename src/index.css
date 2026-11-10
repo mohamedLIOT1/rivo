@@ -1008,17 +1008,43 @@ html[lang="ar"] .sp-section-link,
 }
 
 /* =============================================
-   Low-End Device & Android Tablet GPU Acceleration
-   (Targeting Samsung Galaxy Tab A, Mali-T830 / weak GPUs)
+   Low-End Device & Mobile / Tablet GPU Acceleration
+   (Targeting OPPO A60, Adreno 610, Mali-T830 / weak GPUs)
    ============================================= */
-html.low-end-device,
-@media (max-width: 1280px) and (pointer: coarse),
-@media (max-width: 1024px) {
-  /* Complete removal of GPU fill-rate chokepoints (backdrop-filter Gaussian blur passes) */
-  html.low-end-device .glass-panel,
-  html.low-end-device .glass-player,
-  html.low-end-device .sp-mobile-nav,
-  html.low-end-device [class*="backdrop-blur-"],
+
+/* Global touch responsiveness & zero tap delay */
+html, body, button, a, [role="button"], input, select {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Complete removal of GPU fill-rate chokepoints on low-end devices */
+html.low-end-device .glass-panel,
+html.low-end-device .glass-player,
+html.low-end-device .sp-mobile-nav,
+html.low-end-device [class*="backdrop-blur-"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.low-end-device .glass-panel {
+  background: rgba(18, 18, 18, 0.96) !important;
+}
+
+html.low-end-device .glass-player {
+  background: #0e1715 !important;
+}
+
+html.low-end-device .sp-mobile-nav {
+  background: #0b1110 !important;
+}
+
+html.low-end-device [class*="bg-black/"][class*="backdrop-blur-"] {
+  background-color: rgba(0, 0, 0, 0.88) !important;
+}
+
+/* Complete removal of GPU fill-rate chokepoints on mobile/tablets & touch viewports */
+@media (max-width: 1024px), (pointer: coarse) {
   .glass-panel,
   .glass-player,
   .sp-mobile-nav,
@@ -1027,22 +1053,18 @@ html.low-end-device,
     -webkit-backdrop-filter: none !important;
   }
 
-  html.low-end-device .glass-panel,
   .glass-panel {
     background: rgba(18, 18, 18, 0.96) !important;
   }
 
-  html.low-end-device .glass-player,
   .glass-player {
     background: #0e1715 !important;
   }
 
-  html.low-end-device .sp-mobile-nav,
   .sp-mobile-nav {
     background: #0b1110 !important;
   }
 
-  html.low-end-device [class*="bg-black/"][class*="backdrop-blur-"],
   [class*="bg-black/"][class*="backdrop-blur-"] {
     background-color: rgba(0, 0, 0, 0.88) !important;
   }
@@ -1051,9 +1073,10 @@ html.low-end-device,
   .sp-track-row {
     content-visibility: auto;
     contain-intrinsic-size: 56px;
+    contain: paint;
   }
 
-  /* Snappier lightweight shadows for low fill-rate tablet GPUs */
+  /* Snappier lightweight shadows for low fill-rate tablet & mid-range GPUs */
   .brutal-shadow-lg {
     box-shadow: 2px 2px 0px #0b1110 !important;
   }

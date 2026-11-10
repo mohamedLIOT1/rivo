@@ -414,6 +414,11 @@ export default function PlaylistScreen({
     );
   }, [playlistTracks, searchQuery]);
 
+  const [visibleLimit, setVisibleLimit] = useState(60);
+  useEffect(() => {
+    setVisibleLimit(60);
+  }, [playlist?.id, playlist?._id, searchQuery]);
+
   // Multi-Select state & batch actions
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedTrackIds, setSelectedTrackIds] = useState(new Set());
@@ -1468,7 +1473,7 @@ export default function PlaylistScreen({
               <span className={isPlaylistMixActive ? "col-span-5 md:col-span-1 text-right pr-2" : "col-span-5 md:col-span-2 text-right pr-2"}>{t?.('library.actionsHeader') || 'ACTIONS'}</span>
             </div>
 
-            {filteredPlaylistTracks.map((track, i) => {
+            {filteredPlaylistTracks.slice(0, visibleLimit).map((track, i) => {
               const isSelected = selectedTrackIds.has(String(track.id || track._id));
               const isMixOn = isPlaylistMixActive;
               const musical = isMixOn ? getTrackMusicalData(track) : null;
@@ -1710,6 +1715,18 @@ export default function PlaylistScreen({
                 </React.Fragment>
               );
             })}
+
+            {filteredPlaylistTracks.length > visibleLimit && (
+              <div className="pt-4 pb-8 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit(prev => prev + 60)}
+                  className="px-6 py-2.5 rounded-xl brutal-border font-mono text-xs font-black uppercase bg-[#17a398] text-[#0b1110] hover:bg-[#26c4b7] transition-all brutal-shadow-sm cursor-pointer"
+                >
+                  {isRTL ? 'عرض المزيد من المقاطع' : 'Load More Tracks'} ({filteredPlaylistTracks.length - visibleLimit} {isRTL ? 'متبقية' : 'remaining'})
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           <div className={`text-center py-12 brutal-border-thick brutal-shadow p-8 ${

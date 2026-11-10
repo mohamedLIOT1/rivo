@@ -10,7 +10,7 @@ import { FULL_VERSION, APP_VERSION } from '../version';
 import RivoLogo from './RivoLogo';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
-export default function Navigation({ 
+function Navigation({ 
   currentScreen = 'home', 
   setCurrentScreen = () => {}, 
   playlists = [], 
@@ -589,3 +589,5 @@ export default function Navigation({
     </>
   );
 }
+
+export default React.memo(Navigation);

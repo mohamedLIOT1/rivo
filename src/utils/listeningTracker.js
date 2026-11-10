@@ -80,7 +80,7 @@ export function saveListeningStats(stats, immediate = false) {
     persist();
   } else {
     if (saveTimeout) clearTimeout(saveTimeout);
-    saveTimeout = setTimeout(persist, 1000);
+    saveTimeout = setTimeout(persist, 15000);
   }
 }
 

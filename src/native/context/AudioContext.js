@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { updateMediaNotification } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
@@ -36,7 +36,9 @@ export const AudioProvider = ({ children }) => {
       allowsRecordingIOS: false,
       staysActiveInBackground: true,
       playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false
     }).catch(() => {});
   }, []);

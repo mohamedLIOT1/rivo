@@ -1,3 +1,4 @@
+import { AppState } from 'react-native';
 import { updateAudioProgress } from '../AudioProgressContext';
 import { clearStreamCache } from '../../services/youtubeResolver';
 import { isQuranContent } from '../../../utils/quranUtils';
@@ -72,18 +73,36 @@ export const handlePlaybackStatusUpdate = ({
     if (shouldBePlayingRef.current && !isPlayingRef?.current && typeof setIsPlaying === 'function') {
       setIsPlaying(true);
     }
-  } else if (!status.isBuffering && !isLoadingRef?.current && !shouldBePlayingRef?.current) {
-    if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
-      setIsPlaying(false);
+  } else if (!status.isBuffering && !isLoadingRef?.current) {
+    // If the OS paused audio (interrupted by another app, video, phone call), update state to paused
+    if (AppState.currentState !== 'active' || !shouldBePlayingRef?.current) {
+      if (shouldBePlayingRef) shouldBePlayingRef.current = false;
+      if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
+        setIsPlaying(false);
+      }
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
     }
   }
 
-  // Stall & Auto-play watchdog: If AVPlayer is paused or buffering when shouldBePlaying is true
+  // Stall & Auto-play watchdog: Only recover if app is in active foreground and genuinely stalled during buffering
   if (status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current && !isSeekingRef.current) {
-    if (!status.isBuffering && soundRef.current) {
+    if (AppState.currentState !== 'active') {
+      // Audio focus lost to another app while in background -> cleanly pause
+      shouldBePlayingRef.current = false;
+      if (typeof setIsPlaying === 'function') setIsPlaying(false);
+    } else if (status.isBuffering) {
+      // Still buffering, wait for buffer
+    } else if (soundRef.current) {
       soundRef.current.playAsync().then(() => {
         if (typeof setIsPlaying === 'function') setIsPlaying(true);
-      }).catch(() => {});
+      }).catch(() => {
+        // Audio focus rejected by OS (another app has audio focus) -> pause cleanly
+        shouldBePlayingRef.current = false;
+        if (typeof setIsPlaying === 'function') setIsPlaying(false);
+      });
     }
 
     if (!stallRecoveryTimerRef.current) {

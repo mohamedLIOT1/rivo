@@ -53,7 +53,7 @@ import { ThemeProvider, useTheme } from './src/native/context/ThemeContext';
 import { colors } from './src/native/theme/colors';
 import { APP_VERSION, FULL_VERSION } from './src/native/version';
 import { API_BASE_URL } from './src/native/config';
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import {
   installApk,
@@ -125,7 +125,9 @@ function MainAppShell() {
       allowsRecordingIOS: false,
       staysActiveInBackground: true,
       playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false
     }).catch(() => {});
 
@@ -753,7 +755,9 @@ function NativeAppShell() {
       allowsRecordingIOS: false,
       staysActiveInBackground: true,
       playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
+      interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+      interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+      shouldDuckAndroid: false,
       playThroughEarpieceAndroid: false
     }).catch(() => {});
 
