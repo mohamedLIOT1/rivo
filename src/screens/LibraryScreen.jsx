@@ -138,8 +138,8 @@ export default function LibraryScreen({
 
   return (
     <div 
-      className={`flex-1 overflow-y-auto select-none p-4 sm:p-6 ${
-        isDark ? 'bg-[#081210] text-[#fdfbf7]' : 'bg-[#eef8f6] text-[#081210]'
+      className={`flex-1 overflow-y-auto select-none p-4 sm:p-6 transition-colors ${
+        isDark ? 'bg-[#081210] text-[#fdfbf7]' : 'bg-[#fdfbf7] text-[#082621]'
       }`}
       style={{ 
         paddingBottom: 'calc(var(--player-height) + 50px)',
@@ -149,10 +149,14 @@ export default function LibraryScreen({
       <div className="mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h1 className={`text-2xl sm:text-3xl font-display font-black tracking-tight text-white flex items-center gap-2 ${isRTL ? 'font-sans' : ''}`}>
+            <h1 className={`text-2xl sm:text-3xl font-display font-black tracking-tight flex items-center gap-2 transition-colors ${
+              isDark ? 'text-white' : 'text-[#082621]'
+            } ${isRTL ? 'font-sans' : ''}`}>
               <span>{isRTL ? 'مكتبتك الصوتية' : (libraryTitle || 'Your Library')}</span>
             </h1>
-            <p className="text-xs text-emerald-300/70 mt-0.5 font-medium">
+            <p className={`text-xs mt-0.5 font-medium transition-colors ${
+              isDark ? 'text-emerald-300/70' : 'text-[#082621]/70'
+            }`}>
               {isRTL
                 ? 'مكتبتك الشخصية المنظمة: قوائم التشغيل، الأغاني المحفوظة، والتلاوات المفضلة.'
                 : 'Your organized personal library: playlists, saved songs, and favorite recitations.'}
@@ -164,7 +168,7 @@ export default function LibraryScreen({
             {openCreatePlaylistModal && (
               <button
                 onClick={openCreatePlaylistModal}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-display font-black bg-emerald-400 text-black hover:bg-emerald-300 transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-display font-black bg-[#17a398] text-[#0b1110] hover:bg-[#26c4b7] transition-transform active:scale-95 flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Plus size={14} strokeWidth={3} />
                 <span>{isRTL ? 'قائمة جديدة' : 'New Playlist'}</span>
@@ -175,7 +179,11 @@ export default function LibraryScreen({
             <div className="relative">
               <button
                 onClick={() => setIsAddMenuOpen(!isAddMenuOpen)}
-                className="px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+                className={`px-3 py-1.5 rounded-xl text-xs font-display font-black brutal-border transition-colors flex items-center gap-1.5 cursor-pointer ${
+                  isDark
+                    ? 'bg-[#0e221d] hover:bg-emerald-500 hover:text-black text-emerald-300 border-zinc-700'
+                    : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] border-[#0b1110]'
+                }`}
               >
                 <Plus size={14} />
                 <span>{isRTL ? 'إضافة / استيراد' : 'Add / Import'}</span>
@@ -188,14 +196,22 @@ export default function LibraryScreen({
                     className="fixed inset-0 z-40" 
                     onClick={() => setIsAddMenuOpen(false)} 
                   />
-                  <div className={`absolute ${isRTL ? 'left-0' : 'right-0'} mt-1.5 w-52 bg-[#091714] border border-emerald-500/40 rounded-xl shadow-2xl p-1.5 z-50 text-xs font-medium space-y-0.5`}>
+                  <div className={`absolute ${isRTL ? 'left-0' : 'right-0'} mt-1.5 w-52 rounded-xl shadow-2xl p-1.5 z-50 text-xs font-medium space-y-0.5 border ${
+                    isDark 
+                      ? 'bg-[#091714] border-emerald-500/40 text-emerald-200' 
+                      : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'
+                  }`}>
                     {openAddSongModal && (
                       <button
                         onClick={() => {
                           setIsAddMenuOpen(false);
                           openAddSongModal();
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left cursor-pointer ${
+                          isDark 
+                            ? 'text-emerald-200 hover:bg-emerald-500 hover:text-black' 
+                            : 'text-[#082621] hover:bg-[#ede5d3] hover:text-[#0b1110]'
+                        }`}
                       >
                         <Search size={14} />
                         <span>{isRTL ? 'بحث وإضافة أغنية' : 'Search & Add Song'}</span>
@@ -208,7 +224,11 @@ export default function LibraryScreen({
                           if (openImportSongModal) openImportSongModal();
                           else if (openImportPlaylistModal) openImportPlaylistModal();
                         }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
+                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors text-left cursor-pointer ${
+                          isDark 
+                            ? 'text-emerald-200 hover:bg-emerald-500 hover:text-black' 
+                            : 'text-[#082621] hover:bg-[#ede5d3] hover:text-[#0b1110]'
+                        }`}
                       >
                         <Link2 size={14} />
                         <span>{isRTL ? 'استيراد عبر الرابط (مقطع أو قائمة)' : 'Import by Link (Track / Playlist)'}</span>
@@ -222,19 +242,29 @@ export default function LibraryScreen({
         </div>
 
         {/* ── SECTION TABS (Music Library vs Quran Library) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-1.5 bg-[#050f0d] rounded-2xl border border-emerald-500/25">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-1.5 rounded-2xl border transition-colors ${
+          isDark ? 'bg-[#050f0d] border-emerald-500/25' : 'bg-[#ede5d3] border-[#0b1110]'
+        }`}>
           {showMusic && (
             <button
               onClick={() => { setActiveSection('music'); setFilter('all'); }}
               className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
                 activeSection === 'music'
-                  ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]'
-                  : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
+                  ? (isDark 
+                      ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]' 
+                      : 'bg-[#082621] text-[#26c4b7] shadow-sm scale-[1.01]')
+                  : (isDark 
+                      ? 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40' 
+                      : 'text-[#082621]/70 hover:text-[#082621] hover:bg-white/60')
               }`}
             >
               <Music size={16} />
               <span>{isRTL ? 'مكتبة الموسيقى' : 'Music Library'}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeSection === 'music' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeSection === 'music' 
+                  ? (isDark ? 'bg-black/20 text-black' : 'bg-[#26c4b7]/20 text-[#26c4b7]') 
+                  : (isDark ? 'bg-emerald-950 text-emerald-300' : 'bg-[#0b1110]/10 text-[#082621]')
+              }`}>
                 {activeTracks.length} {isRTL ? 'مقطع' : 'tracks'}
               </span>
             </button>
@@ -245,13 +275,21 @@ export default function LibraryScreen({
               onClick={() => { setActiveSection('quran'); setFilter('all'); }}
               className={`flex items-center justify-center gap-2.5 py-2.5 px-4 rounded-xl text-xs font-display font-black transition-all cursor-pointer ${
                 activeSection === 'quran'
-                  ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]'
-                  : 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40'
+                  ? (isDark 
+                      ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.35)] scale-[1.01]' 
+                      : 'bg-[#082621] text-[#26c4b7] shadow-sm scale-[1.01]')
+                  : (isDark 
+                      ? 'text-emerald-300/80 hover:text-white hover:bg-emerald-950/40' 
+                      : 'text-[#082621]/70 hover:text-[#082621] hover:bg-white/60')
               }`}
             >
               <BookOpen size={16} />
               <span>{isRTL ? 'المكتبة القرآنية' : 'Quran Library'}</span>
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${activeSection === 'quran' ? 'bg-black/20 text-black font-bold' : 'bg-emerald-950 text-emerald-300'}`}>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                activeSection === 'quran' 
+                  ? (isDark ? 'bg-black/20 text-black' : 'bg-[#26c4b7]/20 text-[#26c4b7]') 
+                  : (isDark ? 'bg-emerald-950 text-emerald-300' : 'bg-[#0b1110]/10 text-[#082621]')
+              }`}>
                 {quranTracks.length} {isRTL ? 'تلاوة' : 'recitations'}
               </span>
             </button>
@@ -274,8 +312,10 @@ export default function LibraryScreen({
                 onClick={() => setFilter(chip.id)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-display font-black transition-colors cursor-pointer ${
                   active
-                    ? 'bg-emerald-400 text-black shadow-sm'
-                    : 'bg-[#0b1c18] text-emerald-200/80 border border-emerald-900/60 hover:bg-[#0f2621]'
+                    ? (isDark ? 'bg-emerald-400 text-black shadow-sm' : 'bg-[#082621] text-[#26c4b7] shadow-sm')
+                    : (isDark 
+                        ? 'bg-[#0b1c18] text-emerald-200/80 border border-emerald-900/60 hover:bg-[#0f2621]' 
+                        : 'bg-[#ede5d3] text-[#082621] border border-[#0b1110] hover:bg-[#ded2bb]')
                 }`}
               >
                 {chip.label}
@@ -285,13 +325,19 @@ export default function LibraryScreen({
         </div>
 
         <div className="relative w-full sm:w-64">
-          <Search size={14} className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 text-emerald-400/60 pointer-events-none`} />
+          <Search size={14} className={`absolute ${isRTL ? 'right-3' : 'left-3'} top-1/2 -translate-y-1/2 pointer-events-none transition-colors ${
+            isDark ? 'text-emerald-400/60' : 'text-[#082621]/60'
+          }`} />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={isRTL ? 'ابحث في مكتبتك...' : 'Search in library...'}
-            className={`w-full text-xs font-bold ${isRTL ? 'pr-8 pl-3 text-right' : 'pl-8 pr-3'} py-2 rounded-xl bg-[#091714] text-white border border-emerald-900/70 placeholder-emerald-500/40 focus:outline-none focus:border-emerald-500`}
+            className={`w-full text-xs font-bold ${isRTL ? 'pr-8 pl-3 text-right' : 'pl-8 pr-3'} py-2 rounded-xl transition-colors focus:outline-none ${
+              isDark 
+                ? 'bg-[#091714] text-white border border-emerald-900/70 placeholder-emerald-500/40 focus:border-emerald-500' 
+                : 'bg-[#ede5d3] text-[#082621] border border-[#0b1110] placeholder-[#082621]/40 focus:bg-white focus:border-[#082621]'
+            }`}
           />
         </div>
       </div>
@@ -312,6 +358,7 @@ export default function LibraryScreen({
         <LibraryPlaylistsGrid
           playlists={filteredPlaylists}
           activeSection={activeSection}
+          isDark={isDark}
           isRTL={isRTL}
           onSelectPlaylist={onSelectPlaylist}
         />
@@ -323,6 +370,7 @@ export default function LibraryScreen({
           tracks={filter === 'downloads' ? downloadedTracks : filteredTracks}
           filter={filter}
           activeSection={activeSection}
+          isDark={isDark}
           isRTL={isRTL}
           onSelectTrack={onSelectTrack}
           toggleLike={toggleLike}
