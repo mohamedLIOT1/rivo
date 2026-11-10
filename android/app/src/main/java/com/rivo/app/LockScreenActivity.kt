@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
@@ -15,6 +17,7 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import kotlin.math.abs
 import java.util.Locale
 
 class LockScreenActivity : Activity() {
@@ -48,6 +51,7 @@ class LockScreenActivity : Activity() {
     private var btnNext: ImageButton? = null
     private var btnRepeat: ImageButton? = null
     private var btnClose: ImageButton? = null
+    private var gestureDetector: GestureDetector? = null
 
     private val progressHandler = Handler(Looper.getMainLooper())
     private var isUserSeeking = false
@@ -76,6 +80,12 @@ class LockScreenActivity : Activity() {
     override fun onResume() {
         super.onResume()
         activeInstance = this
+
+        // Clear the launcher notification once the activity is in foreground
+        try {
+            MediaNotificationService.instance?.dismissLockscreenNotification()
+        } catch (_: Throwable) {}
+
         // If playback stopped while locked, dismiss activity
         if (!MediaNotificationService.isPlaying) {
             finish()
@@ -100,14 +110,15 @@ class LockScreenActivity : Activity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
-                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
         }
+
+        @Suppress("DEPRECATION")
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+        )
 
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = (
@@ -133,6 +144,30 @@ class LockScreenActivity : Activity() {
         btnClose = findViewById(R.id.btn_lock_close)
 
         txtTitle?.isSelected = true // Enable marquee horizontal scroll
+
+        // Swipe up or swipe down gesture to unlock / dismiss
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 != null) {
+                    val diffY = e2.y - e1.y
+                    val diffX = e2.x - e1.x
+                    if (abs(diffY) > abs(diffX) && abs(diffY) > 120 && abs(velocityY) > 200) {
+                        dismissAndUnlock()
+                        return true
+                    }
+                }
+                return false
+            }
+        })
+
+        findViewById<View>(android.R.id.content)?.setOnTouchListener { _, event ->
+            gestureDetector?.onTouchEvent(event) ?: false
+        }
     }
 
     private fun setupListeners() {

@@ -39,6 +39,7 @@ export const handlePlaybackStatusUpdate = ({
   setIsPlaying,
   isPlayingRef,
   trackCompletionHandledRef,
+  interruptedByOsRef,
 }) => {
   if (!status.isLoaded) {
     if (status.error) {
@@ -70,45 +71,87 @@ export const handlePlaybackStatusUpdate = ({
       clearTimeout(stallRecoveryTimerRef.current);
       stallRecoveryTimerRef.current = null;
     }
-    if (shouldBePlayingRef.current && !isPlayingRef?.current && typeof setIsPlaying === 'function') {
+    if (interruptedByOsRef) interruptedByOsRef.current = false;
+    if (shouldBePlayingRef) shouldBePlayingRef.current = true;
+    if (!isPlayingRef?.current && typeof setIsPlaying === 'function') {
       setIsPlaying(true);
+      const cur = currentTrackRef.current;
+      const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+      if (typeof updateMediaNotification === 'function') {
+        updateMediaNotification(
+          true,
+          repeatModeRef?.current || 'off',
+          isShuffleRef?.current || false,
+          isLikedTrack,
+          cur
+        );
+      }
     }
-  } else if (!status.isBuffering && !isLoadingRef?.current) {
-    // If the OS paused audio (interrupted by another app, video, phone call), update state to paused
-    if (AppState.currentState !== 'active' || !shouldBePlayingRef?.current) {
-      if (shouldBePlayingRef) shouldBePlayingRef.current = false;
+  } else if (!status.isBuffering && !isLoadingRef?.current && !isSeekingRef?.current) {
+    // If the OS paused audio (interrupted by another app like Reels, video, phone call), update state to paused
+    if (shouldBePlayingRef?.current) {
+      if (interruptedByOsRef) interruptedByOsRef.current = true;
       if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
         setIsPlaying(false);
+        const cur = currentTrackRef.current;
+        const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+        if (typeof updateMediaNotification === 'function') {
+          updateMediaNotification(
+            false,
+            repeatModeRef?.current || 'off',
+            isShuffleRef?.current || false,
+            isLikedTrack,
+            cur
+          );
+        }
       }
       if (stallRecoveryTimerRef.current) {
         clearTimeout(stallRecoveryTimerRef.current);
         stallRecoveryTimerRef.current = null;
       }
+    } else {
+      if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
+        setIsPlaying(false);
+        const cur = currentTrackRef.current;
+        const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+        if (typeof updateMediaNotification === 'function') {
+          updateMediaNotification(
+            false,
+            repeatModeRef?.current || 'off',
+            isShuffleRef?.current || false,
+            isLikedTrack,
+            cur
+          );
+        }
+      }
     }
   }
 
   // Stall & Auto-play watchdog: Only recover if app is in active foreground and genuinely stalled during buffering
-  if (status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current && !isSeekingRef.current) {
+  if (status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current && !isSeekingRef.current && !interruptedByOsRef?.current) {
     if (AppState.currentState !== 'active') {
-      // Audio focus lost to another app while in background -> cleanly pause
-      shouldBePlayingRef.current = false;
-      if (typeof setIsPlaying === 'function') setIsPlaying(false);
+      // Audio focus lost to another app while in background -> cleanly wait without force-retrying
+      if (stallRecoveryTimerRef.current) {
+        clearTimeout(stallRecoveryTimerRef.current);
+        stallRecoveryTimerRef.current = null;
+      }
     } else if (status.isBuffering) {
       // Still buffering, wait for buffer
     } else if (soundRef.current) {
       soundRef.current.playAsync().then(() => {
+        if (interruptedByOsRef) interruptedByOsRef.current = false;
         if (typeof setIsPlaying === 'function') setIsPlaying(true);
       }).catch(() => {
-        // Audio focus rejected by OS (another app has audio focus) -> pause cleanly
-        shouldBePlayingRef.current = false;
+        // Audio focus rejected by OS (another app has audio focus) -> wait cleanly
+        if (interruptedByOsRef) interruptedByOsRef.current = true;
         if (typeof setIsPlaying === 'function') setIsPlaying(false);
       });
     }
 
-    if (!stallRecoveryTimerRef.current) {
+    if (!stallRecoveryTimerRef.current && !interruptedByOsRef?.current && AppState.currentState === 'active') {
       stallRecoveryTimerRef.current = setTimeout(() => {
         stallRecoveryTimerRef.current = null;
-        if (shouldBePlayingRef.current && !isLoadingRef.current && soundRef.current) {
+        if (shouldBePlayingRef.current && !isLoadingRef.current && soundRef.current && !interruptedByOsRef?.current) {
           const cur = currentTrackRef.current;
           const tid = String(cur?._id || cur?.id || '');
           if (tid) clearStreamCache(tid);

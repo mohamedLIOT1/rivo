@@ -20,9 +20,12 @@ object MediaNotificationBuilder {
     const val CHANNEL_ID = "rivo_playback_channel"
     const val NOTIFICATION_ID = 9541
 
+    const val LOCKSCREEN_CHANNEL_ID = "rivo_lockscreen_channel"
+    const val LOCKSCREEN_NOTIFICATION_ID = 9542
+
     fun createPlaybackChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
+            val playbackChannel = NotificationChannel(
                 CHANNEL_ID,
                 "Rivo Music Playback",
                 NotificationManager.IMPORTANCE_LOW
@@ -34,8 +37,23 @@ object MediaNotificationBuilder {
                 enableVibration(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
+
+            val lockscreenChannel = NotificationChannel(
+                LOCKSCREEN_CHANNEL_ID,
+                "Rivo Lock Screen Player",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Displays the lock screen music player when screen turns off"
+                setShowBadge(false)
+                setSound(null, null)
+                enableLights(false)
+                enableVibration(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            }
+
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            manager.createNotificationChannel(playbackChannel)
+            manager.createNotificationChannel(lockscreenChannel)
         }
     }
 
@@ -167,5 +185,36 @@ object MediaNotificationBuilder {
 
         builder.setStyle(style)
         return builder.build()
+    }
+
+    fun buildLockscreenLaunchNotification(
+        context: Context,
+        title: String,
+        artist: String
+    ): Notification {
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+
+        val lockIntent = Intent(context, LockScreenActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        val lockPendingIntent = PendingIntent.getActivity(context, 199, lockIntent, flags)
+
+        return NotificationCompat.Builder(context, LOCKSCREEN_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(artist)
+            .setSubText("Rivo")
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(lockPendingIntent, true)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setSilent(true)
+            .build()
     }
 }

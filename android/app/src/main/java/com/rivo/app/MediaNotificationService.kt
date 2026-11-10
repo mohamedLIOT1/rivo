@@ -94,23 +94,34 @@ class MediaNotificationService : Service() {
                             val prefs = getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
                             val isLockscreenEnabled = prefs.getBoolean("lockscreen_overlay_enabled", true)
                             if (isPlaying && isLockscreenEnabled) {
+                                // Keep CPU awake briefly so lock screen activity renders smoothly
+                                acquireWakeLock()
+
+                                // 1. Attempt direct activity launch (allowed on Android 9 and below, or if overlay granted)
                                 try {
-                                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this@MediaNotificationService)) {
+                                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || Settings.canDrawOverlays(this@MediaNotificationService)) {
                                         val lockIntent = Intent(this@MediaNotificationService, LockScreenActivity::class.java).apply {
                                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
                                         }
                                         startActivity(lockIntent)
-                                    } else {
-                                        updateNotification(withFullScreenLock = true)
                                     }
-                                } catch (_: Throwable) {
-                                    updateNotification(withFullScreenLock = true)
-                                }
+                                } catch (_: Throwable) {}
+
+                                // 2. Trigger high-priority full-screen intent notification (standard Android 10-15 mechanism)
+                                try {
+                                    val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                                    val notif = MediaNotificationBuilder.buildLockscreenLaunchNotification(
+                                        this@MediaNotificationService,
+                                        currentTitle,
+                                        currentArtist
+                                    )
+                                    manager.notify(MediaNotificationBuilder.LOCKSCREEN_NOTIFICATION_ID, notif)
+                                } catch (_: Throwable) {}
                             }
                         }
                         Intent.ACTION_USER_PRESENT -> {
+                            dismissLockscreenNotification()
                             LockScreenActivity.dismissIfShowing()
-                            updateNotification(withFullScreenLock = false)
                         }
                     }
                 }
@@ -124,7 +135,15 @@ class MediaNotificationService : Service() {
         } catch (_: Throwable) {}
     }
 
+    fun dismissLockscreenNotification() {
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.cancel(MediaNotificationBuilder.LOCKSCREEN_NOTIFICATION_ID)
+        } catch (_: Throwable) {}
+    }
+
     override fun onDestroy() {
+        dismissLockscreenNotification()
         try { screenReceiver?.let { unregisterReceiver(it) } } catch (_: Throwable) {}
         if (instance == this) instance = null
         releaseWakeLock()
@@ -209,6 +228,8 @@ class MediaNotificationService : Service() {
                 }
             }
             ACTION_HIDE -> {
+                dismissLockscreenNotification()
+                LockScreenActivity.dismissIfShowing()
                 releaseWakeLock()
                 stopForeground(true)
                 stopSelf()

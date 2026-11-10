@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateMediaNotification } from '../../services/mediaControls';
 import { ensurePlaybackPermissions } from './playbackPermissions';
@@ -35,6 +36,7 @@ export const useAudioPlaybackCore = ({
   const isSeekingRef = useRef(false);
   const lastSeekTimestampRef = useRef(0);
   const trackCompletionHandledRef = useRef(null);
+  const interruptedByOsRef = useRef(false);
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const currentTrackRef = useRef(null);
@@ -87,6 +89,33 @@ export const useAudioPlaybackCore = ({
       }
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!AppState || typeof AppState.addEventListener !== 'function') return;
+    const sub = AppState.addEventListener('change', async (nextState) => {
+      if (nextState === 'active') {
+        if (interruptedByOsRef.current && shouldBePlayingRef.current && !isPlayingRef.current) {
+          const snd = soundRef.current;
+          if (snd) {
+            try {
+              const st = await snd.getStatusAsync();
+              if (st?.isLoaded && !st.isPlaying && shouldBePlayingRef.current) {
+                await snd.playAsync();
+                interruptedByOsRef.current = false;
+                setIsPlaying(true);
+                const cur = currentTrackRef.current;
+                const isLiked = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+                if (typeof updateMediaNotification === 'function') {
+                  updateMediaNotification(true, repeatModeRef?.current || 'off', isShuffleRef?.current || false, isLiked, cur);
+                }
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [likedTrackIds, repeatModeRef, isShuffleRef, setIsPlaying]);
 
   const updateVocalStatus = useCallback((status) => {
     setVocalIsolationStatus(status);
@@ -143,6 +172,7 @@ export const useAudioPlaybackCore = ({
       setIsPlaying,
       isPlayingRef,
       trackCompletionHandledRef,
+      interruptedByOsRef,
     });
   }, [
     isMixModeRef, activeTransRef, queueRef, nextSoundRef, isMixTransitioningRef,
@@ -173,7 +203,10 @@ export const useAudioPlaybackCore = ({
 
     isLoadingRef.current = true;
     setIsLoading(true);
-    if (autoPlay) shouldBePlayingRef.current = true;
+    if (autoPlay) {
+      shouldBePlayingRef.current = true;
+      interruptedByOsRef.current = false;
+    }
     ensurePlaybackPermissions();
 
     const curId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
@@ -368,6 +401,7 @@ export const useAudioPlaybackCore = ({
     }
 
     const isLikedTrack = curTrack ? likedTrackIds.some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
+    interruptedByOsRef.current = false;
     shouldBePlayingRef.current = nextPlaying;
     isPlayingRef.current = nextPlaying;
     setIsPlaying(nextPlaying);
