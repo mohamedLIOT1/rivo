@@ -211,7 +211,9 @@ export default function Navigation({
               <div className="flex items-center gap-1">
                 <button
                   onClick={openImportSongModal}
-                  title={libraryMode === 'quran' ? "Import Surah by Link" : "Import Song by Link"}
+                  title={libraryMode === 'quran' 
+                    ? (isRTL ? "استيراد عبر الرابط (سورة أو قائمة)" : "Import by Link (Surah / Playlist)") 
+                    : (isRTL ? "استيراد عبر الرابط (أغنية أو قائمة)" : "Import by Link (Track / Playlist)")}
                   className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
                     isDark 
                       ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-[#17a398]' 
@@ -219,17 +221,6 @@ export default function Navigation({
                   }`}
                 >
                   <Link2 size={12} />
-                </button>
-                <button
-                  onClick={openImportPlaylistModal}
-                  title={libraryMode === 'quran' ? "Import Quran Playlist" : "Import Playlist"}
-                  className={`w-6 h-6 rounded brutal-border flex items-center justify-center font-bold text-xs transition ${
-                    isDark 
-                      ? 'bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-zinc-200' 
-                      : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
-                  }`}
-                >
-                  <DownloadCloud size={12} />
                 </button>
                 <button
                   onClick={openCreatePlaylistModal}

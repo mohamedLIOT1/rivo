@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Link2, Music, DownloadCloud, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { API_BASE_URL } from '../config';
+import { useUI } from '../context/UIContext';
 
 export default function ImportModal({
   isOpen,
@@ -9,16 +10,18 @@ export default function ImportModal({
   onTrackImported,
   onPlaylistImported,
   isQuran = false,
-  globalTheme = 'dark'
+  globalTheme: propGlobalTheme,
 }) {
+  const ui = useUI ? useUI() : null;
+  const activeTheme = propGlobalTheme || ui?.globalTheme || 'dark';
+  const isDark = activeTheme === 'dark';
+
   const [activeTab, setActiveTab] = useState(initialTab || 'track');
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(null);
   const closeTimerRef = useRef(null);
-
-  const isDark = globalTheme === 'dark';
 
   useEffect(() => {
     if (isOpen) {
@@ -163,31 +166,31 @@ export default function ImportModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 transition-colors"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className={`brutal-border-thick brutal-shadow-lg max-w-md w-full p-6 relative ${
-          isDark ? 'bg-[#121917] text-white border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] border-[#0b1110]'
+        className={`brutal-border-thick brutal-shadow-lg max-w-md w-full p-6 relative transition-colors ${
+          isDark ? 'bg-[#0e1715] text-[#fdfbf7] border-[#263330]' : 'bg-[#fdfbf7] text-[#082621] border-[#0b1110]'
         }`}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between pb-3 border-b-2 ${
-          isDark ? 'border-zinc-700' : 'border-[#0b1110]'
+        <div className={`flex items-center justify-between pb-3 border-b-2 transition-colors ${
+          isDark ? 'border-[#263330]' : 'border-[#0b1110]'
         }`}>
           <div className="flex items-center gap-2.5">
-            <div className={`w-8 h-8 brutal-border flex items-center justify-center ${
-              isDark ? 'bg-[#082621] text-[#26c4b7] border-zinc-700' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
+            <div className={`w-8 h-8 brutal-border flex items-center justify-center transition-colors ${
+              isDark ? 'bg-[#17a398] text-[#082621] border-[#17a398]' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
             }`}>
               {activeTab === 'playlist' ? <DownloadCloud size={16} /> : <Music size={16} />}
             </div>
             <div>
-              <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>
+              <h3 className={`text-base font-mono font-black uppercase transition-colors ${isDark ? 'text-white' : 'text-[#082621]'}`}>
                 {modalTitle}
               </h3>
-              <p className={`text-[11px] font-sans ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+              <p className={`text-[11px] font-sans transition-colors ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
                 {modalSubtitle}
               </p>
             </div>
@@ -196,9 +199,9 @@ export default function ImportModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className={`brutal-btn p-1 brutal-border cursor-pointer ${
+            className={`brutal-btn p-1 brutal-border cursor-pointer transition-colors ${
               isDark
-                ? 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700'
+                ? 'bg-[#1b2623] hover:bg-[#263531] text-white border-[#263330]'
                 : 'bg-[#ede5d3] hover:bg-[#ded2bb] text-[#0b1110] border-[#0b1110]'
             }`}
           >
@@ -207,15 +210,15 @@ export default function ImportModal({
         </div>
 
         {/* Segmented Tab Control */}
-        <div className={`grid grid-cols-2 p-1 gap-1 my-4 brutal-border ${
-          isDark ? 'bg-black/40 border-zinc-700' : 'bg-[#ede5d3] border-[#0b1110]'
+        <div className={`grid grid-cols-2 p-1 gap-1 my-4 brutal-border transition-colors ${
+          isDark ? 'bg-black/40 border-[#263330]' : 'bg-[#ede5d3] border-[#0b1110]'
         }`}>
           <button
             type="button"
             onClick={() => setActiveTab('track')}
             className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-mono font-black uppercase transition-all cursor-pointer brutal-border ${
               activeTab === 'track'
-                ? (isDark ? 'bg-[#082621] text-[#26c4b7] border-zinc-700 shadow-sm' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110] shadow-sm')
+                ? (isDark ? 'bg-[#17a398] text-[#082621] border-[#17a398] shadow-sm' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110] shadow-sm')
                 : (isDark ? 'bg-transparent text-zinc-400 border-transparent hover:text-white' : 'bg-transparent text-[#082621]/70 border-transparent hover:text-[#082621]')
             }`}
           >
@@ -227,7 +230,7 @@ export default function ImportModal({
             onClick={() => setActiveTab('playlist')}
             className={`flex items-center justify-center gap-2 py-2 px-3 text-xs font-mono font-black uppercase transition-all cursor-pointer brutal-border ${
               activeTab === 'playlist'
-                ? (isDark ? 'bg-[#082621] text-[#26c4b7] border-zinc-700 shadow-sm' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110] shadow-sm')
+                ? (isDark ? 'bg-[#17a398] text-[#082621] border-[#17a398] shadow-sm' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110] shadow-sm')
                 : (isDark ? 'bg-transparent text-zinc-400 border-transparent hover:text-white' : 'bg-transparent text-[#082621]/70 border-transparent hover:text-[#082621]')
             }`}
           >
@@ -239,13 +242,13 @@ export default function ImportModal({
         {/* Form Content */}
         <form onSubmit={handleImport} className="space-y-4">
           <div>
-            <label className={`block text-[10px] font-mono font-black uppercase mb-1.5 ${
+            <label className={`block text-[10px] font-mono font-black uppercase mb-1.5 transition-colors ${
               isDark ? 'text-zinc-300' : 'text-[#082621]'
             }`}>
               {inputLabel}
             </label>
             <div className="relative">
-              <Link2 size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 ${
+              <Link2 size={15} className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${
                 isDark ? 'text-zinc-500' : 'text-[#082621]/60'
               }`} />
               <input
@@ -254,9 +257,9 @@ export default function ImportModal({
                 value={url}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 placeholder={inputPlaceholder}
-                className={`w-full pl-9 pr-3 py-2 text-xs font-mono brutal-border focus:outline-none ${
+                className={`w-full pl-9 pr-3 py-2 text-xs font-mono brutal-border focus:outline-none transition-colors ${
                   isDark
-                    ? 'bg-zinc-900 border-zinc-700 text-white placeholder-zinc-500 focus:bg-zinc-800 focus:border-[#26c4b7]'
+                    ? 'bg-[#141d1b] border-[#263330] text-white placeholder-zinc-500 focus:bg-[#1b2623] focus:border-[#26c4b7]'
                     : 'bg-[#ede5d3] border-[#0b1110] text-[#0b1110] placeholder-[#082621]/40 focus:bg-white focus:border-[#082621]'
                 }`}
                 autoFocus
@@ -268,22 +271,22 @@ export default function ImportModal({
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border transition-colors ${
               isSpotify
-                ? 'bg-[#082621] text-[#26c4b7] border-[#26c4b7]'
-                : (isDark ? 'bg-zinc-900 text-zinc-500 border-zinc-800' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
+                ? (isDark ? 'bg-[#1db954]/20 text-[#1ed760] border-[#1db954]' : 'bg-[#1db954] text-[#0b1110] border-[#0b1110]')
+                : (isDark ? 'bg-[#141d1b] text-zinc-400 border-[#263330]' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
             }`}>
               Spotify
             </span>
             <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border transition-colors ${
               isYouTube
-                ? 'bg-red-600/20 text-[#ef4444] border-[#ef4444]'
-                : (isDark ? 'bg-zinc-900 text-zinc-500 border-zinc-800' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
+                ? (isDark ? 'bg-[#ef4444]/20 text-[#ef4444] border-[#ef4444]' : 'bg-[#dc2626] text-white border-[#0b1110]')
+                : (isDark ? 'bg-[#141d1b] text-zinc-400 border-[#263330]' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
             }`}>
               YouTube
             </span>
             <span className={`text-[10px] px-2.5 py-0.5 font-mono font-black uppercase brutal-border transition-colors ${
               isApple
-                ? 'bg-pink-600/20 text-pink-400 border-pink-400'
-                : (isDark ? 'bg-zinc-900 text-zinc-500 border-zinc-800' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
+                ? (isDark ? 'bg-pink-600/20 text-pink-400 border-pink-400' : 'bg-[#fa2d48] text-white border-[#0b1110]')
+                : (isDark ? 'bg-[#141d1b] text-zinc-400 border-[#263330]' : 'bg-[#ede5d3] text-[#082621]/70 border-[#0b1110]')
             }`}>
               Apple Music
             </span>
@@ -291,14 +294,18 @@ export default function ImportModal({
 
           {/* Status Messages */}
           {error && (
-            <div className="p-2.5 bg-red-500/10 border-2 border-[#dc2626] flex items-center gap-2 text-xs font-mono text-[#dc2626] font-bold">
+            <div className={`p-2.5 border-2 flex items-center gap-2 text-xs font-mono font-bold transition-colors ${
+              isDark ? 'bg-red-500/10 border-[#ef4444] text-[#ef4444]' : 'bg-red-500/10 border-[#dc2626] text-[#dc2626]'
+            }`}>
               <AlertCircle size={15} className="shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {success && success.type === 'track' && (
-            <div className="p-2.5 bg-[#082621] text-[#26c4b7] brutal-border flex items-center gap-3 text-xs font-mono font-bold">
+            <div className={`p-2.5 brutal-border flex items-center gap-3 text-xs font-mono font-bold transition-colors ${
+              isDark ? 'bg-[#141d1b] text-[#26c4b7] border-[#26c4b7]' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
+            }`}>
               {success.cover && (
                 <img src={success.cover} alt={success.title} className="w-9 h-9 brutal-border object-cover shrink-0" />
               )}
@@ -313,7 +320,9 @@ export default function ImportModal({
           )}
 
           {success && success.type === 'playlist' && (
-            <div className="p-2.5 bg-[#082621] text-[#26c4b7] brutal-border flex items-center gap-2 text-xs font-mono font-bold">
+            <div className={`p-2.5 brutal-border flex items-center gap-2 text-xs font-mono font-bold transition-colors ${
+              isDark ? 'bg-[#141d1b] text-[#26c4b7] border-[#26c4b7]' : 'bg-[#082621] text-[#26c4b7] border-[#0b1110]'
+            }`}>
               <CheckCircle2 size={15} className="shrink-0 text-[#26c4b7]" />
               <span className="truncate">
                 IMPORTED "{success.name}" ({success.trackCount} {isQuran ? (success.trackCount === 1 ? 'SURAH' : 'SURAHS') : 'DOSES CONVERTED'})!
@@ -325,7 +334,11 @@ export default function ImportModal({
             <button
               type="submit"
               disabled={loading || !url.trim()}
-              className="brutal-btn w-full py-2.5 bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              className={`brutal-btn w-full py-2.5 font-mono text-xs font-black uppercase brutal-border brutal-shadow flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 transition-colors ${
+                isDark 
+                  ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#082621] border-[#17a398]' 
+                  : 'bg-[#082621] hover:bg-[#0b1110] text-[#26c4b7] border-[#0b1110]'
+              }`}
             >
               {loading ? (
                 <>

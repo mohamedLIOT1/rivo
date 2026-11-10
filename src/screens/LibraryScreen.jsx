@@ -201,28 +201,17 @@ export default function LibraryScreen({
                         <span>{isRTL ? 'بحث وإضافة أغنية' : 'Search & Add Song'}</span>
                       </button>
                     )}
-                    {openImportSongModal && (
+                    {(openImportSongModal || openImportPlaylistModal) && (
                       <button
                         onClick={() => {
                           setIsAddMenuOpen(false);
-                          openImportSongModal();
+                          if (openImportSongModal) openImportSongModal();
+                          else if (openImportPlaylistModal) openImportPlaylistModal();
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
                       >
                         <Link2 size={14} />
-                        <span>{isRTL ? 'استيراد مقطع برابط' : 'Import Track by Link'}</span>
-                      </button>
-                    )}
-                    {openImportPlaylistModal && (
-                      <button
-                        onClick={() => {
-                          setIsAddMenuOpen(false);
-                          openImportPlaylistModal();
-                        }}
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-emerald-200 hover:bg-emerald-500 hover:text-black transition-colors text-left cursor-pointer"
-                      >
-                        <DownloadCloud size={14} />
-                        <span>{isRTL ? 'استيراد قائمة برابط' : 'Import Playlist by Link'}</span>
+                        <span>{isRTL ? 'استيراد عبر الرابط (مقطع أو قائمة)' : 'Import by Link (Track / Playlist)'}</span>
                       </button>
                     )}
                   </div>

@@ -310,6 +310,7 @@ export default function AppModals({
         isOpen={isImportPlaylistOpen}
         onClose={() => setIsImportPlaylistOpen(false)}
         isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
+        globalTheme={globalTheme}
         onPlaylistImported={(newPl, newTracks) => {
           const importedIsQuran = currentScreen === 'quran' || libraryMode === 'quran' || isQuranContent(newPl) || (newTracks || []).some(isQuranContent);
           const taggedPlaylist = { ...newPl, isQuran: importedIsQuran };
@@ -344,6 +345,7 @@ export default function AppModals({
         isOpen={isImportSongOpen}
         onClose={() => setIsImportSongOpen(false)}
         isQuran={currentScreen === 'quran' || libraryMode === 'quran'}
+        globalTheme={globalTheme}
         onTrackImported={(newTrack) => {
           handleAddSong(newTrack);
           showToast(`Imported "${newTrack.title}" by ${newTrack.artist}!`);
