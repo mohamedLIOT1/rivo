@@ -209,6 +209,7 @@ export default function ScreenRouter({
 
       {currentScreen === 'podcasts' && showPodcasts && (
         <PodcastScreen
+          tracks={tracks}
           onSelectTrack={playTrack}
           currentTrack={currentTrack}
           isPlaying={isPlaying}

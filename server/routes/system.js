@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.13',
+      version: '2.4.14',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.13 • تسريع التنقل الفوري وتحسينات الأداء والسحابة والتوصيات الشخصية.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي والاقتصار على البودكاست الحقيقي مع تسريع الأداء.'
     },
     windows: {
-      version: '2.4.13',
-      displayVersion: '2.4.13',
+      version: '2.4.14',
+      displayVersion: '2.4.14',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.13.exe',
+      directFile: 'Rivo-v2.4.14.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • تسريع التنقل واستقرار التشغيل السحابي والتوصيات الشخصية.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي مع تسريع التنقل واستقرار السحابة.'
     },
     android: {
-      version: '2.4.13',
-      build: 143,
+      version: '2.4.14',
+      build: 144,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.13.apk',
+      directFile: 'Rivo-v2.4.14.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • تسريع فوري للتنقل بين الأغاني والبودكاست والقرآن على الأجهزة الضعيفة، وإصلاح قائمة الثلاث نقاط داخل المشغل.',
-      notesEn: 'Update v2.4.13 • Instant Music/Podcast/Quran tab switching on low-RAM devices and fixed 3-dots menu inside Full Player.',
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتفريغ الذاكرة لتسريع فوري على الأجهزة الضعيفة.',
+      notesEn: 'Update v2.4.14 • Removed dummy hardcoded podcasts; shows live catalog only with faster low-RAM switching.',
       ota: {
         enabled: true,
-        version: '2.4.23',
+        version: '2.4.24',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.23 • تسريع التنقل بين الأغاني والبودكاست والقرآن وإصلاح قائمة الثلاث نقاط داخل المشغل',
-        notesEn: 'Instant OTA update v2.4.23 • Instant tab switching across Music/Podcast/Quran and fixed 3-dots menu inside Full Player.',
-        bundleSize: 5205050,
-        sizeMb: '4.96 MB'
+        notes: 'تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء',
+        notesEn: 'Instant OTA v2.4.24 • Removed dummy podcasts for cleaner UX and lower RAM footprint',
+        bundleSize: 5239331,
+        sizeMb: '5.00 MB'
       }
     },
     ios: {
-      version: '2.4.13',
-      build: 143,
+      version: '2.4.14',
+      build: 144,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.13.ipa',
+      directFile: 'Rivo-v2.4.14.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • إصلاح قائمة الثلاث نقاط داخل المشغل، وتسريع فوري للتنقل بين الأغاني والبودكاست والقرآن.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتحسين التنقل وإصلاح قائمة الثلاث نقاط.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.13',
+      version: '2.4.14',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.13 • تسريع التنقل الفوري وتحسينات الأداء والسحابة.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.'
     },
     windows: {
-      version: '2.4.13',
-      displayVersion: '2.4.13',
+      version: '2.4.14',
+      displayVersion: '2.4.14',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.13.exe',
+      directFile: 'Rivo-v2.4.14.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • تسريع التنقل واستقرار التشغيل السحابي.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.'
     },
     android: {
-      version: '2.4.13',
-      build: 143,
+      version: '2.4.14',
+      build: 144,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.13.apk',
+      directFile: 'Rivo-v2.4.14.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • تسريع التنقل وإصلاح قائمة الثلاث نقاط.',
-      notesEn: 'Update v2.4.13 • Instant Music/Podcast/Quran tab switching and fixed 3-dots menu inside Full Player.',
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.',
+      notesEn: 'Update v2.4.14 • Removed dummy hardcoded podcasts and faster low-RAM switching.',
       ota: {
         enabled: true,
-        version: '2.4.23',
+        version: '2.4.24',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.23 • تسريع التنقل وإصلاح قائمة الثلاث نقاط داخل المشغل',
-        notesEn: 'Instant OTA update v2.4.23 • Instant Music/Podcast/Quran tab switching and fixed 3-dots menu inside Full Player.',
-        bundleSize: 5205050,
-        sizeMb: '4.96 MB'
+        notes: 'تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء',
+        notesEn: 'Instant OTA v2.4.24 • Removed dummy podcasts for cleaner UX and lower RAM footprint',
+        bundleSize: 5239331,
+        sizeMb: '5.00 MB'
       }
     },
     ios: {
-      version: '2.4.13',
-      build: 143,
+      version: '2.4.14',
+      build: 144,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.13.ipa',
+      directFile: 'Rivo-v2.4.14.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.13 • إصلاح قائمة الثلاث نقاط داخل المشغل وتسريع التنقل الفوري.'
+      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتحسين التنقل وإصلاح قائمة الثلاث نقاط.'
     }
   }
 };

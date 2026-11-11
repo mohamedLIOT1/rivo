@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.23",
+  "version": "2.4.24",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري v2.4.23 • تسريع التنقل بين الأغاني والبودكاست والقرآن وإصلاح قائمة الثلاث نقاط",
-  "notesEn": "Instant OTA v2.4.23 • Fast Music/Podcast/Quran tab switching and fixed 3-dots menu",
-  "bundleSize": 5239331,
-  "sizeMb": "5.00 MB",
-  "updatedAt": "2026-11-11T22:41:01.594Z"
+  "notes": "تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء",
+  "notesEn": "Instant OTA v2.4.24 • Removed dummy podcasts and improved low-RAM speed",
+  "bundleSize": 5222880,
+  "sizeMb": "4.98 MB",
+  "updatedAt": "2026-11-11T23:00:24.064Z"
 }

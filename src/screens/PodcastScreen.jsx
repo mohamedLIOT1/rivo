@@ -2,12 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Radio, Sparkles, Disc, Flame } from 'lucide-react';
 import { useTranslation } from '../context/PreferencesContext';
 import { useAudioPlayer } from '../context/AudioContext';
-import { 
-  PODCAST_SHOWS, 
-  ALL_PODCAST_EPISODES, 
-  FEATURED_PODCAST_EPISODES 
-} from '../data/podcastsData';
-import { buildPodcastSeedQueue } from '../utils/podcastUtils';
+import { buildPodcastSeedQueue, isPodcastContent, getPodcastCategory } from '../utils/podcastUtils';
 
 import PodcastCategoriesBar from '../components/podcast/PodcastCategoriesBar';
 import PodcastHeroBanner from '../components/podcast/PodcastHeroBanner';
@@ -16,6 +11,7 @@ import PodcastEpisodeCard from '../components/podcast/PodcastEpisodeCard';
 import PodcastShowDetail from '../components/podcast/PodcastShowDetail';
 
 export default function PodcastScreen({
+  tracks: propTracks,
   onSelectTrack,
   currentTrack,
   isPlaying,
@@ -31,19 +27,54 @@ export default function PodcastScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
 
+  const realPodcastEpisodes = useMemo(() => {
+    const src = Array.isArray(propTracks) && propTracks.length > 0 ? propTracks : (audio?.tracks || []);
+    return src
+      .filter((tr) => isPodcastContent(tr))
+      .map((tr) => ({
+        ...tr,
+        category: tr.podcastCategory || getPodcastCategory(tr),
+      }));
+  }, [propTracks, audio?.tracks]);
+
+  const realPodcastShows = useMemo(() => {
+    if (realPodcastEpisodes.length === 0) return [];
+    const map = new Map();
+    for (let i = 0; i < realPodcastEpisodes.length; i++) {
+      const ep = realPodcastEpisodes[i];
+      const showName = String(ep.album || ep.artist || '').trim();
+      if (!showName) continue;
+      const key = showName.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `show-${key}`,
+          name: showName,
+          title: showName,
+          creator: ep.artist || showName,
+          category: ep.category || 'culture',
+          cover: ep.coverUrl || ep.cover || null,
+          episodes: [ep],
+        });
+      } else {
+        map.get(key).episodes.push(ep);
+      }
+    }
+    return Array.from(map.values()).filter((s) => s.episodes.length >= 2);
+  }, [realPodcastEpisodes]);
+
   // Play a podcast episode and set seed queue exclusively with other podcasts
   const handlePlayEpisode = useCallback((episode, customQueue = null) => {
     if (!episode) return;
     const queue = customQueue && customQueue.length > 0 
       ? customQueue 
-      : buildPodcastSeedQueue(episode, ALL_PODCAST_EPISODES, 25);
+      : buildPodcastSeedQueue(episode, realPodcastEpisodes, 25);
     
     if (typeof onSelectTrack === 'function') {
       onSelectTrack(episode, queue);
     } else if (audio?.playTrack) {
       audio.playTrack(episode, queue);
     }
-  }, [onSelectTrack, audio]);
+  }, [onSelectTrack, audio, realPodcastEpisodes]);
 
   // Play all episodes from a show
   const handlePlayShow = useCallback((show) => {
@@ -62,7 +93,7 @@ export default function PodcastScreen({
 
   // Filter shows based on category & search query
   const filteredShows = useMemo(() => {
-    let result = PODCAST_SHOWS;
+    let result = realPodcastShows;
 
     if (selectedCategory !== 'all') {
       result = result.filter(s => s.category === selectedCategory);
@@ -80,11 +111,11 @@ export default function PodcastScreen({
     }
 
     return result;
-  }, [selectedCategory, searchQuery]);
+  }, [realPodcastShows, selectedCategory, searchQuery]);
 
   // Filter episodes based on category & search query
   const filteredEpisodes = useMemo(() => {
-    let result = ALL_PODCAST_EPISODES;
+    let result = realPodcastEpisodes;
 
     if (selectedCategory !== 'all') {
       result = result.filter(ep => ep.category === selectedCategory);
@@ -103,19 +134,13 @@ export default function PodcastScreen({
     }
 
     return result;
-  }, [selectedCategory, searchQuery]);
+  }, [realPodcastEpisodes, selectedCategory, searchQuery]);
 
   // Pick a featured episode for the Hero banner
   const featuredEpisode = useMemo(() => {
-    if (FEATURED_PODCAST_EPISODES && FEATURED_PODCAST_EPISODES.length > 0) {
-      if (selectedCategory !== 'all') {
-        const matching = FEATURED_PODCAST_EPISODES.find(e => e.category === selectedCategory);
-        if (matching) return matching;
-      }
-      return FEATURED_PODCAST_EPISODES[0];
-    }
-    return ALL_PODCAST_EPISODES[0] || null;
-  }, [selectedCategory]);
+    if (filteredEpisodes.length > 0) return filteredEpisodes[0];
+    return realPodcastEpisodes[0] || null;
+  }, [filteredEpisodes, realPodcastEpisodes]);
 
   // If a specific show is selected, render the Show Detail view (the show as an Album)
   if (selectedShow) {
@@ -195,7 +220,7 @@ export default function PodcastScreen({
           featuredEpisode={featuredEpisode}
           onPlayEpisode={handlePlayEpisode}
           onOpenShow={(showId) => {
-            const match = PODCAST_SHOWS.find(s => s.id === showId);
+            const match = realPodcastShows.find(s => s.id === showId);
             if (match) setSelectedShow(match);
           }}
           currentTrack={currentTrack}
@@ -206,27 +231,21 @@ export default function PodcastScreen({
         />
       )}
 
-      {/* ── SHOWS CAROUSEL / GRID ("الألبومات الخاصة بصناع البودكاست المعروفين") ── */}
-      <div className="mb-10">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Flame size={18} className="text-[#10b981]" />
-            <h2 className={`font-display font-black text-lg sm:text-xl ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-              {t('podcast.popularShows') || (isRTL ? 'أشهر البرامج والبودكاست' : 'Popular Podcast Shows')}
-            </h2>
+      {/* ── SHOWS CAROUSEL / GRID (Only shown when real shows exist) ── */}
+      {filteredShows.length > 0 && (
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Flame size={18} className="text-[#10b981]" />
+              <h2 className={`font-display font-black text-lg sm:text-xl ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                {t('podcast.popularShows') || (isRTL ? 'أشهر البرامج والبودكاست' : 'Popular Podcast Shows')}
+              </h2>
+            </div>
+            <span className="text-xs font-mono text-zinc-400">
+              {filteredShows.length} {t('podcast.shows') || (isRTL ? 'برامج' : 'shows')}
+            </span>
           </div>
-          <span className="text-xs font-mono text-zinc-400">
-            {filteredShows.length} {t('podcast.shows') || (isRTL ? 'برامج' : 'shows')}
-          </span>
-        </div>
 
-        {filteredShows.length === 0 ? (
-          <div className={`p-8 text-center rounded-2xl brutal-border ${
-            isDark ? 'bg-[#0d1c19] text-zinc-400 border-emerald-950' : 'bg-white text-zinc-600'
-          }`}>
-            <p className="font-bold text-sm">{t('podcast.noResults') || (isRTL ? 'لم يتم العثور على برامج مطابقة' : 'No shows found')}</p>
-          </div>
-        ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
             {filteredShows.map((show) => (
               <PodcastShowCard
@@ -240,8 +259,8 @@ export default function PodcastScreen({
               />
             ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ── LATEST EPISODES SECTION ── */}
       <div>

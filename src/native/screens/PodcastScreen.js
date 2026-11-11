@@ -10,15 +10,13 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Radio, Search, X, Flame } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
+import { useUser } from '../context/UserContext';
+import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
-import {
-  PODCAST_CATEGORIES,
-  PODCAST_SHOWS,
-  ALL_DEFAULT_PODCAST_EPISODES,
-} from '../data/podcastData';
-import { normalizePodcastSearchText } from '../utils/podcastUtils';
+import { PODCAST_CATEGORIES } from '../data/podcastData';
+import { isPodcastContent, getPodcastCategory, normalizePodcastSearchText } from '../utils/podcastUtils';
 import PodcastShowCard from '../components/podcast/PodcastShowCard';
 import PodcastEpisodeItem from '../components/podcast/PodcastEpisodeItem';
 import PodcastShowDetail from '../components/podcast/PodcastShowDetail';
@@ -27,14 +25,52 @@ import { styles } from './PodcastScreen.styles';
 const FOLLOWED_PODCASTS_KEY = '@rivo_followed_podcasts_v1';
 
 export function PodcastScreen({ onTrackAction }) {
-  const { playTrack, currentTrack, isPlaying } = useAudioPlayer();
+  const { playTrack, currentTrack, isPlaying, downloadedTracks = [] } = useAudioPlayer();
+  const { tracks: userTracks = [] } = useUser();
+  const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const isOffline = appMode === 'offline';
 
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
   const [followedShowIds, setFollowedShowIds] = useState(new Set());
+
+  const realPodcastEpisodes = useMemo(() => {
+    const src = isOffline ? (downloadedTracks || []) : (userTracks || []);
+    return src
+      .filter((tr) => isPodcastContent(tr))
+      .map((tr) => ({
+        ...tr,
+        category: tr.podcastCategory || getPodcastCategory(tr),
+      }));
+  }, [isOffline, downloadedTracks, userTracks]);
+
+  const realPodcastShows = useMemo(() => {
+    if (realPodcastEpisodes.length === 0) return [];
+    const map = new Map();
+    for (let i = 0; i < realPodcastEpisodes.length; i++) {
+      const ep = realPodcastEpisodes[i];
+      const showName = String(ep.album || ep.artist || '').trim();
+      if (!showName) continue;
+      const key = showName.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: `show-${key}`,
+          name: showName,
+          title: showName,
+          creator: ep.artist || showName,
+          category: ep.category || 'culture',
+          cover: ep.coverUrl || ep.cover || null,
+          episodes: [ep],
+        });
+      } else {
+        map.get(key).episodes.push(ep);
+      }
+    }
+    return Array.from(map.values()).filter((s) => s.episodes.length >= 2);
+  }, [realPodcastEpisodes]);
 
   // Load followed podcasts from local storage
   useEffect(() => {
@@ -67,8 +103,8 @@ export function PodcastScreen({ onTrackAction }) {
   // Filter shows based on category & search query (fast O(1) bypass when unfiltered)
   const filteredShows = useMemo(() => {
     const query = normalizePodcastSearchText(searchQuery);
-    if (selectedCategory === 'all' && !query) return PODCAST_SHOWS;
-    return PODCAST_SHOWS.filter((show) => {
+    if (selectedCategory === 'all' && !query) return realPodcastShows;
+    return realPodcastShows.filter((show) => {
       if (selectedCategory !== 'all') {
         const catMatch =
           show.category === selectedCategory ||
@@ -78,17 +114,17 @@ export function PodcastScreen({ onTrackAction }) {
       }
       if (!query) return true;
       const combined = normalizePodcastSearchText(
-        `${show.title} ${show.creator} ${show.description} ${show.episodes?.map(e => e.title).join(' ')}`
+        `${show.title} ${show.creator} ${show.description || ''} ${show.episodes?.map(e => e.title).join(' ')}`
       );
       return combined.includes(query);
     });
-  }, [selectedCategory, searchQuery]);
+  }, [realPodcastShows, selectedCategory, searchQuery]);
 
   // Filter all episodes based on category & search query (fast O(1) bypass when unfiltered)
   const filteredEpisodes = useMemo(() => {
     const query = normalizePodcastSearchText(searchQuery);
-    if (selectedCategory === 'all' && !query) return ALL_DEFAULT_PODCAST_EPISODES;
-    return ALL_DEFAULT_PODCAST_EPISODES.filter((ep) => {
+    if (selectedCategory === 'all' && !query) return realPodcastEpisodes;
+    return realPodcastEpisodes.filter((ep) => {
       if (selectedCategory !== 'all') {
         const catMatch =
           ep.category === selectedCategory ||
@@ -102,7 +138,7 @@ export function PodcastScreen({ onTrackAction }) {
       );
       return combined.includes(query);
     });
-  }, [selectedCategory, searchQuery]);
+  }, [realPodcastEpisodes, selectedCategory, searchQuery]);
 
   const currentTrackId = String(currentTrack?._id || currentTrack?.id || '');
 

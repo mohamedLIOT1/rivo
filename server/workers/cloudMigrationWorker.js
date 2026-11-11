@@ -51,31 +51,29 @@ function isLiveRadioTrack(track) {
   const url = String(track.audioUrl || '').toLowerCase();
   return Boolean(
     track.isRadio || track.isLive || url.includes('radiojar.com') ||
-    url.includes('qurango.net') || url.includes('xecod.com') || url.includes('stream.mp3quran.net')
+    url.includes('qurango.net') || url.includes('xecod.com') || url.includes('mp3quran.net/')
   );
 }
 
-function buildMigrationQuery(allowedCategories) {
+function buildMigrationQuery(allowedCategories, targetCategory = null) {
   const allowedArr = Array.from(allowedCategories);
+  const quranOr = [{ isQuran: true }, { contentType: 'quran' }, { genre: /quran|قرآن/i }, { album: /quran|قرآن/i }, { title: /سورة|تلاوة|القرآن/i }];
+  const podcastOr = [{ isPodcast: true }, { contentType: 'podcast' }, { genre: /podcast|بودكاست/i }];
+  const baseOr = [{ 'migration.status': { $nin: ['migrated', 'skipped', 'deferred'] } }, { 'migration.status': 'deferred', 'migration.category': { $in: allowedArr } }];
+  const andClauses = [{ $or: baseOr }, { $or: [{ 'migration.attempts': { $exists: false } }, { 'migration.attempts': { $lt: 3 } }] }];
+  if (targetCategory === 'quran') andClauses.push({ $or: quranOr });
+  else if (targetCategory === 'podcast') andClauses.push({ $or: podcastOr });
+  else if (targetCategory === 'music') {
+    andClauses.push({ isQuran: { $ne: true }, isPodcast: { $ne: true }, genre: { $not: /quran|قرآن|podcast|بودكاست/i }, title: { $not: /سورة|تلاوة|القرآن/i } });
+  }
   const query = {
     'cloudStorage.provider': { $exists: false },
     audioUrl: { $not: /^\/?uploads\//i },
-    $and: [
-      {
-        $or: [
-          { 'migration.status': { $nin: ['migrated', 'skipped', 'deferred'] } },
-          { 'migration.status': 'deferred', 'migration.category': { $in: allowedArr } }
-        ]
-      },
-      { $or: [{ 'migration.attempts': { $exists: false } }, { 'migration.attempts': { $lt: 3 } }] }
-    ]
+    $and: andClauses,
+    contentType: { $nin: ['audiobook', ...(!allowedCategories.has('quran') ? ['quran'] : []), ...(!allowedCategories.has('podcast') ? ['podcast'] : [])] }
   };
   if (!allowedCategories.has('quran')) query.isQuran = { $ne: true };
   if (!allowedCategories.has('podcast')) query.isPodcast = { $ne: true };
-  const excludedTypes = ['audiobook'];
-  if (!allowedCategories.has('quran')) excludedTypes.push('quran');
-  if (!allowedCategories.has('podcast')) excludedTypes.push('podcast');
-  query.contentType = { $nin: excludedTypes };
   return query;
 }
 
@@ -318,6 +316,8 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
 async function runMigrationLoop({ limit = 0, watch = false, dryRun = false, trackId = null, signal } = {}) {
   const allowedCategories = getAllowedCategories();
   const seenIds = [];
+  const ninFilter = () => (seenIds.length > 0 ? seenIds.slice(-500) : null);
+  const priorityOrder = ['music', 'podcast', 'quran'].filter((c) => allowedCategories.has(c));
   let processed = 0;
   let freshBatchCount = 0;
   let nextHumanBreakAt = Math.floor(randomBetween(18, 29));
@@ -330,9 +330,14 @@ async function runMigrationLoop({ limit = 0, watch = false, dryRun = false, trac
       track = await Track.findById(trackId).lean();
       if (!track) break;
     } else {
-      const query = buildMigrationQuery(allowedCategories);
-      if (seenIds.length > 0) query._id = { $nin: seenIds.slice(-500) };
-      track = await Track.findOne(query).sort({ plays: -1, createdAt: -1 }).lean();
+      const order = priorityOrder.length > 0 ? [...priorityOrder, null] : [null];
+      for (const cat of order) {
+        const query = buildMigrationQuery(allowedCategories, cat);
+        const nin = ninFilter();
+        if (nin) query._id = { $nin: nin };
+        track = await Track.findOne(query).sort({ plays: -1, createdAt: -1 }).lean();
+        if (track) break;
+      }
     }
 
     if (!track) {
