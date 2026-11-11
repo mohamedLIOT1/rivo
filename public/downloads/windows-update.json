@@ -1,7 +1,13 @@
 {
-  "version": "2.4.2",
-  "pub_date": "2026-11-08T10:30:00Z",
+  "pub_date": "2026-11-11T10:27:50Z",
+  "version": "2.4.10",
+  "notes": "Update v2.4.10: Spotify-grade Web Queue, zero-lag audio progress isolation, overnight Quran stability, H:MM:SS duration, and lock screen sync.",
   "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe",
-  "size": 52448091,
-  "notes": "Update v2.4.2: Dedicated Podcasts section, creator show collections, ±15s jump controls, variable speed playback, and AI podcast queue isolation."
+  "size": 6013290,
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTblNNUk1CalZTc2NzTHpzR2dDTXlCS2svQVZodjkvV0pXcUJBNnczNHk1aDIwRmNjOUMyaTQwU1RHZEZVdVE5NFNvRHRMbnRrcjJVcm93N3I0dFprZjEvMmRzby9lakFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MzkyODY5CWZpbGU6Uml2b18yLjQuMTBfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjIuNC4xMApHYXV5aVNENDZyK254RWFMWGlpYW1IcW9PT3I5QzBhQkgxOGJjR2hjbUNHUmEzUzArSXAvTDNWcVdHVkdTa05KdUhQdHR2VUNTUVNPRkUwMDJaZmNBQT09Cg==",
+      "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.4.10.exe"
+    }
+  }
 }
