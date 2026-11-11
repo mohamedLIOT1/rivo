@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   downloadTrack,
@@ -11,6 +12,8 @@ import {
 } from '../../services/downloadManager';
 import { updateDownloadProgress, clearDownloadProgress } from '../AudioProgressContext';
 import { updateMediaNotification, hideMediaNotification } from '../../services/mediaControls';
+
+const AUTO_DOWNLOAD_QUEUE_KEY = '@rivo_auto_download_queue_v1';
 
 export const useAudioDownloads = ({
   showToast = () => {},
@@ -26,6 +29,8 @@ export const useAudioDownloads = ({
 
   // Local ref tracking active downloads to avoid rapid re-render storms on general AudioProvider
   const downloadingIdsRef = useRef({});
+  const autoDownloadQueueRef = useRef([]);
+  const autoDownloadDrainingRef = useRef(false);
 
   const [autoDownloadFinished, setAutoDownloadFinishedState] = useState(true);
   const autoDownloadFinishedRef = useRef(true);
@@ -123,18 +128,18 @@ export const useAudioDownloads = ({
   }, []);
 
   const handleDownloadTrack = useCallback(async (t, isSilent = false) => {
-    if (!t) return;
+    if (!t) return false;
     const cleanTitle = (t.title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim();
     const cleanArtist = (t.artist || 'Artist').replace(/[/\\?%*:|"<>]/g, '').trim();
     const id = String(t._id || t.id || t.youtubeId || `tr_${cleanTitle}_${cleanArtist}`.replace(/\s+/g, '_'));
 
     if (isTrackDownloaded(t)) {
       if (!isSilent) showToast(`"${t.title || 'Track'}" is already in offline vault`, 'info');
-      return;
+      return true;
     }
     if (downloadingIdsRef.current[id] !== undefined) {
       if (!isSilent) showToast(`"${t.title || 'Track'}" is already downloading...`, 'info');
-      return;
+      return false;
     }
     try {
       if (!isSilent) {
@@ -162,14 +167,87 @@ export const useAudioDownloads = ({
 
       await refreshDownloadedTracks();
       showToast(`"${t.title || 'Track'}" saved to offline vault`, 'success');
+      return true;
     } catch (err) {
       console.warn('[AutoDownload] Download error:', t?.title, err?.message);
       if (!isSilent) showToast(`Download failed: ${err?.message || 'Could not save track'}`, 'error');
+      return false;
     } finally {
       delete downloadingIdsRef.current[id];
       clearDownloadProgress(id);
     }
   }, [isTrackDownloaded, showToast, currentTrackRef, refreshDownloadedTracks]);
+
+  const persistAutoDownloadQueue = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem(AUTO_DOWNLOAD_QUEUE_KEY, JSON.stringify(autoDownloadQueueRef.current));
+    } catch (err) {
+      console.warn('[AutoDownload] Failed to persist queue:', err?.message || err);
+    }
+  }, []);
+
+  const drainAutoDownloadQueue = useCallback(async () => {
+    if (autoDownloadDrainingRef.current) return;
+    autoDownloadDrainingRef.current = true;
+    try {
+      while (autoDownloadQueueRef.current.length > 0) {
+        const item = autoDownloadQueueRef.current[0];
+        const success = await handleDownloadTrack(item.track, true);
+        if (success) {
+          autoDownloadQueueRef.current.shift();
+        } else {
+          item.attempts += 1;
+          if (item.attempts >= 3) {
+            console.warn('[AutoDownload] Dropping track after retry limit:', item.track?.title);
+            autoDownloadQueueRef.current.shift();
+          } else {
+            autoDownloadQueueRef.current.push(autoDownloadQueueRef.current.shift());
+          }
+        }
+        await persistAutoDownloadQueue();
+      }
+    } finally {
+      autoDownloadDrainingRef.current = false;
+    }
+  }, [handleDownloadTrack, persistAutoDownloadQueue]);
+
+  const queueAutoDownloadTrack = useCallback((track) => {
+    if (!track || isTrackDownloaded(track)) return;
+    const key = getTrackDedupeKey(track) || String(track._id || track.id || track.youtubeId || '');
+    const exists = autoDownloadQueueRef.current.some((item) => {
+      const queuedKey = getTrackDedupeKey(item.track) || String(item.track?._id || item.track?.id || item.track?.youtubeId || '');
+      return queuedKey && queuedKey === key;
+    });
+    if (exists) return;
+    autoDownloadQueueRef.current.push({ track, attempts: 0 });
+    persistAutoDownloadQueue();
+    drainAutoDownloadQueue();
+  }, [drainAutoDownloadQueue, isTrackDownloaded, persistAutoDownloadQueue]);
+
+  useEffect(() => {
+    let mounted = true;
+    AsyncStorage.getItem(AUTO_DOWNLOAD_QUEUE_KEY).then((raw) => {
+      if (!mounted || !raw) return;
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          autoDownloadQueueRef.current = parsed.filter((item) => item?.track).slice(0, 50);
+          drainAutoDownloadQueue();
+        }
+      } catch (err) {
+        console.warn('[AutoDownload] Invalid persisted queue:', err?.message || err);
+      }
+    }).catch((err) => {
+      console.warn('[AutoDownload] Failed to load queue:', err?.message || err);
+    });
+    const sub = AppState?.addEventListener?.('change', (state) => {
+      if (state === 'active') drainAutoDownloadQueue();
+    });
+    return () => {
+      mounted = false;
+      sub?.remove?.();
+    };
+  }, [drainAutoDownloadQueue]);
 
   const handleDownloadPlaylist = useCallback(async (tracksToDownload) => {
     if (!tracksToDownload || tracksToDownload.length === 0) return;
@@ -216,6 +294,7 @@ export const useAudioDownloads = ({
     downloadingIdsRef,
     autoDownloadFinished,
     autoDownloadFinishedRef,
+    queueAutoDownloadTrack,
     toggleAutoDownloadFinished,
     refreshDownloadedTracks,
     isTrackDownloaded,

@@ -6,7 +6,7 @@ import { ensurePlaybackPermissions } from './playbackPermissions';
 import { updateAudioProgress } from '../AudioProgressContext';
 import { handlePlaybackStatusUpdate } from './playbackEngine';
 import { resolveTrackPlaybackUri, createAudioSound } from './streamResolverHelper';
-import { saveLastPlayedState } from './useAudioPersistence';
+import { saveLastPlayedState, flushLastPlayedState } from './useAudioPersistence';
 import { clearStreamCache } from '../../services/youtubeResolver';
 import { sanitizeDuration } from '../../utils/timeUtils';
 import { buildSmartSeedQueue } from '../../utils/tasteAlgorithm';
@@ -104,6 +104,18 @@ export const useAudioPlaybackCore = ({
   useEffect(() => {
     if (!AppState || typeof AppState.addEventListener !== 'function') return;
     const sub = AppState.addEventListener('change', async (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        flushLastPlayedState();
+        if (currentTrackRef.current) {
+          saveLastPlayedState(
+            currentTrackRef.current,
+            queueRef.current,
+            playbackStatusRef.current?.currentTime || 0
+          );
+          flushLastPlayedState();
+        }
+        return;
+      }
       if (nextState !== 'active') return;
       if (!shouldBePlayingRef.current || isLoadingRef.current) return;
 

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.20",
+  "version": "2.4.21",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري v2.4.20 • استقرار القرآن في الخلفية ليلاً، توقيت الساعات، ومزامنة الإشعار والكاش",
-  "notesEn": "Instant OTA update v2.4.20 • Overnight Quran stability, H:MM:SS timing, lock screen sync, and stream cache fixes.",
-  "bundleSize": 5200900,
+  "notes": "إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي",
+  "notesEn": "Fix lock-screen playback recovery and reliable auto-downloads",
+  "bundleSize": 5205050,
   "sizeMb": "4.96 MB",
-  "updatedAt": "2026-11-11T10:16:13.575Z"
+  "updatedAt": "2026-11-11T15:43:36.208Z"
 }

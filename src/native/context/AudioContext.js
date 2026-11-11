@@ -152,7 +152,7 @@ export const AudioProvider = ({ children }) => {
     repeatModeRef,
     isShuffleRef,
     autoDownloadFinishedRef: downloads.autoDownloadFinishedRef,
-    handleDownloadTrack: downloads.handleDownloadTrack,
+    handleDownloadTrack: downloads.queueAutoDownloadTrack,
     autoPersistFinishedTrack: autoPersistFinishedTrackHandler,
   });
 
@@ -180,7 +180,7 @@ export const AudioProvider = ({ children }) => {
     isMixTransitioningRef: dj.isMixTransitioningRef,
     lastMixBridgeUpdateRef: dj.lastMixBridgeUpdateRef,
     autoDownloadFinishedRef: downloads.autoDownloadFinishedRef,
-    handleDownloadTrack: downloads.handleDownloadTrack,
+    handleDownloadTrack: downloads.queueAutoDownloadTrack,
     autoPersistFinishedTrack: autoPersistFinishedTrackHandler,
     broadcastListeningActivity: broadcastListeningActivityHandler,
     jamSyncRef: jamSync.jamSyncRef,

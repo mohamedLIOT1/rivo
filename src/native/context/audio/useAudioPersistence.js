@@ -18,6 +18,7 @@ export const LAST_POSITION_KEY = 'rivo_last_position';
 export const LAST_POSITION_FALLBACK_KEY = 'last_position';
 
 let pendingSaveTimer = null;
+let pendingSavePayload = null;
 
 const sanitizeTrackForPersistence = (t) => {
   if (!t) return null;
@@ -91,32 +92,42 @@ export const saveLastPlayedState = (track, queue = [], position = 0) => {
   if (pendingSaveTimer) {
     clearTimeout(pendingSaveTimer);
   }
-  pendingSaveTimer = setTimeout(async () => {
-    try {
-      const safePos = Math.max(0, Number(position) || 0);
-      const safeTrack = {
-        ...sanitizeTrackForPersistence(track),
-        currentTime: safePos,
-      };
-      const trackStr = JSON.stringify(safeTrack);
-      const safeQueueList = (Array.isArray(queue) && queue.length > 0 ? queue.slice(0, 30) : [safeTrack])
-        .map(sanitizeTrackForPersistence)
-        .filter(Boolean);
-      const queueStr = JSON.stringify(safeQueueList);
-      const posStr = String(safePos);
-
-      await AsyncStorage.multiSet([
-        [LAST_PLAYED_TRACK_KEY, trackStr],
-        [LAST_PLAYED_TRACK_FALLBACK_KEY, trackStr],
-        [LAST_QUEUE_KEY, queueStr],
-        [LAST_QUEUE_FALLBACK_KEY, queueStr],
-        [LAST_POSITION_KEY, posStr],
-        [LAST_POSITION_FALLBACK_KEY, posStr],
-      ]);
-    } catch (err) {
-      // Non-blocking disk write
-    }
+  const safePos = Math.max(0, Number(position) || 0);
+  const safeTrack = { ...sanitizeTrackForPersistence(track), currentTime: safePos };
+  pendingSavePayload = {
+    trackStr: JSON.stringify(safeTrack),
+    queueStr: JSON.stringify((Array.isArray(queue) && queue.length > 0 ? queue.slice(0, 30) : [safeTrack])
+      .map(sanitizeTrackForPersistence)
+      .filter(Boolean)),
+    posStr: String(safePos),
+  };
+  pendingSaveTimer = setTimeout(() => {
+    pendingSaveTimer = null;
+    flushLastPlayedState();
   }, 3000);
+};
+
+export const flushLastPlayedState = async () => {
+  if (pendingSaveTimer) {
+    clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = null;
+  }
+  const payload = pendingSavePayload;
+  pendingSavePayload = null;
+  if (!payload) return;
+  try {
+    await AsyncStorage.multiSet([
+      [LAST_PLAYED_TRACK_KEY, payload.trackStr],
+      [LAST_PLAYED_TRACK_FALLBACK_KEY, payload.trackStr],
+      [LAST_QUEUE_KEY, payload.queueStr],
+      [LAST_QUEUE_FALLBACK_KEY, payload.queueStr],
+      [LAST_POSITION_KEY, payload.posStr],
+      [LAST_POSITION_FALLBACK_KEY, payload.posStr],
+    ]);
+  } catch (err) {
+    pendingSavePayload = payload;
+    console.warn('[AudioPersistence] Failed to flush last played state:', err?.message || err);
+  }
 };
 
 /**
