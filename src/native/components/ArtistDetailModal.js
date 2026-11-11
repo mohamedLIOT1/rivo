@@ -34,6 +34,7 @@ import { useUser } from '../context/UserContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { formatDuration } from '../utils/timeUtils';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { API_BASE_URL } from '../config';
 import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../../utils/artistUtils.jsx';
@@ -128,17 +129,6 @@ export default function ArtistDetailModal({
     playTrack(queue[0], queue);
   };
 
-  const formatDuration = (sec) => {
-    const s = parseInt(sec, 10) || 210;
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const rem = s % 60;
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${rem < 10 ? '0' : ''}${rem}`;
-    }
-    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-  };
-
   const { height: SCREEN_HEIGHT } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -215,7 +205,7 @@ export default function ArtistDetailModal({
               {t.artist || artistName}
             </Text>
           </View>
-          <Text style={styles.trackDuration}>{formatDuration(t.duration)}</Text>
+          <Text style={styles.trackDuration}>{formatDuration(t.duration, 210)}</Text>
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => downloadTrack && downloadTrack(t)}

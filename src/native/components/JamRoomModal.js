@@ -47,6 +47,7 @@ import { useToast } from '../context/ToastContext';
 import { useLocalization } from '../context/LocalizationContext';
 import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
+import { formatTime, sanitizeDuration } from '../utils/timeUtils';
 import UserDetailModal from './UserDetailModal';
 
 const JAM_ROW_HEIGHT = 68;
@@ -261,13 +262,6 @@ export default function JamRoomModal({ visible, onClose }) {
   const [jamContentFilter, setJamContentFilter] = useState('songs'); // 'songs' | 'quran'
   const [stableRecommendations, setStableRecommendations] = useState([]);
 
-  const formatTime = (secs) => {
-    const s = Math.floor(Math.max(0, Number(secs) || 0));
-    const m = Math.floor(s / 60);
-    const rem = s % 60;
-    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-  };
-
   const { width, height } = useWindowDimensions();
   const isLandscape = (width > height && width >= 480) || width >= 650;
 
@@ -472,7 +466,7 @@ export default function JamRoomModal({ visible, onClose }) {
     const curTime = (progress?.currentTime !== undefined && progress?.currentTime > 0)
       ? progress.currentTime
       : (jamSession?.currentTime || progress?.currentTime || 0);
-    const durTime = progress?.duration || activeTrack?.duration || 240;
+    const durTime = progress?.duration || sanitizeDuration(activeTrack?.duration, 240);
     const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
 
     const handleTogglePlay = () => {

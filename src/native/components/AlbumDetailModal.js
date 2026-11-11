@@ -35,6 +35,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { formatDuration, sanitizeDuration } from '../utils/timeUtils';
 import { isArabicText } from '../theme/typography';
 import { API_BASE_URL } from '../config';
 import { INITIAL_TRACKS } from '../data/initialTracks';
@@ -71,7 +72,6 @@ const AlbumTrackRow = React.memo(({
   onToggleLike,
   onTrackAction,
   styles,
-  formatDuration,
   isDark = true,
 }) => {
   const numStr = (index + 1) < 10 ? `0${index + 1}` : `${index + 1}`;
@@ -125,7 +125,7 @@ const AlbumTrackRow = React.memo(({
         </Text>
       </View>
 
-      <Text style={styles.trackDuration}>{formatDuration(track.duration)}</Text>
+      <Text style={styles.trackDuration}>{formatDuration(track.duration, 210)}</Text>
 
       <TouchableOpacity
         style={styles.iconBtn}
@@ -390,7 +390,7 @@ export default function AlbumDetailModal({
 
   // Total runtime minutes
   const totalMinutes = useMemo(() => {
-    const totalSec = effectiveAlbumTracks.reduce((acc, t) => acc + (parseInt(t.duration, 10) || 210), 0);
+    const totalSec = effectiveAlbumTracks.reduce((acc, t) => acc + sanitizeDuration(t.duration, 210), 0);
     return Math.round(totalSec / 60);
   }, [effectiveAlbumTracks]);
 
@@ -470,17 +470,6 @@ export default function AlbumDetailModal({
     }
   };
 
-  const formatDuration = (sec) => {
-    const s = parseInt(sec, 10) || 210;
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const rem = s % 60;
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${rem < 10 ? '0' : ''}${rem}`;
-    }
-    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-  };
-
   const { height: SCREEN_HEIGHT } = Dimensions.get('window');
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -551,7 +540,6 @@ export default function AlbumDetailModal({
         onToggleLike={handleToggleLikeRow}
         onTrackAction={handleTrackAction}
         styles={styles}
-        formatDuration={formatDuration}
         isDark={isDark}
       />
     );

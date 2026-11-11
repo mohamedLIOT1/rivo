@@ -1,9 +1,15 @@
-import { AppState } from 'react-native';
 import { updateAudioProgress } from '../AudioProgressContext';
-import { clearStreamCache } from '../../services/youtubeResolver';
-import { isQuranContent } from '../../../utils/quranUtils';
+import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
 import { calculateCrossfadeGains } from '../../utils/musicAnalysis';
 import { recordListeningTick, flushListeningStats } from './audioApiHelpers';
+import {
+  syncRecoveryTrackSession,
+  clearStallRecoveryTimer,
+  noteHealthyPlayback,
+  handlePlaybackError,
+  handlePlaybackStallOrInterruption,
+  tryRecoverPrematureFinish,
+} from './backgroundRecoveryHelper';
 
 export const handlePlaybackStatusUpdate = ({
   status,
@@ -41,138 +47,45 @@ export const handlePlaybackStatusUpdate = ({
   trackCompletionHandledRef,
   interruptedByOsRef,
 }) => {
+  const notifyMediaState = (playing) => {
+    if (typeof updateMediaNotification !== 'function') return;
+    const cur = currentTrackRef.current;
+    const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+    updateMediaNotification(
+      playing,
+      repeatModeRef?.current || 'off',
+      isShuffleRef?.current || false,
+      isLikedTrack,
+      cur
+    );
+  };
+
   if (!status.isLoaded) {
     if (status.error) {
-      if (stallRecoveryTimerRef.current) {
-        clearTimeout(stallRecoveryTimerRef.current);
-        stallRecoveryTimerRef.current = null;
-      }
-      if (shouldBePlayingRef.current && !isLoadingRef.current) {
-        const cur = currentTrackRef.current;
-        const tid = String(cur?._id || cur?.id || '');
-        if (tid) clearStreamCache(tid);
-        if (cur && !cur._retryDone) {
-          cur._retryDone = true;
-          playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0, false, false, true);
-        } else if (playNextTrack) {
-          playNextTrack();
-        }
-      }
+      syncRecoveryTrackSession(currentTrackRef.current, playbackStatusRef);
+      handlePlaybackError({
+        currentTrackRef,
+        queueRef,
+        playbackStatusRef,
+        shouldBePlayingRef,
+        isLoadingRef,
+        isSeekingRef,
+        interruptedByOsRef,
+        soundRef,
+        isPlayingRef,
+        stallRecoveryTimerRef,
+        playTrack,
+        playNextTrack,
+        setIsPlaying,
+        notifyPaused: () => notifyMediaState(false),
+      });
     }
     return;
   }
 
-  const newCurrentTime = Math.floor((status.positionMillis || 0) / 1000);
-  const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
-
-  // Synchronize playing state with native AVPlayer
-  if (status.isPlaying) {
-    if (stallRecoveryTimerRef.current) {
-      clearTimeout(stallRecoveryTimerRef.current);
-      stallRecoveryTimerRef.current = null;
-    }
-    if (interruptedByOsRef) interruptedByOsRef.current = false;
-    if (shouldBePlayingRef) shouldBePlayingRef.current = true;
-    if (!isPlayingRef?.current && typeof setIsPlaying === 'function') {
-      setIsPlaying(true);
-      const cur = currentTrackRef.current;
-      const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
-      if (typeof updateMediaNotification === 'function') {
-        updateMediaNotification(
-          true,
-          repeatModeRef?.current || 'off',
-          isShuffleRef?.current || false,
-          isLikedTrack,
-          cur
-        );
-      }
-    }
-  } else if (!status.isBuffering && !isLoadingRef?.current && !isSeekingRef?.current) {
-    // If the OS paused audio (interrupted by another app like Reels, video, phone call), update state to paused
-    if (shouldBePlayingRef?.current) {
-      if (interruptedByOsRef) interruptedByOsRef.current = true;
-      if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
-        setIsPlaying(false);
-        const cur = currentTrackRef.current;
-        const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
-        if (typeof updateMediaNotification === 'function') {
-          updateMediaNotification(
-            false,
-            repeatModeRef?.current || 'off',
-            isShuffleRef?.current || false,
-            isLikedTrack,
-            cur
-          );
-        }
-      }
-      if (stallRecoveryTimerRef.current) {
-        clearTimeout(stallRecoveryTimerRef.current);
-        stallRecoveryTimerRef.current = null;
-      }
-    } else {
-      if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
-        setIsPlaying(false);
-        const cur = currentTrackRef.current;
-        const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
-        if (typeof updateMediaNotification === 'function') {
-          updateMediaNotification(
-            false,
-            repeatModeRef?.current || 'off',
-            isShuffleRef?.current || false,
-            isLikedTrack,
-            cur
-          );
-        }
-      }
-    }
-  }
-
-  // Stall & Auto-play watchdog: Only recover if app is in active foreground and genuinely stalled during buffering
-  if (status.isPlaying === false && shouldBePlayingRef.current && !isLoadingRef.current && !isSeekingRef.current && !interruptedByOsRef?.current) {
-    if (AppState.currentState !== 'active') {
-      // Audio focus lost to another app while in background -> cleanly wait without force-retrying
-      if (stallRecoveryTimerRef.current) {
-        clearTimeout(stallRecoveryTimerRef.current);
-        stallRecoveryTimerRef.current = null;
-      }
-    } else if (status.isBuffering) {
-      // Still buffering, wait for buffer
-    } else if (soundRef.current) {
-      soundRef.current.playAsync().then(() => {
-        if (interruptedByOsRef) interruptedByOsRef.current = false;
-        if (typeof setIsPlaying === 'function') setIsPlaying(true);
-      }).catch(() => {
-        // Audio focus rejected by OS (another app has audio focus) -> wait cleanly
-        if (interruptedByOsRef) interruptedByOsRef.current = true;
-        if (typeof setIsPlaying === 'function') setIsPlaying(false);
-      });
-    }
-
-    if (!stallRecoveryTimerRef.current && !interruptedByOsRef?.current && AppState.currentState === 'active') {
-      stallRecoveryTimerRef.current = setTimeout(() => {
-        stallRecoveryTimerRef.current = null;
-        if (shouldBePlayingRef.current && !isLoadingRef.current && soundRef.current && !interruptedByOsRef?.current) {
-          const cur = currentTrackRef.current;
-          const tid = String(cur?._id || cur?.id || '');
-          if (tid) clearStreamCache(tid);
-          if (cur && !cur._retryDone) {
-            cur._retryDone = true;
-            playTrack({ ...cur, resolvedAudioUrl: null, isRetry: true }, queueRef.current, true, playbackStatusRef.current?.currentTime || 0, false, false, true);
-          } else if (playNextTrack) {
-            playNextTrack();
-          }
-        }
-      }, 4500);
-    }
-  } else if (status.isPlaying) {
-    if (stallRecoveryTimerRef.current) {
-      clearTimeout(stallRecoveryTimerRef.current);
-      stallRecoveryTimerRef.current = null;
-    }
-  }
-
-  // Safety: Ensure sound matches active track
-  const currentActiveId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
+  // Safety: Ensure sound matches active track before mutating playback state
+  const curTrack = currentTrackRef.current;
+  const currentActiveId = String(curTrack?._id || curTrack?.id || '');
   if (loadedTrackIdRef.current && currentActiveId && loadedTrackIdRef.current !== currentActiveId) {
     if (soundRef.current) {
       soundRef.current.stopAsync().catch(() => {});
@@ -181,28 +94,89 @@ export const handlePlaybackStatusUpdate = ({
     return;
   }
 
+  syncRecoveryTrackSession(curTrack, playbackStatusRef);
+
+  const newCurrentTime = Math.floor((status.positionMillis || 0) / 1000);
+  const statusDurSec = Math.floor((status.durationMillis || 0) / 1000);
+  const isLiveStream = Boolean(curTrack && (isRadioTrack(curTrack) || curTrack.isLive));
+  const knownDur = Number(curTrack?.duration || playbackStatusRef.current?.duration || 0);
+  const hasRealDuration = !isLiveStream && (knownDur > 0 || statusDurSec > 1);
+
+  const newDuration = isLiveStream
+    ? (statusDurSec > 1 ? statusDurSec : knownDur)
+    : (statusDurSec > 1 && (knownDur <= 0 || statusDurSec > knownDur + 5))
+      ? statusDurSec
+      : (knownDur > 0 ? knownDur : (statusDurSec > 1 ? statusDurSec : 240));
+
+  const clampedCurrentTime = (!isLiveStream && newDuration > 0 && newCurrentTime > newDuration)
+    ? newDuration
+    : newCurrentTime;
+  const positionAdvanced = playbackStatusRef.current.currentTime !== clampedCurrentTime;
+
+  const isFinished = Boolean(
+    status.didJustFinish ||
+    (hasRealDuration && statusDurSec > 5 && newCurrentTime >= statusDurSec - 1) ||
+    (hasRealDuration && newDuration > 5 && newCurrentTime >= Math.max(1, newDuration - 1))
+  );
+
+  // Synchronize playing state with native player & run background-capable recovery
+  if (status.isPlaying) {
+    noteHealthyPlayback({
+      currentTime: clampedCurrentTime,
+      statusDurSec,
+      isBuffering: Boolean(status.isBuffering),
+      positionAdvanced,
+      stallRecoveryTimerRef,
+    });
+    if (interruptedByOsRef) interruptedByOsRef.current = false;
+    if (shouldBePlayingRef) shouldBePlayingRef.current = true;
+    if (!isPlayingRef?.current && typeof setIsPlaying === 'function') {
+      setIsPlaying(true);
+      notifyMediaState(true);
+    }
+  } else if (!shouldBePlayingRef?.current) {
+    clearStallRecoveryTimer(stallRecoveryTimerRef);
+    if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
+      setIsPlaying(false);
+      notifyMediaState(false);
+    }
+  } else if (!isLoadingRef?.current && !isSeekingRef?.current && !status.didJustFinish && !isFinished) {
+    handlePlaybackStallOrInterruption({
+      status,
+      soundRef,
+      currentTrackRef,
+      queueRef,
+      playbackStatusRef,
+      shouldBePlayingRef,
+      isLoadingRef,
+      isSeekingRef,
+      interruptedByOsRef,
+      isPlayingRef,
+      setIsPlaying,
+      stallRecoveryTimerRef,
+      playTrack,
+      playNextTrack,
+      notifyPaused: () => notifyMediaState(false),
+    });
+  }
+
   if (isSeekingRef.current || (Date.now() - (lastSeekTimestampRef.current || 0) < 1200)) {
     return;
   }
 
-  const knownDur = Number(currentTrackRef.current?.duration || playbackStatusRef.current?.duration || 0);
-  const newDuration = (knownDur > 0) ? knownDur : (statusDurSec > 1 ? statusDurSec : 240);
-  const clampedCurrentTime = (newDuration > 0 && newCurrentTime > newDuration) ? newDuration : newCurrentTime;
-
-  if (playbackStatusRef.current.currentTime !== clampedCurrentTime) {
+  if (positionAdvanced) {
     playbackStatusRef.current = { ...playbackStatusRef.current, currentTime: clampedCurrentTime, duration: newDuration };
     progressRef.current = { currentTime: clampedCurrentTime, duration: newDuration };
 
     // High-frequency isolation: Dispatches directly to AudioProgressContext listeners
     updateAudioProgress({ currentTime: clampedCurrentTime, duration: newDuration });
 
-    if (status.isPlaying && currentTrackRef.current) {
-      recordListeningTick(currentTrackRef.current, 1);
+    if (status.isPlaying && curTrack) {
+      recordListeningTick(curTrack, 1);
     }
 
     // RIVO DJ ENGINE: Dual-Player Lookahead Crossfade with Smooth Volume Ramping
-    if (isMixModeRef?.current && status.isPlaying && statusDurSec > 10) {
-      const curTrack = currentTrackRef.current;
+    if (isMixModeRef?.current && !isLiveStream && status.isPlaying && statusDurSec > 10) {
       if (!isQuranContent(curTrack)) {
         const curId = String(curTrack?._id || curTrack?.id || '');
         const q = queueRef.current || [];
@@ -255,10 +229,10 @@ export const handlePlaybackStatusUpdate = ({
   }
 
   const curActiveId = String(
-    currentTrackRef.current?._id ||
-    currentTrackRef.current?.id ||
-    currentTrackRef.current?.youtubeId ||
-    (currentTrackRef.current?.title && currentTrackRef.current?.artist ? `${currentTrackRef.current.title}___${currentTrackRef.current.artist}` : '')
+    curTrack?._id ||
+    curTrack?.id ||
+    curTrack?.youtubeId ||
+    (curTrack?.title && curTrack?.artist ? `${curTrack.title}___${curTrack.artist}` : '')
   );
 
   // If track restarts or is early in playback, clear completion handled flag so loops/repeats work
@@ -266,27 +240,48 @@ export const handlePlaybackStatusUpdate = ({
     trackCompletionHandledRef.current = null;
   }
 
-  const isFinished = Boolean(
-    status.didJustFinish ||
-    (statusDurSec > 5 && newCurrentTime >= statusDurSec - 1) ||
-    (newDuration > 5 && newCurrentTime >= Math.max(1, newDuration - 1))
-  );
-
   if (isFinished) {
-    const cur = currentTrackRef.current;
     if (curActiveId && trackCompletionHandledRef?.current === curActiveId) {
       return;
     }
+
+    const recovered = tryRecoverPrematureFinish({
+      cur: curTrack,
+      status,
+      newCurrentTime,
+      statusDurSec,
+      newDuration,
+      isLiveStream,
+      shouldBePlayingRef,
+      isLoadingRef,
+      interruptedByOsRef,
+      playbackStatusRef,
+      stallRecoveryTimerRef,
+      soundRef,
+      currentTrackRef,
+      queueRef,
+      isPlayingRef,
+      playTrack,
+      playNextTrack,
+      setIsPlaying,
+      notifyPaused: () => notifyMediaState(false),
+    });
+    if (recovered) {
+      return;
+    }
+
+    clearStallRecoveryTimer(stallRecoveryTimerRef);
+
     if (trackCompletionHandledRef && curActiveId) {
       trackCompletionHandledRef.current = curActiveId;
     }
     if (isMixTransitioningRef?.current) {
       return;
     }
-    const finishedTrack = cur ? {
-      ...cur,
-      resolvedAudioUrl: cur.resolvedAudioUrl || soundRef?.current?._uri || null,
-      duration: newDuration || cur.duration,
+    const finishedTrack = curTrack ? {
+      ...curTrack,
+      resolvedAudioUrl: curTrack.resolvedAudioUrl || soundRef?.current?._uri || null,
+      duration: newDuration || curTrack.duration,
     } : null;
     if (finishedTrack) {
       autoPersistFinishedTrack?.(finishedTrack);

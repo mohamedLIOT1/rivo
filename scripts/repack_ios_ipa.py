@@ -19,8 +19,8 @@ if not os.path.exists(BASE_IPA):
 HERMESC = os.path.join(ROOT_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 USER_DOWNLOADS = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-VERSION = '2.4.2'
-BUILD_NUM = '133'
+VERSION = '2.4.10'
+BUILD_NUM = '140'
 NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
 NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
 
@@ -141,7 +141,8 @@ def repack():
                     zout.writestr(item, buffer)
 
     print(f"\nFinalizing output IPAs...")
-    for target in [NEW_IPA_VERSIONED, NEW_IPA_LATEST]:
+    versioned_ipa = os.path.join(DOWNLOADS_DIR, f'Rivo-v{target_ver}.ipa')
+    for target in [versioned_ipa, NEW_IPA_LATEST]:
         if os.path.exists(target):
             os.remove(target)
         shutil.copyfile(temp_zip, target)
@@ -151,11 +152,11 @@ def repack():
     # Also sync to dist/downloads and user Downloads folder
     dist_dl = os.path.join(ROOT_DIR, 'dist', 'downloads')
     os.makedirs(dist_dl, exist_ok=True)
-    shutil.copyfile(temp_zip, os.path.join(dist_dl, f'Rivo-v{VERSION}.ipa'))
+    shutil.copyfile(temp_zip, os.path.join(dist_dl, f'Rivo-v{target_ver}.ipa'))
     shutil.copyfile(temp_zip, os.path.join(dist_dl, 'Rivo.ipa'))
 
     if os.path.exists(USER_DOWNLOADS):
-        user_ipa = os.path.join(USER_DOWNLOADS, f'Rivo-v{VERSION}.ipa')
+        user_ipa = os.path.join(USER_DOWNLOADS, f'Rivo-v{target_ver}.ipa')
         try:
             shutil.copyfile(temp_zip, user_ipa)
             print(f"SUCCESS: Synced directly to user Downloads: {user_ipa}")

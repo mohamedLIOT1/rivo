@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -81,8 +82,9 @@ class MediaNotificationService : Service() {
     private var screenReceiver: BroadcastReceiver? = null
     private var mediaSession: MediaSessionCompat? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private val wakeLockHandler = Handler(Looper.getMainLooper())
-    private val wakeLockReleaseRunnable = Runnable { if (!isPlaying) releaseWakeLock() }
+    private val wakeLockReleaseRunnable = Runnable { if (!isPlaying) releasePlaybackLocks() }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -93,12 +95,28 @@ class MediaNotificationService : Service() {
         setupMediaSession()
         registerScreenStateReceiver()
         initWakeLock()
+        initWifiLock()
     }
 
     private fun initWakeLock() {
         try {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Rivo::PlaybackWakeLock").apply {
+                setReferenceCounted(false)
+            }
+        } catch (_: Throwable) {}
+    }
+
+    @Suppress("DEPRECATION")
+    private fun initWifiLock() {
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wm.createWifiLock(mode, "Rivo::PlaybackWifiLock").apply {
                 setReferenceCounted(false)
             }
         } catch (_: Throwable) {}
@@ -110,11 +128,10 @@ class MediaNotificationService : Service() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     when (intent?.action) {
                         Intent.ACTION_SCREEN_OFF -> {
+                            if (isPlaying) acquirePlaybackLocks()
                             val prefs = getSharedPreferences("rivo_prefs", Context.MODE_PRIVATE)
                             val isLockscreenEnabled = prefs.getBoolean("lockscreen_overlay_enabled", true)
                             if (isPlaying && isLockscreenEnabled) {
-                                // Keep CPU awake briefly so lock screen activity renders smoothly
-                                acquireWakeLock()
 
                                 // 1. Attempt direct activity launch (allowed on Android 9 and below, or if overlay granted)
                                 try {
@@ -165,7 +182,8 @@ class MediaNotificationService : Service() {
         dismissLockscreenNotification()
         try { screenReceiver?.let { unregisterReceiver(it) } } catch (_: Throwable) {}
         if (instance == this) instance = null
-        releaseWakeLock()
+        wakeLockHandler.removeCallbacksAndMessages(null)
+        releasePlaybackLocks()
         try {
             mediaSession?.isActive = false
             mediaSession?.release()
@@ -175,21 +193,31 @@ class MediaNotificationService : Service() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         try {
+            wakeLockHandler.removeCallbacksAndMessages(null)
+            releasePlaybackLocks()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         } catch (_: Throwable) {}
         super.onTaskRemoved(rootIntent)
     }
 
-    private fun acquireWakeLock() {
+    private fun acquirePlaybackLocks() {
         try {
-            if (wakeLock?.isHeld == false) wakeLock?.acquire(4 * 60 * 60 * 1000L)
+            if (wakeLock == null) initWakeLock()
+            if (wakeLock?.isHeld == false) wakeLock?.acquire()
+        } catch (_: Throwable) {}
+        try {
+            if (wifiLock == null) initWifiLock()
+            if (wifiLock?.isHeld == false) wifiLock?.acquire()
         } catch (_: Throwable) {}
     }
 
-    private fun releaseWakeLock() {
+    private fun releasePlaybackLocks() {
         try {
             if (wakeLock?.isHeld == true) wakeLock?.release()
+        } catch (_: Throwable) {}
+        try {
+            if (wifiLock?.isHeld == true) wifiLock?.release()
         } catch (_: Throwable) {}
     }
 
@@ -238,7 +266,7 @@ class MediaNotificationService : Service() {
                 handlePlaybackIntent(intent)
                 if (isPlaying) {
                     wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
-                    acquireWakeLock()
+                    acquirePlaybackLocks()
                     startForegroundWithNotification()
                 } else {
                     wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
@@ -250,7 +278,8 @@ class MediaNotificationService : Service() {
             ACTION_HIDE -> {
                 dismissLockscreenNotification()
                 LockScreenActivity.dismissIfShowing()
-                releaseWakeLock()
+                wakeLockHandler.removeCallbacksAndMessages(null)
+                releasePlaybackLocks()
                 stopForeground(true)
                 stopSelf()
             }
@@ -332,11 +361,16 @@ class MediaNotificationService : Service() {
         when (action) {
             "play" -> {
                 if (!isPlaying) lastPositionUpdateElapsedRealtime = now
-                isPlaying = true; acquireWakeLock(); startForegroundWithNotification()
+                isPlaying = true
+                wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
+                acquirePlaybackLocks()
+                startForegroundWithNotification()
             }
             "pause" -> {
                 if (isPlaying) { currentPositionMs = getEstimatedPositionMs(); lastPositionUpdateElapsedRealtime = now }
-                isPlaying = false; releaseWakeLock()
+                isPlaying = false
+                wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
+                releasePlaybackLocks()
             }
             "repeat" -> {
                 repeatMode = when (repeatMode) { "off" -> "all"; "all" -> "one"; else -> "off" }
@@ -359,6 +393,7 @@ class MediaNotificationService : Service() {
 
     private fun startForegroundWithNotification() {
         try {
+            if (isPlaying) acquirePlaybackLocks()
             val notification = buildMediaNotification(false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)

@@ -33,6 +33,7 @@ import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { getDownloadedTracks, deduplicateTrackList } from '../services/downloadManager';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { formatDuration } from '../utils/timeUtils';
 
 export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTracks = [] }) {
   const { token, syncUserData, setPlaylists } = useUser();
@@ -289,13 +290,6 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDuration = (secs) => {
-    if (!secs || isNaN(secs)) return '3:00';
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
@@ -695,7 +689,7 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
 
                                       <View style={{ alignItems: 'flex-end', gap: 2 }}>
                                         <Text style={styles.trackDuration}>
-                                          {formatDuration(t.duration)}
+                                          {formatDuration(t.duration, 180)}
                                         </Text>
                                         <View style={styles.vaultTag}>
                                           <Text style={styles.vaultTagText}>VAULT</Text>

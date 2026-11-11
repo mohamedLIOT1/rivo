@@ -1,16 +1,161 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { applyStandardAudioMode } from './audioModeConfig';
 import {
   subscribeToMediaActions,
   checkNotificationPermission,
   requestNotificationPermission,
   updateLockScreenLyrics,
+  updateMediaNotification,
 } from '../../services/mediaControls';
+import { isRadioTrack } from '../../../utils/quranUtils';
+import { sanitizeDuration } from '../../../utils/streamRecoveryHelper';
 
 export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
+  const isMountedRef = useRef(true);
+  const syncStateRef = useRef({
+    trackKey: '',
+    duration: 0,
+    isPlaying: false,
+    isLive: false,
+    lastPos: 0,
+    lastSyncTs: 0,
+    probeCount: 0,
+    probing: false,
+  });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     updateLockScreenLyrics(lyrics);
   }, [lyrics]);
+
+  const syncNotificationMetadata = useCallback(() => {
+    try {
+      const pb = playbackRef?.current;
+      if (!pb) return;
+      const cur = pb.currentTrackRef?.current || pb.currentTrack;
+      if (!cur) return;
+
+      const trackKey = String(cur._id || cur.id || cur.youtubeId || cur.title || '');
+      if (!trackKey) return;
+
+      const isLive = Boolean(cur.isLive || isRadioTrack(cur));
+      const isPlaying = Boolean(pb.isPlayingRef?.current ?? pb.isPlaying);
+      const statusDur = sanitizeDuration(pb.playbackStatusRef?.current?.duration, 0);
+      const trackDur = sanitizeDuration(cur.duration, 0);
+      const curPos = Math.max(0, Math.round(Number(pb.playbackStatusRef?.current?.currentTime || 0)));
+      const now = Date.now();
+
+      if (syncStateRef.current.trackKey !== trackKey) {
+        syncStateRef.current = {
+          trackKey,
+          duration: isLive ? 0 : trackDur,
+          isPlaying,
+          isLive,
+          lastPos: curPos,
+          lastSyncTs: now,
+          probeCount: 0,
+          probing: false,
+        };
+      }
+
+      const repeatMode = queueRef?.current?.repeatMode || 'off';
+      const isShuffle = Boolean(queueRef?.current?.isShuffleRef?.current ?? queueRef?.current?.isShuffle);
+
+      if (isLive) {
+        if (!syncStateRef.current.isLive) {
+          syncStateRef.current.isLive = true;
+          syncStateRef.current.duration = 0;
+          updateMediaNotification(isPlaying, repeatMode, isShuffle, undefined, {
+            ...cur,
+            isLive: true,
+            duration: 0,
+            currentTime: 0,
+          });
+        }
+        return;
+      }
+
+      const bestDur = statusDur > 5 ? statusDur : (trackDur > 5 ? trackDur : (statusDur > 0 ? statusDur : trackDur));
+
+      // Fallback probe for progressive streams where track.duration was missing and status duration lagged
+      if (
+        isPlaying &&
+        trackDur === 0 &&
+        (bestDur === 0 || bestDur === 240) &&
+        syncStateRef.current.probeCount < 3 &&
+        !syncStateRef.current.probing &&
+        typeof pb.soundRef?.current?.getStatusAsync === 'function'
+      ) {
+        syncStateRef.current.probing = true;
+        syncStateRef.current.probeCount += 1;
+        const expectedKey = trackKey;
+        pb.soundRef.current.getStatusAsync().then((st) => {
+          if (!isMountedRef.current || syncStateRef.current.trackKey !== expectedKey) return;
+          if (st?.isLoaded && st.durationMillis > 1000) {
+            const nativeDur = sanitizeDuration(Math.floor(st.durationMillis / 1000), 0);
+            if (nativeDur > 5 && Math.abs(nativeDur - syncStateRef.current.duration) > 2) {
+              const latestPb = playbackRef?.current;
+              const latestPlaying = Boolean(latestPb?.isPlayingRef?.current ?? latestPb?.isPlaying);
+              const nativePos = Math.max(0, Math.round((st.positionMillis || 0) / 1000));
+              syncStateRef.current.duration = nativeDur;
+              syncStateRef.current.lastPos = nativePos;
+              syncStateRef.current.lastSyncTs = Date.now();
+              syncStateRef.current.isPlaying = latestPlaying;
+              updateMediaNotification(
+                latestPlaying,
+                queueRef?.current?.repeatMode || 'off',
+                Boolean(queueRef?.current?.isShuffleRef?.current ?? queueRef?.current?.isShuffle),
+                undefined,
+                { ...cur, duration: nativeDur, currentTime: nativePos }
+              );
+            }
+          }
+        }).catch(() => {}).finally(() => {
+          if (syncStateRef.current.trackKey === expectedKey) {
+            syncStateRef.current.probing = false;
+          }
+        });
+      }
+
+      const elapsedSec = Math.max(0, (now - syncStateRef.current.lastSyncTs) / 1000);
+      const expectedPos = syncStateRef.current.isPlaying
+        ? (syncStateRef.current.lastPos + elapsedSec)
+        : syncStateRef.current.lastPos;
+      const durationChanged = bestDur > 5 && Math.abs(bestDur - syncStateRef.current.duration) > 2;
+      const positionJumped = Math.abs(curPos - expectedPos) >= 5;
+
+      if (durationChanged || positionJumped) {
+        const syncDur = bestDur > 0 ? bestDur : syncStateRef.current.duration;
+        syncStateRef.current.duration = syncDur;
+        syncStateRef.current.lastPos = curPos;
+        syncStateRef.current.lastSyncTs = now;
+        syncStateRef.current.isPlaying = isPlaying;
+        updateMediaNotification(isPlaying, repeatMode, isShuffle, undefined, {
+          ...cur,
+          duration: syncDur,
+          currentTime: curPos,
+        });
+      } else {
+        syncStateRef.current.lastPos = curPos;
+        syncStateRef.current.lastSyncTs = now;
+        syncStateRef.current.isPlaying = isPlaying;
+      }
+    } catch (_err) {}
+  }, [playbackRef, queueRef]);
+
+  const curTrack = playbackRef?.current?.currentTrack;
+  const curPlaying = Boolean(playbackRef?.current?.isPlaying);
+  const curLoading = Boolean(playbackRef?.current?.isLoading);
+
+  useEffect(() => {
+    syncNotificationMetadata();
+  }, [curTrack, curPlaying, curLoading, syncNotificationMetadata]);
 
   useEffect(() => {
     applyStandardAudioMode();
@@ -21,6 +166,8 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
         requestNotificationPermission().catch(() => {});
       }
     }).catch(() => {});
+
+    const syncTimer = setInterval(syncNotificationMetadata, 1000);
 
     const handleMediaAction = (action, payload) => {
       try {
@@ -48,6 +195,18 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
           if (!isNaN(idx) && idx >= 0 && Array.isArray(q) && q[idx]) {
             playbackRef.current?.playTrack?.(q[idx], q);
           }
+        } else if (act === 'interruption_ended_resume') {
+          const pb = playbackRef.current;
+          if (pb?.shouldBePlayingRef?.current && !pb?.isPlayingRef?.current && pb?.soundRef?.current) {
+            pb.soundRef.current.playAsync().then(() => {
+              if (!isMountedRef.current) return;
+              pb.isPlayingRef.current = true;
+              pb.setIsPlaying?.(true);
+              syncNotificationMetadata();
+            }).catch(() => {});
+          }
+        } else if (act === 'interruption_began' || act === 'interruption_ended') {
+          // Handled via native AVAudioSession & playbackEngine without clearing shouldBePlayingRef
         }
       } catch (_err) {}
     };
@@ -96,6 +255,7 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
     });
 
     return () => {
+      clearInterval(syncTimer);
       try {
         if (typeof sub === 'function') {
           sub();
@@ -104,5 +264,5 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
         }
       } catch (_e) {}
     };
-  }, [playbackRef, queueRef]);
+  }, [playbackRef, queueRef, syncNotificationMetadata]);
 };

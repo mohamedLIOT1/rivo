@@ -1,32 +1,112 @@
 import { NativeModules, DeviceEventEmitter, NativeEventEmitter, Platform, PermissionsAndroid, Linking } from 'react-native';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { isRadioTrack } from '../../utils/quranUtils';
 
 const { RivoMediaControls } = NativeModules;
+
+const MAX_NOTIFICATION_DURATION_SEC = 86400; // 24 hours (matches sanitizeDuration)
+
+let lastNotificationState = {
+  trackKey: '',
+  duration: 0,
+  isLive: false,
+  isLiked: false,
+};
+
+function sanitizeNotificationSeconds(rawVal, allowZero = false) {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return null;
+  const num = Number(rawVal);
+  if (!Number.isFinite(num) || Number.isNaN(num)) return null;
+  if (num < 0 || (!allowZero && num === 0)) return null;
+  if (num > MAX_NOTIFICATION_DURATION_SEC) {
+    const inSec = Math.round(num / 1000);
+    if (inSec > 0 && inSec <= MAX_NOTIFICATION_DURATION_SEC) return inSec;
+    return allowZero ? 0 : null;
+  }
+  return Math.round(num);
+}
+
+function getTrackIdentityKey(track) {
+  if (!track || typeof track !== 'object') return '';
+  const id = track._id || track.id || track.youtubeId || track.ytId;
+  if (id) return `id:${String(id)}`;
+  const title = String(track.title || track.name || '').trim();
+  const artist = String(track.artist || '').trim();
+  return title ? `meta:${title}:::${artist}` : '';
+}
+
+function buildPlaybackPayload({ track, isPlaying, repeatMode, isShuffle, isLiked, isInitialShow }) {
+  const safeRepeatMode = typeof repeatMode === 'string' ? repeatMode : (repeatMode ? 'all' : 'off');
+  const resolvedIsLiked = (isLiked !== undefined && isLiked !== null)
+    ? Boolean(isLiked)
+    : ((track && (track.liked !== undefined || track.isLiked !== undefined))
+        ? Boolean(track.liked || track.isLiked)
+        : lastNotificationState.isLiked);
+  lastNotificationState.isLiked = resolvedIsLiked;
+
+  const payload = {
+    isPlaying: Boolean(isPlaying),
+    repeatMode: safeRepeatMode,
+    isRepeat: safeRepeatMode !== 'off',
+    isShuffle: Boolean(isShuffle),
+    isLiked: resolvedIsLiked,
+  };
+  if (!track) return payload;
+
+  const isLive = Boolean(track.isLive || isRadioTrack(track));
+  const trackKey = getTrackIdentityKey(track);
+  const isNewTrack = Boolean(isInitialShow || (trackKey && lastNotificationState.trackKey && trackKey !== lastNotificationState.trackKey));
+  const resetMeta = isNewTrack || !lastNotificationState.trackKey || lastNotificationState.isLive;
+
+  payload.isLive = isLive;
+  payload.title = track.title || 'Unknown Track';
+  payload.artist = track.artist || 'Unknown Artist';
+  const rawCover = track.coverUrl || track.cover || track.coverImage || track.thumbnail || '';
+  payload.coverUrl = normalizeCoverUri(rawCover, track);
+
+  if (isLive) {
+    payload.duration = 0;
+    payload.currentTime = 0;
+    lastNotificationState.duration = 0;
+  } else {
+    const sanitizedDur = sanitizeNotificationSeconds(track.duration, false);
+    if (sanitizedDur !== null) {
+      payload.duration = sanitizedDur;
+      lastNotificationState.duration = sanitizedDur;
+    } else {
+      payload.duration = resetMeta ? 0 : (lastNotificationState.duration > 0 ? lastNotificationState.duration : 0);
+      if (resetMeta) lastNotificationState.duration = 0;
+    }
+
+    const sanitizedTime = sanitizeNotificationSeconds(track.currentTime, true);
+    if (sanitizedTime !== null) {
+      payload.currentTime = sanitizedTime;
+    } else if (resetMeta) {
+      payload.currentTime = 0;
+    }
+  }
+
+  lastNotificationState = {
+    trackKey: trackKey || lastNotificationState.trackKey,
+    duration: lastNotificationState.duration,
+    isLive,
+    isLiked: resolvedIsLiked,
+  };
+  return payload;
+}
 
 export const showMediaNotification = (
   track,
   isPlaying = true,
   repeatMode = 'off',
   isShuffle = false,
-  isLiked = false
+  isLiked = undefined
 ) => {
   if (!RivoMediaControls) return;
   try {
-    const rawCover = track?.coverUrl || track?.cover || track?.coverImage || track?.thumbnail || '';
-    const safeCover = normalizeCoverUri(rawCover, track);
-    const safeRepeatMode = typeof repeatMode === 'string' ? repeatMode : (repeatMode ? 'all' : 'off');
-    RivoMediaControls.showNotification({
-      title: track?.title || 'Unknown Track',
-      artist: track?.artist || 'Unknown Artist',
-      coverUrl: safeCover,
-      isPlaying: Boolean(isPlaying),
-      repeatMode: safeRepeatMode,
-      isRepeat: safeRepeatMode !== 'off',
-      isShuffle: Boolean(isShuffle),
-      isLiked: Boolean(isLiked !== undefined ? isLiked : (track?.liked || track?.isLiked)),
-      duration: Number(track?.duration || 240),
-      currentTime: Number(track?.currentTime !== undefined ? track.currentTime : 0),
-    });
+    RivoMediaControls.showNotification(
+      buildPlaybackPayload({ track, isPlaying, repeatMode, isShuffle, isLiked, isInitialShow: true })
+    );
   } catch (e) {}
 };
 
@@ -34,41 +114,21 @@ export const updateMediaNotification = (
   isPlaying,
   repeatMode = 'off',
   isShuffle = false,
-  isLiked = false,
+  isLiked = undefined,
   track = null
 ) => {
   if (!RivoMediaControls) return;
   try {
-    const safeRepeatMode = typeof repeatMode === 'string' ? repeatMode : (repeatMode ? 'all' : 'off');
-    const payload = {
-      isPlaying: Boolean(isPlaying),
-      repeatMode: safeRepeatMode,
-      isRepeat: safeRepeatMode !== 'off',
-      isShuffle: Boolean(isShuffle),
-      isLiked: Boolean(isLiked),
-    };
-    if (track) {
-      payload.title = track.title || 'Unknown Track';
-      payload.artist = track.artist || 'Unknown Artist';
-      const rawCover = track.coverUrl || track.cover || track.coverImage || track.thumbnail || '';
-      payload.coverUrl = normalizeCoverUri(rawCover, track);
-      if (track.duration !== undefined && track.duration !== null) {
-        payload.duration = Number(track.duration);
-      }
-      if (track.currentTime !== undefined && track.currentTime !== null) {
-        payload.currentTime = Number(track.currentTime);
-      }
-      if (track.liked !== undefined || track.isLiked !== undefined) {
-        payload.isLiked = Boolean(track.liked || track.isLiked);
-      }
-    }
-    RivoMediaControls.updatePlayback(payload);
+    RivoMediaControls.updatePlayback(
+      buildPlaybackPayload({ track, isPlaying, repeatMode, isShuffle, isLiked, isInitialShow: false })
+    );
   } catch (e) {}
 };
 
 export const hideMediaNotification = () => {
   if (!RivoMediaControls) return;
   try {
+    lastNotificationState = { trackKey: '', duration: 0, isLive: false, isLiked: false };
     RivoMediaControls.hideNotification();
   } catch (e) {}
 };

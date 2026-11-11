@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Play, Pause, SkipBack, SkipForward, Loader2, Shuffle, Repeat, Repeat1, Heart, Maximize2, Volume2, VolumeX, FileText, PlusCircle, Radio } from 'lucide-react';
-import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
+import { useAudioPlayer } from '../context/AudioContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { isPodcastContent } from '../utils/podcastUtils';
-import PodcastPlayerControls, { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
-import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
+import { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
+import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
+import { MiniPlayerMobileScrubber, MiniPlayerDesktopProgress, MiniPlayerPodcastControls } from './player/MiniPlayerProgress';
 
 function MiniPlayer({
   currentTrack,
@@ -47,28 +48,9 @@ function MiniPlayer({
   const openFullPlayer = propOpenFullPlayer || onOpenFullPlayer;
   const openAddToPlaylist = propOpenAddToPlaylist || onOpenAddToPlaylist;
   const repeatMode = propRepeatMode || audio?.repeatMode || (isRepeat ? 'all' : 'off');
-  const progress = useAudioProgress();
-  const rawCurrentTime = propCurrentTime !== undefined ? propCurrentTime : (progress?.currentTime ?? audio?.currentTime ?? 0);
-  const currentTime = (rawCurrentTime > 86400 && Math.round(rawCurrentTime / 1000) <= 86400) ? Math.round(rawCurrentTime / 1000) : rawCurrentTime;
-  const rawDuration = propDuration !== undefined ? propDuration : (progress?.duration ?? audio?.duration ?? 210);
-  const duration = (rawDuration > 86400 && Math.round(rawDuration / 1000) <= 86400) ? Math.round(rawDuration / 1000) : rawDuration;
   const seekTo = propSeekTo || audio?.seekTo;
-  const formatTime = (secs) => {
-    if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const sVal = (secs > 86400 && Math.round(secs / 1000) <= 86400) ? Math.round(secs / 1000) : Math.round(secs);
-    const h = Math.floor(sVal / 3600);
-    const m = Math.floor((sVal % 3600) / 60);
-    const s = Math.floor(sVal % 60);
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
 
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercent, setScrubPercent] = useState(0);
-
   const [isVolScrubbing, setIsVolScrubbing] = useState(false);
 
   usePodcastResumeProgress(currentTrack, seekTo, isPlaying);
@@ -79,95 +61,11 @@ function MiniPlayer({
   const isPodcast = isPodcastContent(currentTrack);
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
-  const rawActiveDur = (duration > 0 && isFinite(duration)) ? duration : (currentTrack?.duration || 210);
-  const activeDuration = (rawActiveDur > 86400 && Math.round(rawActiveDur / 1000) <= 86400) ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
-  const realPercent = activeDuration > 0 ? (currentTime / activeDuration) * 100 : 0;
-  const progressPercent = isScrubbing ? scrubPercent : realPercent;
-
   const isMixMode = !isQuran && Boolean(
     (audio?.isMixMode && (audio?.currentTrack?.isMix || audio?.currentTrack?._isMix || audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || (audio?.currentQueue?.name && String(audio?.currentQueue?.name).toUpperCase().includes('MIX')) || (audio?.currentQueue?._playlistName && String(audio?.currentQueue?._playlistName).toUpperCase().includes('MIX')))) ||
     (audio?.currentQueue?._isMix || audio?.currentQueue?.isMix || audio?.currentTrack?.isMix || audio?.currentTrack?._isMix)
   );
   const mixPlaylistName = audio?.currentQueue?._playlistName || audio?.currentQueue?.name || audio?.currentTrack?.mixName || (isMixMode ? 'Mix' : '');
-  const currentQueue = audio?.currentQueue || [];
-  const currentQueueIndex = audio?.currentQueueIndex ?? -1;
-  const nextMixTrack = isMixMode && currentQueue.length > 1 && currentQueueIndex >= 0
-    ? currentQueue[(currentQueueIndex + 1) % currentQueue.length]
-    : null;
-  const curTrack = audio?.currentTrack;
-  const nextTrack = nextMixTrack;
-  const pairKey = curTrack && nextTrack ? `${String(curTrack.id || curTrack._id)}___${String(nextTrack.id || nextTrack._id)}` : '';
-  const transConfig = (pairKey && (audio?.activeTransitions?.[pairKey] || audio?.currentQueue?._transitions?.[pairKey])) || null;
-  const targetMixOut = transConfig?.mixOutPoint ? Number(transConfig.mixOutPoint) : activeDuration;
-  const timeToNext = Math.max(0, Math.round(targetMixOut - currentTime));
-
-  const seekFromClientX = (clientX, targetRect) => {
-    if (!targetRect || targetRect.width <= 0) return;
-    const clickX = clientX - targetRect.left;
-    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
-    const targetSec = pct * activeDuration;
-    setScrubPercent(pct * 100);
-    if (seekTo) seekTo(targetSec);
-  };
-
-  const handleDesktopPointerDown = (e) => {
-    e.preventDefault();
-    setIsScrubbing(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleDesktopPointerMove = (e) => {
-    if (!isScrubbing) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleDesktopPointerUp = (e) => {
-    if (isScrubbing) {
-      setIsScrubbing(false);
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-    }
-  };
-
-  const handleMobilePointerDown = (e) => {
-    e.preventDefault();
-    setIsScrubbing(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleMobilePointerMove = (e) => {
-    if (!isScrubbing) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleMobilePointerUp = (e) => {
-    if (isScrubbing) {
-      setIsScrubbing(false);
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-    }
-  };
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (seekTo) seekTo(Math.max(0, currentTime - 5));
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (seekTo) seekTo(Math.min(activeDuration, currentTime + 5));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      if (seekTo) seekTo(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      if (seekTo) seekTo(activeDuration);
-    }
-  };
-
 
   const setVolumeFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
@@ -255,23 +153,14 @@ function MiniPlayer({
           </div>
         )}
 
-        {/* Mobile Scrubber Line (generous 32px touch & drag hitbox) */}
-        <div 
-          role="slider"
-          aria-label="Seek track"
-          className="md:hidden absolute -top-3.5 inset-x-0 h-8 pt-3.5 cursor-pointer z-30 flex items-start touch-none select-none"
-          onPointerDown={handleMobilePointerDown}
-          onPointerMove={handleMobilePointerMove}
-          onPointerUp={handleMobilePointerUp}
-          onPointerCancel={handleMobilePointerUp}
-        >
-          <div className={`w-full h-[4px] overflow-hidden pointer-events-none ${isDark ? 'bg-zinc-800' : 'bg-[#ded2bb]'}`}>
-            <div 
-              className="h-full bg-[#17a398] transition-all pointer-events-none"
-              style={{ width: `${isNaN(progressPercent) ? 0 : Math.min(100, Math.max(0, progressPercent))}%` }}
-            />
-          </div>
-        </div>
+        {/* Mobile Scrubber Line (isolated progress subscription) */}
+        <MiniPlayerMobileScrubber
+          currentTrack={currentTrack}
+          propCurrentTime={propCurrentTime}
+          propDuration={propDuration}
+          seekTo={seekTo}
+          isDark={isDark}
+        />
 
         {/* ─────────────────────────────────────────
             MOBILE COMPACT ROW (< md)
@@ -470,13 +359,12 @@ function MiniPlayer({
             {/* Control buttons */}
             <div className={`flex items-center ${isPodcast ? 'gap-2.5 sm:gap-3.5' : 'gap-2 sm:gap-3'}`}>
               {isPodcast ? (
-                <PodcastPlayerControls
+                <MiniPlayerPodcastControls
                   audioRef={audio?.audioRef}
                   currentTrack={currentTrack}
-                  currentTime={currentTime}
-                  duration={activeDuration}
+                  propCurrentTime={propCurrentTime}
+                  propDuration={propDuration}
                   seekTo={seekTo}
-                  compact={true}
                   isDark={isDark}
                 />
               ) : (
@@ -556,51 +444,14 @@ function MiniPlayer({
               )}
             </div>
 
-            {/* Progress bar & time */}
-            <div className={`w-full flex items-center gap-2 text-[10px] sm:text-[11px] font-mono font-bold ${
-              isDark ? 'text-zinc-400' : 'text-zinc-700'
-            }`}>
-              {currentTrack?.isLive ? (
-                <div className="w-full flex items-center justify-center gap-2 py-1 text-red-500 font-bold">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                  <span>LIVE 24/7 • Holy Quran Radio</span>
-                </div>
-              ) : (
-                <>
-                  <span className="w-8 text-right tabular-nums">{formatTime(currentTime)}</span>
-                  <div 
-                    role="slider"
-                    tabIndex={0}
-                    aria-label="Seek track"
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-valuenow={Math.round(progressPercent)}
-                    onKeyDown={handleKeyDown}
-                    className="relative flex-1 group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
-                    onPointerDown={handleDesktopPointerDown}
-                    onPointerMove={handleDesktopPointerMove}
-                    onPointerUp={handleDesktopPointerUp}
-                    onPointerCancel={handleDesktopPointerUp}
-                  >
-                    {/* Track background & vibrant active fill */}
-                    <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden brutal-border transition-all pointer-events-none ${
-                      isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-[#ede5d3]'
-                    }`}>
-                      <div 
-                        className="h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none"
-                        style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
-                      />
-                    </div>
-                    {/* Tactile thumb knob */}
-                    <div 
-                      className="absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full brutal-border shadow-md pointer-events-none transition-transform group-hover:scale-125 z-10"
-                      style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
-                    />
-                  </div>
-                  <span className="w-8 tabular-nums">{formatTime(duration)}</span>
-                </>
-              )}
-            </div>
+            {/* Progress bar & time (isolated subscription) */}
+            <MiniPlayerDesktopProgress
+              currentTrack={currentTrack}
+              propCurrentTime={propCurrentTime}
+              propDuration={propDuration}
+              seekTo={seekTo}
+              isDark={isDark}
+            />
           </div>
 
           {/* RIGHT: Tactile Volume Meter & Expand */}

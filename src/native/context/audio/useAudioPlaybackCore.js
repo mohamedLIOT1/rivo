@@ -7,12 +7,22 @@ import { updateAudioProgress } from '../AudioProgressContext';
 import { handlePlaybackStatusUpdate } from './playbackEngine';
 import { resolveTrackPlaybackUri, createAudioSound } from './streamResolverHelper';
 import { saveLastPlayedState } from './useAudioPersistence';
+import { clearStreamCache } from '../../services/youtubeResolver';
+import { sanitizeDuration } from '../../utils/timeUtils';
 import { buildSmartSeedQueue } from '../../utils/tasteAlgorithm';
 import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
 import { QURAN_LIVE_STATIONS } from '../../data/quranLiveStations';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
 import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
+
+const disposeSound = (snd) => {
+  if (!snd) return;
+  try { snd.setOnPlaybackStatusUpdate(null); } catch {}
+  snd.pauseAsync().catch(() => {});
+  snd.stopAsync().catch(() => {});
+  snd.unloadAsync().catch(() => {});
+};
 
 export const useAudioPlaybackCore = ({
   likedTrackIds = [], showToast, queueRef, setQueue, isShuffleRef, repeatModeRef,
@@ -94,29 +104,67 @@ export const useAudioPlaybackCore = ({
   useEffect(() => {
     if (!AppState || typeof AppState.addEventListener !== 'function') return;
     const sub = AppState.addEventListener('change', async (nextState) => {
-      if (nextState === 'active') {
-        if (interruptedByOsRef.current && shouldBePlayingRef.current && !isPlayingRef.current) {
-          const snd = soundRef.current;
-          if (snd) {
-            try {
-              const st = await snd.getStatusAsync();
-              if (st?.isLoaded && !st.isPlaying && shouldBePlayingRef.current) {
-                await snd.playAsync();
+      if (nextState !== 'active') return;
+      if (!shouldBePlayingRef.current || isLoadingRef.current) return;
+
+      const cur = currentTrackRef.current;
+      if (!cur) return;
+
+      const snd = soundRef.current;
+      let recovered = false;
+
+      if (snd) {
+        try {
+          const st = await snd.getStatusAsync();
+          if (!shouldBePlayingRef.current || isLoadingRef.current) return;
+          if (st?.isLoaded && !st?.error) {
+            if (st.isPlaying || st.isBuffering) {
+              interruptedByOsRef.current = false;
+              if (st.isPlaying && !isPlayingRef.current) {
+                setIsPlaying(true);
+              }
+              recovered = true;
+            } else {
+              const playRes = await snd.playAsync();
+              if (!shouldBePlayingRef.current || isLoadingRef.current) return;
+              if (playRes?.isLoaded && !playRes?.error && (playRes.isPlaying || playRes.isBuffering)) {
                 interruptedByOsRef.current = false;
                 setIsPlaying(true);
-                const cur = currentTrackRef.current;
-                const isLiked = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+                const isLiked = likedTrackIds.some(id => String(id) === String(cur._id || cur.id));
+                const isLive = isRadioTrack(cur) || Boolean(cur.isLive);
                 if (typeof updateMediaNotification === 'function') {
-                  updateMediaNotification(true, repeatModeRef?.current || 'off', isShuffleRef?.current || false, isLiked, cur);
+                  updateMediaNotification(true, repeatModeRef?.current || 'off', isShuffleRef?.current || false, isLiked, {
+                    ...cur,
+                    currentTime: playbackStatusRef.current?.currentTime || 0,
+                    duration: isLive ? 0 : (playbackStatusRef.current?.duration || sanitizeDuration(cur.duration, 0)),
+                  });
                 }
+                recovered = true;
               }
-            } catch (e) {}
+            }
           }
-        }
+        } catch (e) {}
+      }
+
+      if (!recovered && shouldBePlayingRef.current && !isLoadingRef.current) {
+        disposeSound(snd);
+        soundRef.current = null;
+        loadedTrackIdRef.current = null;
+        const tid = String(cur._id || cur.id || '');
+        if (tid || cur.youtubeId) clearStreamCache(tid, cur.youtubeId);
+        playTrackRef.current?.(
+          { ...cur, resolvedAudioUrl: null, isRetry: true, _retryDone: false },
+          queueRef.current,
+          true,
+          playbackStatusRef.current?.currentTime || 0,
+          false,
+          false,
+          true
+        );
       }
     });
-    return () => sub.remove();
-  }, [likedTrackIds, repeatModeRef, isShuffleRef, setIsPlaying]);
+    return () => sub?.remove?.();
+  }, [likedTrackIds, repeatModeRef, isShuffleRef, setIsPlaying, queueRef]);
 
   const updateVocalStatus = useCallback((status) => {
     setVocalIsolationStatus(status);
@@ -197,10 +245,21 @@ export const useAudioPlaybackCore = ({
     const abortController = new AbortController();
     playAbortControllerRef.current = abortController;
 
+    if (stallRecoveryTimerRef.current) {
+      clearTimeout(stallRecoveryTimerRef.current);
+      stallRecoveryTimerRef.current = null;
+    }
+
     const currentLoadId = ++soundLoadIdRef.current;
     const requestSeq = ++playRequestSeqRef.current;
     const safeTargetSec = Math.max(0, Number(targetTime) || 0);
     trackCompletionHandledRef.current = null;
+
+    const isLiveStream = Boolean(isRadioTrack(track) || track.isLive);
+    const sanitizedDur = isLiveStream ? 0 : sanitizeDuration(track.duration, 0);
+    const cleanTrack = isRetry
+      ? { ...track, duration: sanitizedDur }
+      : { ...track, _retryDone: false, duration: sanitizedDur };
 
     isLoadingRef.current = true;
     setIsLoading(true);
@@ -211,125 +270,152 @@ export const useAudioPlaybackCore = ({
     ensurePlaybackPermissions();
 
     const curId = String(currentTrackRef.current?._id || currentTrackRef.current?.id || '');
-    const nextId = String(track?._id || track?.id || '');
+    const nextId = String(cleanTrack._id || cleanTrack.id || '');
     if (curId && curId === nextId && soundRef.current && loadedTrackIdRef.current === curId && !isRetry) {
-      isLoadingRef.current = false;
-      setIsLoading(false);
-      shouldBePlayingRef.current = true;
-      if (autoPlay) {
-        await soundRef.current.playAsync().catch(() => {});
-        isPlayingRef.current = true;
-        setIsPlaying(true);
-        const isLikedTrack = likedTrackIds.some(id => String(id) === curId);
-        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
-        if (typeof broadcastListeningActivity === 'function') {
-          broadcastListeningActivity(track, true, safeTargetSec);
+      let reuseOk = false;
+      try {
+        const st = await soundRef.current.getStatusAsync();
+        if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) return;
+        if (st?.isLoaded && !st?.error) {
+          if (!autoPlay) {
+            reuseOk = true;
+          } else {
+            const playSt = await soundRef.current.playAsync();
+            if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) return;
+            if (playSt?.isLoaded && !playSt?.error && (playSt.isPlaying || playSt.isBuffering)) {
+              reuseOk = true;
+            }
+          }
         }
+      } catch {}
+
+      if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) return;
+
+      if (reuseOk) {
+        if (currentTrackRef.current) {
+          currentTrackRef.current._retryDone = false;
+        }
+        isLoadingRef.current = false;
+        setIsLoading(false);
+        if (autoPlay) {
+          shouldBePlayingRef.current = true;
+          isPlayingRef.current = true;
+          setIsPlaying(true);
+          const isLikedTrack = likedTrackIds.some(id => String(id) === curId);
+          const curDur = isLiveStream ? 0 : (playbackStatusRef.current?.duration || sanitizedDur);
+          updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+            ...cleanTrack,
+            currentTime: playbackStatusRef.current?.currentTime ?? safeTargetSec,
+            duration: curDur,
+          });
+          if (typeof broadcastListeningActivity === 'function') {
+            broadcastListeningActivity(cleanTrack, true, safeTargetSec);
+          }
+        }
+        return;
       }
-      return;
+
+      const deadSound = soundRef.current;
+      soundRef.current = null;
+      loadedTrackIdRef.current = null;
+      disposeSound(deadSound);
+      clearStreamCache(curId, cleanTrack.youtubeId);
     }
 
-    currentTrackRef.current = track;
-    setCurrentTrackState(track);
-    saveLastPlayedState(track, Array.isArray(trackList) && trackList.length > 0 ? trackList : queueRef.current, safeTargetSec);
+    // Immediately silence and unload previous sound before resolving next track
+    const prevSound = soundRef.current;
+    soundRef.current = null;
+    loadedTrackIdRef.current = null;
+    disposeSound(prevSound);
+    isPlayingRef.current = false;
+    setIsPlaying(false);
+
+    currentTrackRef.current = cleanTrack;
+    setCurrentTrackState(cleanTrack);
+    saveLastPlayedState(cleanTrack, Array.isArray(trackList) && trackList.length > 0 ? trackList : queueRef.current, safeTargetSec);
 
     playbackStatusRef.current = {
       currentTime: safeTargetSec,
-      duration: Number(track.duration || 0),
+      duration: sanitizedDur,
       lastRequestTs: Date.now(),
       requestSeq,
     };
-    progressRef.current = { currentTime: safeTargetSec, duration: Number(track.duration || 0) };
-    updateAudioProgress({ currentTime: safeTargetSec, duration: Number(track.duration || 0) });
+    progressRef.current = { currentTime: safeTargetSec, duration: sanitizedDur };
+    updateAudioProgress({ currentTime: safeTargetSec, duration: sanitizedDur });
     setVocalIsolationStatus(null);
 
-    const isLikedTrack = likedTrackIds.some(id => String(id) === String(track._id || track.id));
+    const isLikedTrack = likedTrackIds.some(id => String(id) === nextId);
     updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
-      ...track,
+      ...cleanTrack,
       currentTime: safeTargetSec,
-      duration: Number(track.duration || 240),
+      duration: isLiveStream ? 0 : sanitizedDur,
     });
 
     if (autoPlay && typeof broadcastListeningActivity === 'function') {
-      broadcastListeningActivity(track, true, safeTargetSec);
+      broadcastListeningActivity(cleanTrack, true, safeTargetSec);
     }
 
     try {
-      const isQuran = isQuranContent(track) || isRadioTrack(track);
+      const isQuran = isQuranContent(cleanTrack) || isRadioTrack(cleanTrack);
       if (Array.isArray(trackList) && trackList.length > 0) {
         if (trackList.length === 1 && !isQuran) {
-          if (isPodcastContent(track)) {
+          if (isPodcastContent(cleanTrack)) {
             const podcastPool = ((userTracks?.length > 0) ? userTracks : []).filter(t => isPodcastContent(t));
             const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
-            setQueue(buildPodcastSeedQueue(track, fullPool, 20));
+            setQueue(buildPodcastSeedQueue(cleanTrack, fullPool, 20));
           } else {
             const pool = ((userTracks?.length > 0) ? userTracks : (INITIAL_TRACKS || [])).filter(t => !isQuranContent(t) && !isPodcastContent(t));
-            setQueue(buildSmartSeedQueue(track, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
+            setQueue(buildSmartSeedQueue(cleanTrack, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
           }
         } else {
           // Strictly isolate queue according to playing content type
           if (isQuran) {
             const quranList = trackList.filter(t => isQuranContent(t) || isRadioTrack(t));
-            setQueue(quranList.length > 0 ? quranList : [track]);
-          } else if (isPodcastContent(track)) {
+            setQueue(quranList.length > 0 ? quranList : [cleanTrack]);
+          } else if (isPodcastContent(cleanTrack)) {
             const podcastList = trackList.filter(isPodcastContent);
-            setQueue(podcastList.length > 0 ? podcastList : [track]);
+            setQueue(podcastList.length > 0 ? podcastList : [cleanTrack]);
           } else {
             const musicList = trackList.filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
-            setQueue(musicList.length > 0 ? musicList : [track]);
+            setQueue(musicList.length > 0 ? musicList : [cleanTrack]);
           }
         }
       } else {
         // No trackList provided: ensure existing queue is strictly segregated
         if (isQuran) {
           const quranQueue = (queueRef.current || []).filter(t => isQuranContent(t) || isRadioTrack(t));
-          setQueue(quranQueue.length > 0 ? quranQueue : (isRadioTrack(track) ? QURAN_LIVE_STATIONS : [track]));
-        } else if (isPodcastContent(track)) {
+          setQueue(quranQueue.length > 0 ? quranQueue : (isRadioTrack(cleanTrack) ? QURAN_LIVE_STATIONS : [cleanTrack]));
+        } else if (isPodcastContent(cleanTrack)) {
           const podcastQueue = (queueRef.current || []).filter(isPodcastContent);
-          setQueue(podcastQueue.length > 0 ? podcastQueue : [track]);
+          setQueue(podcastQueue.length > 0 ? podcastQueue : [cleanTrack]);
         } else {
           const musicQueue = (queueRef.current || []).filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
-          setQueue(musicQueue.length > 0 ? musicQueue : [track]);
+          setQueue(musicQueue.length > 0 ? musicQueue : [cleanTrack]);
         }
       }
 
-      const prevSound = soundRef.current;
-      soundRef.current = null;
-      loadedTrackIdRef.current = null;
-      if (prevSound) {
-        try { prevSound.setOnPlaybackStatusUpdate(null); } catch {}
-      }
-
       const uri = await resolveTrackPlaybackUri({
-        track,
+        track: cleanTrack,
         isVocalOnly: isVocalOnlyRef.current,
         updateVocalStatus,
         signal: abortController.signal,
       });
 
       if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) {
-        if (prevSound) {
-          prevSound.stopAsync().catch(() => {});
-          prevSound.unloadAsync().catch(() => {});
-        }
         return;
       }
       if (!uri) {
-        if (prevSound) {
-          prevSound.stopAsync().catch(() => {});
-          prevSound.unloadAsync().catch(() => {});
-        }
         throw new Error('Audio URI could not be resolved');
       }
 
-      track.resolvedAudioUrl = uri;
-      if (currentTrackRef.current && String(currentTrackRef.current._id || currentTrackRef.current.id) === String(track._id || track.id)) {
+      cleanTrack.resolvedAudioUrl = uri;
+      if (currentTrackRef.current && String(currentTrackRef.current._id || currentTrackRef.current.id) === nextId) {
         currentTrackRef.current.resolvedAudioUrl = uri;
       }
 
       const { sound, status } = await createAudioSound({
         uri,
-        track,
+        track: cleanTrack,
         safeTargetSec,
         volume: volumeRef.current,
         isVocalOnly: isVocalOnlyRef.current,
@@ -340,43 +426,59 @@ export const useAudioPlaybackCore = ({
 
       if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) {
         await sound?.unloadAsync().catch(() => {});
-        if (prevSound) {
-          prevSound.stopAsync().catch(() => {});
-          prevSound.unloadAsync().catch(() => {});
-        }
         return;
       }
 
-      if (prevSound) {
-        prevSound.stopAsync().catch(() => {});
-        prevSound.unloadAsync().catch(() => {});
-      }
-
       soundRef.current = sound;
-      loadedTrackIdRef.current = String(track._id || track.id);
+      loadedTrackIdRef.current = nextId;
       sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
       if (playbackRateRef.current && playbackRateRef.current !== 1.0) {
         await sound.setRateAsync(playbackRateRef.current, true).catch(() => {});
       }
 
-      if (status && status.durationMillis > 1000) {
+      const resolvedTrackDur = isLiveStream ? 0 : sanitizeDuration(cleanTrack.duration, sanitizedDur);
+      if (!isLiveStream && status && status.durationMillis > 1000) {
         const durSec = Math.floor(status.durationMillis / 1000);
         playbackStatusRef.current.duration = durSec;
         progressRef.current.duration = durSec;
+        cleanTrack.duration = durSec;
+        if (currentTrackRef.current) {
+          currentTrackRef.current.duration = durSec;
+        }
         updateAudioProgress({ currentTime: safeTargetSec, duration: durSec });
+        updateMediaNotification(
+          Boolean(autoPlay && shouldBePlayingRef.current),
+          repeatModeRef.current,
+          isShuffleRef.current,
+          isLikedTrack,
+          { ...cleanTrack, currentTime: safeTargetSec, duration: durSec }
+        );
+      } else if (!isLiveStream && resolvedTrackDur > 0 && resolvedTrackDur !== sanitizedDur) {
+        playbackStatusRef.current.duration = resolvedTrackDur;
+        progressRef.current.duration = resolvedTrackDur;
+        cleanTrack.duration = resolvedTrackDur;
+        if (currentTrackRef.current) {
+          currentTrackRef.current.duration = resolvedTrackDur;
+        }
+        updateAudioProgress({ currentTime: safeTargetSec, duration: resolvedTrackDur });
       }
 
       if (autoPlay && shouldBePlayingRef.current) {
         await sound.playAsync().catch(() => {});
         isPlayingRef.current = true;
         setIsPlaying(true);
-        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
+        const finalDur = isLiveStream ? 0 : (playbackStatusRef.current.duration || resolvedTrackDur);
+        updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...cleanTrack,
+          currentTime: safeTargetSec,
+          duration: finalDur,
+        });
         if (typeof broadcastListeningActivity === 'function') {
-          broadcastListeningActivity(track, true, safeTargetSec);
+          broadcastListeningActivity(cleanTrack, true, safeTargetSec);
         }
         if (!Boolean(isRemoteParam) && jamSyncRef?.current?.jamSession && canControlJam()) {
-          jamSyncRef.current.broadcastPlayState?.(true, track, safeTargetSec);
+          jamSyncRef.current.broadcastPlayState?.(true, cleanTrack, safeTargetSec);
         }
       }
     } catch (err) {
@@ -384,7 +486,11 @@ export const useAudioPlaybackCore = ({
         showToast?.(`Playback error: ${err.message || 'Stream unavailable'}`, 'error');
         setIsPlaying(false);
         isPlayingRef.current = false;
-        updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, track);
+        updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...cleanTrack,
+          currentTime: safeTargetSec,
+          duration: isLiveStream ? 0 : sanitizedDur,
+        });
       }
     } finally {
       if (soundLoadIdRef.current === currentLoadId) {
@@ -395,7 +501,7 @@ export const useAudioPlaybackCore = ({
   }, [
     likedTrackIds, repeatModeRef, isShuffleRef, setQueue, updateVocalStatus,
     onPlaybackStatusUpdate, broadcastListeningActivity, showToast, setIsLoading,
-    canControlJam, jamSyncRef
+    setIsPlaying, canControlJam, jamSyncRef
   ]);
 
   playTrackRef.current = playTrack;
@@ -417,11 +523,40 @@ export const useAudioPlaybackCore = ({
     if (isLoadingRef.current && nextPlaying) return;
 
     const curTrack = currentTrackRef.current;
+    const resumePos = playbackStatusRef.current?.currentTime || 0;
     if (!soundRef.current) {
-      const resumePos = playbackStatusRef.current?.currentTime || 0;
       if (curTrack) return playTrack(curTrack, queueRef.current, false, resumePos);
       if (queueRef.current.length > 0) return playTrack(queueRef.current[0], queueRef.current);
       return;
+    }
+
+    const reloadDeadTrack = () => {
+      const deadSound = soundRef.current;
+      soundRef.current = null;
+      loadedTrackIdRef.current = null;
+      disposeSound(deadSound);
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+      if (curTrack) {
+        const tid = String(curTrack._id || curTrack.id || '');
+        if (tid || curTrack.youtubeId) clearStreamCache(tid, curTrack.youtubeId);
+        return playTrack(
+          { ...curTrack, resolvedAudioUrl: null, isRetry: true, _retryDone: false },
+          queueRef.current,
+          true,
+          resumePos
+        );
+      }
+      if (queueRef.current.length > 0) return playTrack(queueRef.current[0], queueRef.current);
+      return undefined;
+    };
+
+    if (nextPlaying) {
+      const st = await soundRef.current.getStatusAsync().catch(() => null);
+      if (isLoadingRef.current) return;
+      if (!st?.isLoaded || st?.error) {
+        return reloadDeadTrack();
+      }
     }
 
     const isLikedTrack = curTrack ? likedTrackIds.some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
@@ -431,26 +566,34 @@ export const useAudioPlaybackCore = ({
     setIsPlaying(nextPlaying);
 
     const curPos = playbackStatusRef.current?.currentTime || 0;
-    const curDur = playbackStatusRef.current?.duration || Number(curTrack?.duration || 240);
+    const isLive = isRadioTrack(curTrack) || Boolean(curTrack?.isLive);
+    const curDur = isLive ? 0 : (playbackStatusRef.current?.duration || sanitizeDuration(curTrack?.duration, 0));
 
     if (nextPlaying) {
-      await soundRef.current.playAsync().catch(() => {});
+      try {
+        const playRes = await soundRef.current?.playAsync();
+        if (!playRes?.isLoaded || playRes?.error || (!playRes.isPlaying && !playRes.isBuffering)) {
+          throw new Error('Sound failed to resume');
+        }
+      } catch {
+        return reloadDeadTrack();
+      }
       saveLastPlayedState(curTrack, queueRef.current, curPos);
       updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
         ...curTrack,
         currentTime: curPos,
         duration: curDur,
       });
-      broadcastListeningActivity(curTrack, true, curPos);
+      broadcastListeningActivity?.(curTrack, true, curPos);
     } else {
-      await soundRef.current.pauseAsync().catch(() => {});
+      await soundRef.current?.pauseAsync().catch(() => {});
       saveLastPlayedState(curTrack, queueRef.current, curPos);
       updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
         ...curTrack,
         currentTime: curPos,
         duration: curDur,
       });
-      broadcastListeningActivity(curTrack, false, curPos);
+      broadcastListeningActivity?.(curTrack, false, curPos);
     }
 
     if (jamSyncRef?.current?.jamSession && canControlJam()) {
@@ -511,7 +654,7 @@ export const useAudioPlaybackCore = ({
 
   const jumpBy = useCallback(async (deltaSecs) => {
     const cur = playbackStatusRef.current?.currentTime || progressRef.current?.currentTime || 0;
-    const dur = playbackStatusRef.current?.duration || progressRef.current?.duration || currentTrackRef.current?.duration || 0;
+    const dur = playbackStatusRef.current?.duration || progressRef.current?.duration || sanitizeDuration(currentTrackRef.current?.duration, 0);
     const target = dur > 0 ? Math.max(0, Math.min(dur, cur + deltaSecs)) : Math.max(0, cur + deltaSecs);
     await seekTo(target);
   }, [seekTo]);

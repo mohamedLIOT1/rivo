@@ -23,6 +23,9 @@ object MediaNotificationBuilder {
     const val LOCKSCREEN_CHANNEL_ID = "rivo_lockscreen_channel"
     const val LOCKSCREEN_NOTIFICATION_ID = 9542
 
+    @Volatile
+    var isLiveStream: Boolean = false
+
     fun createPlaybackChannel(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val playbackChannel = NotificationChannel(
@@ -68,7 +71,8 @@ object MediaNotificationBuilder {
         isLiked: Boolean,
         positionMs: Long,
         durationMs: Long,
-        withFullScreenLock: Boolean
+        withFullScreenLock: Boolean,
+        isLive: Boolean = isLiveStream
     ): Notification {
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -89,17 +93,27 @@ object MediaNotificationBuilder {
         // 1. PlaybackStateCompat
         val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
         val speed = if (isPlaying) 1.0f else 0.0f
-        val playbackActions = PlaybackStateCompat.ACTION_PLAY or
+        val hasValidDuration = !isLive && durationMs > 0L
+        val baseActions = PlaybackStateCompat.ACTION_PLAY or
             PlaybackStateCompat.ACTION_PAUSE or
             PlaybackStateCompat.ACTION_PLAY_PAUSE or
             PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
             PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-            PlaybackStateCompat.ACTION_SEEK_TO or
             PlaybackStateCompat.ACTION_SET_REPEAT_MODE
+        val playbackActions = if (hasValidDuration) {
+            baseActions or PlaybackStateCompat.ACTION_SEEK_TO
+        } else {
+            baseActions
+        }
 
+        val effectivePositionMs = if (isLive) {
+            PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN
+        } else {
+            positionMs.coerceAtLeast(0L)
+        }
         val playbackStateBuilder = PlaybackStateCompat.Builder()
             .setActions(playbackActions)
-            .setState(state, positionMs, speed, SystemClock.elapsedRealtime())
+            .setState(state, effectivePositionMs, speed, SystemClock.elapsedRealtime())
 
         val likeIconRes = if (isLiked) R.drawable.ic_notification_liked else R.drawable.ic_notification_like
         playbackStateBuilder.addCustomAction(
@@ -139,7 +153,7 @@ object MediaNotificationBuilder {
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, artist)
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_DESCRIPTION, "Rivo Music")
 
-        if (durationMs > 0L) {
+        if (!isLive && durationMs > 0L) {
             metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
         }
 
@@ -155,7 +169,7 @@ object MediaNotificationBuilder {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(artist)
-            .setSubText("Rivo")
+            .setSubText(if (isLive) "LIVE" else "Rivo")
             .setContentIntent(contentPendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setPriority(NotificationCompat.PRIORITY_LOW)

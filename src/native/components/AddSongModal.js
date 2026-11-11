@@ -18,6 +18,7 @@ import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
+import { formatDuration, sanitizeDuration } from '../utils/timeUtils';
 
 export default function AddSongModal({ visible, onClose, onSuccess }) {
   const { token, syncUserData } = useUser();
@@ -79,7 +80,7 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
           album: track.album || 'Single',
           cover: track.cover || track.coverUrl,
           audioUrl: track.audioUrl,
-          duration: track.duration || 180,
+          duration: sanitizeDuration(track.duration, 180),
           genre: track.genre || 'Pop',
           source: track.source || 'Online',
           lyrics: track.lyrics || [],
@@ -130,13 +131,6 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
     } finally {
       setLinkLoading(false);
     }
-  };
-
-  const formatDuration = (sec) => {
-    const s = parseInt(sec, 10) || 180;
-    const m = Math.floor(s / 60);
-    const rem = s % 60;
-    return `${m}:${rem < 10 ? '0' : ''}${rem}`;
   };
 
   return (
@@ -232,7 +226,7 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
                             <Clock size={10} color="#6b7280" />
                             <Text style={styles.resultMeta}>
-                              {formatDuration(track.duration)} • {track.source || 'Online'}
+                              {formatDuration(track.duration, 180)} • {track.source || 'Online'}
                             </Text>
                           </View>
                         </View>

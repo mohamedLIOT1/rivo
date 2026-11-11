@@ -3,14 +3,8 @@ import { View, Text, TouchableOpacity, ActivityIndicator, Platform } from 'react
 import { Play, Square, Minus, Plus, RotateCcw } from 'lucide-react-native';
 import WaveformCueBox from './WaveformCueBox';
 import TouchSlider from './TouchSlider';
+import { formatTime } from '../../utils/timeUtils';
 import { deckStyles as styles } from './deckCardStyles';
-
-function formatTime(seconds) {
-  if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
 
 export default function DeckCard({
   deck = 'A',

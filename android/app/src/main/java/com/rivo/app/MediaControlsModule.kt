@@ -62,7 +62,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         val context = reactContext.applicationContext
         val intent = Intent(context, MediaNotificationService::class.java).apply {
             action = MediaNotificationService.ACTION_SHOW
-            copyOptionsToIntent(options, this)
+            copyOptionsToIntent(options, this, isInitialShow = true)
         }
 
         try {
@@ -77,7 +77,11 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
     @ReactMethod
     fun updatePlayback(options: ReadableMap) {
         val context = reactContext.applicationContext
-        val isPlaying = if (options.hasKey("isPlaying")) options.getBoolean("isPlaying") else false
+        val isPlaying = if (options.hasKey("isPlaying") && !options.isNull("isPlaying")) {
+            options.getBoolean("isPlaying")
+        } else {
+            false
+        }
 
         val intent = Intent(context, MediaNotificationService::class.java).apply {
             action = if (MediaNotificationService.instance == null && isPlaying) {
@@ -85,7 +89,7 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
             } else {
                 MediaNotificationService.ACTION_UPDATE
             }
-            copyOptionsToIntent(options, this)
+            copyOptionsToIntent(options, this, isInitialShow = false)
         }
 
         try {
@@ -97,21 +101,68 @@ class MediaControlsModule(private val reactContext: ReactApplicationContext) :
         } catch (_: Throwable) {}
     }
 
-    private fun copyOptionsToIntent(options: ReadableMap, intent: Intent) {
-        if (options.hasKey("title")) intent.putExtra("title", options.getString("title"))
-        if (options.hasKey("artist")) intent.putExtra("artist", options.getString("artist"))
-        if (options.hasKey("coverUrl")) intent.putExtra("coverUrl", options.getString("coverUrl"))
-        if (options.hasKey("isPlaying")) intent.putExtra("isPlaying", options.getBoolean("isPlaying"))
-        if (options.hasKey("repeatMode")) intent.putExtra("repeatMode", options.getString("repeatMode"))
-        else if (options.hasKey("isRepeat")) intent.putExtra("isRepeat", options.getBoolean("isRepeat"))
-        if (options.hasKey("isShuffle")) intent.putExtra("isShuffle", options.getBoolean("isShuffle"))
-        if (options.hasKey("isLiked")) intent.putExtra("isLiked", options.getBoolean("isLiked"))
-        if (options.hasKey("duration")) intent.putExtra("duration", options.getDouble("duration"))
-        if (options.hasKey("currentTime")) intent.putExtra("currentTime", options.getDouble("currentTime"))
+    private fun sanitizeSeconds(rawVal: Double, allowZero: Boolean): Double {
+        if (rawVal.isNaN() || rawVal.isInfinite() || rawVal < 0.0 || (!allowZero && rawVal == 0.0)) {
+            return -1.0
+        }
+        // Threshold 86400s (24h) prevents multi-hour tracks (e.g. 714:59 = 42,899s) from being divided by 1000
+        if (rawVal > 86400.0) {
+            val inSec = kotlin.math.round(rawVal / 1000.0)
+            return if (inSec in 1.0..86400.0) inSec else if (allowZero) 0.0 else -1.0
+        }
+        return rawVal
+    }
+
+    private fun copyOptionsToIntent(options: ReadableMap, intent: Intent, isInitialShow: Boolean = false) {
+        if (options.hasKey("title") && !options.isNull("title")) intent.putExtra("title", options.getString("title"))
+        if (options.hasKey("artist") && !options.isNull("artist")) intent.putExtra("artist", options.getString("artist"))
+        if (options.hasKey("coverUrl") && !options.isNull("coverUrl")) intent.putExtra("coverUrl", options.getString("coverUrl"))
+        if (options.hasKey("isPlaying") && !options.isNull("isPlaying")) intent.putExtra("isPlaying", options.getBoolean("isPlaying"))
+        if (options.hasKey("repeatMode") && !options.isNull("repeatMode")) intent.putExtra("repeatMode", options.getString("repeatMode"))
+        else if (options.hasKey("isRepeat") && !options.isNull("isRepeat")) intent.putExtra("isRepeat", options.getBoolean("isRepeat"))
+        if (options.hasKey("isShuffle") && !options.isNull("isShuffle")) intent.putExtra("isShuffle", options.getBoolean("isShuffle"))
+        if (options.hasKey("isLiked") && !options.isNull("isLiked")) intent.putExtra("isLiked", options.getBoolean("isLiked"))
+
+        val hasIsLive = options.hasKey("isLive") && !options.isNull("isLive")
+        val isLive = if (hasIsLive) options.getBoolean("isLive") else if (isInitialShow) false else MediaNotificationBuilder.isLiveStream
+        if (hasIsLive || isInitialShow) {
+            intent.putExtra("isLive", isLive)
+            MediaNotificationBuilder.isLiveStream = isLive
+        }
+
+        if (isLive) {
+            MediaNotificationService.currentDurationMs = 0L
+            MediaNotificationService.currentPositionMs = 0L
+            intent.putExtra("duration", 0.0)
+            intent.putExtra("currentTime", 0.0)
+            return
+        }
+
+        if (options.hasKey("duration") && !options.isNull("duration")) {
+            val durSec = sanitizeSeconds(options.getDouble("duration"), allowZero = false)
+            if (durSec > 0.0) {
+                intent.putExtra("duration", durSec)
+            } else {
+                MediaNotificationService.currentDurationMs = 0L
+                intent.putExtra("duration", 0.0)
+            }
+        } else if (isInitialShow) {
+            MediaNotificationService.currentDurationMs = 0L
+            intent.putExtra("duration", 0.0)
+        }
+
+        if (options.hasKey("currentTime") && !options.isNull("currentTime")) {
+            val curSec = sanitizeSeconds(options.getDouble("currentTime"), allowZero = true)
+            if (curSec >= 0.0) {
+                intent.putExtra("currentTime", curSec)
+            }
+        }
     }
 
     @ReactMethod
     fun hideNotification() {
+        MediaNotificationBuilder.isLiveStream = false
+        MediaNotificationService.currentDurationMs = 0L
         val context = reactContext.applicationContext
         val intent = Intent(context, MediaNotificationService::class.java).apply {
             action = MediaNotificationService.ACTION_HIDE

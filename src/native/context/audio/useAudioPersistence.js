@@ -3,6 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateMediaNotification } from '../../services/mediaControls';
 import { updateAudioProgress } from '../AudioProgressContext';
 import { reanchorDocumentUri } from '../../services/download/storageManifestService';
+import {
+  prewarmTrackStream,
+  sanitizeDuration,
+  isStreamUrlLikelyExpired,
+} from '../../services/youtubeResolver';
+import { isRadioTrack } from '../../../utils/quranUtils';
 
 export const LAST_PLAYED_TRACK_KEY = 'rivo_last_played_track';
 export const LAST_PLAYED_TRACK_FALLBACK_KEY = 'last_played_track';
@@ -24,11 +30,57 @@ const sanitizeTrackForPersistence = (t) => {
     cover: t.cover,
     coverUrl: t.coverUrl,
     audioUrl: t.audioUrl,
-    duration: t.duration,
+    youtubeId: t.youtubeId,
+    source: t.source,
+    duration: sanitizeDuration(t.duration, 0),
     localAudioUri: t.localAudioUri,
     nativeAudioUri: t.nativeAudioUri,
     isQuran: t.isQuran,
+    isPodcast: t.isPodcast,
+    contentType: t.contentType,
+    isRadio: t.isRadio,
+    isLive: t.isLive,
+    fallbackUrl: t.fallbackUrl,
   };
+};
+
+const sanitizeHydratedTrack = (rawTrack) => {
+  if (!rawTrack || typeof rawTrack !== 'object') return null;
+  if (!rawTrack.title && !rawTrack.id && !rawTrack._id) return null;
+
+  const cleanDuration = sanitizeDuration(rawTrack.duration, 0);
+  const reanchoredAudio = reanchorDocumentUri(rawTrack.audioUrl);
+  const safeAudioUrl = (
+    reanchoredAudio &&
+    typeof reanchoredAudio === 'string' &&
+    (reanchoredAudio.includes('googlevideo.com') || reanchoredAudio.includes('/api/tracks/stream-proxy')) &&
+    isStreamUrlLikelyExpired(reanchoredAudio)
+  )
+    ? ''
+    : reanchoredAudio;
+
+  return {
+    ...rawTrack,
+    localAudioUri: reanchorDocumentUri(rawTrack.localAudioUri),
+    nativeAudioUri: reanchorDocumentUri(rawTrack.nativeAudioUri),
+    audioUrl: safeAudioUrl,
+    resolvedAudioUrl: null,
+    duration: cleanDuration,
+  };
+};
+
+const sanitizeHydratedPosition = (rawPos, trackDuration = 0) => {
+  const num = Number(rawPos);
+  if (!isFinite(num) || isNaN(num) || num <= 0) return 0;
+  let posSec = num;
+  if (posSec > 86400) {
+    const converted = Math.round(posSec / 1000);
+    posSec = converted <= 86400 ? converted : 0;
+  }
+  if (trackDuration > 5 && posSec >= trackDuration - 1) {
+    return 0;
+  }
+  return Math.max(0, posSec);
 };
 
 /**
@@ -91,15 +143,7 @@ export const loadLastPlayedState = async () => {
 
     if (trackJson) {
       try {
-        const parsed = JSON.parse(trackJson);
-        if (parsed && (parsed.title || parsed.id || parsed._id)) {
-          track = {
-            ...parsed,
-            localAudioUri: reanchorDocumentUri(parsed.localAudioUri),
-            nativeAudioUri: reanchorDocumentUri(parsed.nativeAudioUri),
-            audioUrl: reanchorDocumentUri(parsed.audioUrl),
-          };
-        }
+        track = sanitizeHydratedTrack(JSON.parse(trackJson));
       } catch (e) {}
     }
 
@@ -107,25 +151,15 @@ export const loadLastPlayedState = async () => {
       try {
         const parsedQ = JSON.parse(queueJson);
         if (Array.isArray(parsedQ)) {
-          queue = parsedQ
-            .filter((t) => t && (t.title || t.id || t._id))
-            .map((t) => ({
-              ...t,
-              localAudioUri: reanchorDocumentUri(t.localAudioUri),
-              nativeAudioUri: reanchorDocumentUri(t.nativeAudioUri),
-              audioUrl: reanchorDocumentUri(t.audioUrl),
-            }));
+          queue = parsedQ.map(sanitizeHydratedTrack).filter(Boolean);
         }
       } catch (e) {}
     }
 
     if (posStr !== null && posStr !== undefined) {
-      const parsedPos = parseFloat(posStr);
-      if (!isNaN(parsedPos) && parsedPos > 0) {
-        position = parsedPos;
-      }
-    } else if (track && typeof track.currentTime === 'number' && track.currentTime > 0) {
-      position = track.currentTime;
+      position = sanitizeHydratedPosition(parseFloat(posStr), track?.duration || 0);
+    } else if (track && typeof track.currentTime === 'number') {
+      position = sanitizeHydratedPosition(track.currentTime, track?.duration || 0);
     }
 
     if (track && queue.length === 0) {
@@ -155,25 +189,31 @@ export const useAudioPersistence = ({
 
   useEffect(() => {
     let isMounted = true;
+    const abortController = new AbortController();
 
     const hydrate = async () => {
       try {
         const { track, queue, position } = await loadLastPlayedState();
-        if (!isMounted) return;
+        if (!isMounted || abortController.signal.aborted) return;
 
         // Only restore if currentTrack is not yet loaded (cold boot)
         if (track && !currentTrackRef.current) {
-          isHydratedRef.current = true;
-          currentTrackRef.current = track;
-          setCurrentTrack?.(track);
+          const cleanTrack = { ...track, resolvedAudioUrl: null };
+          const cleanQueue = Array.isArray(queue)
+            ? queue.map((item) => (item ? { ...item, resolvedAudioUrl: null } : item)).filter(Boolean)
+            : [];
 
-          if (Array.isArray(queue) && queue.length > 0 && (!queueRef.current || queueRef.current.length === 0)) {
-            queueRef.current = queue;
-            setQueue?.(queue);
+          isHydratedRef.current = true;
+          currentTrackRef.current = cleanTrack;
+          setCurrentTrack?.(cleanTrack);
+
+          if (cleanQueue.length > 0 && (!queueRef.current || queueRef.current.length === 0)) {
+            queueRef.current = cleanQueue;
+            setQueue?.(cleanQueue);
           }
 
-          const safePos = Math.max(0, Number(position) || 0);
-          const safeDur = Number(track.duration || 0);
+          const safePos = sanitizeHydratedPosition(position, cleanTrack.duration);
+          const safeDur = sanitizeDuration(cleanTrack.duration, 0);
 
           if (playbackStatusRef?.current) {
             playbackStatusRef.current.currentTime = safePos;
@@ -192,12 +232,21 @@ export const useAudioPersistence = ({
               isShuffleRef?.current || false,
               false,
               {
-                ...track,
+                ...cleanTrack,
                 currentTime: safePos,
                 duration: safeDur || 240,
               }
             );
           } catch (e) {}
+
+          const hasLocalFile = Boolean(
+            (cleanTrack.localAudioUri && (cleanTrack.localAudioUri.startsWith('file://') || cleanTrack.localAudioUri.startsWith('content://'))) ||
+            (cleanTrack.nativeAudioUri && (cleanTrack.nativeAudioUri.startsWith('file://') || cleanTrack.nativeAudioUri.startsWith('content://')))
+          );
+          const isLiveOrRadio = Boolean(cleanTrack.isRadio || cleanTrack.isLive || isRadioTrack(cleanTrack));
+          if (!hasLocalFile && !isLiveOrRadio && !abortController.signal.aborted) {
+            prewarmTrackStream(cleanTrack, abortController.signal).catch(() => {});
+          }
         }
       } catch (err) {
         // Cold boot hydration fallback
@@ -208,6 +257,7 @@ export const useAudioPersistence = ({
 
     return () => {
       isMounted = false;
+      abortController.abort();
     };
   }, [
     currentTrackRef,

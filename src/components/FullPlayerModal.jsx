@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
-  ChevronDown, ChevronUp, ArrowUp, ArrowDown, ChevronsUp, ChevronsDown,
+  ChevronDown, ChevronsUp, ChevronsDown,
   Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, 
-  Heart, Volume2, VolumeX, Download, Disc, Sparkles, Languages, Loader2,
-  MoreHorizontal, MoreVertical, ListMusic, Mic, Trash2, SlidersHorizontal, CheckCircle2,
-  Edit3, Check, Search, X, Sun, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, Save, GripVertical, BookOpen
+  Heart, Volume2, VolumeX, Download, Disc, Sparkles, Loader2,
+  MoreHorizontal, ListMusic, Mic, Trash2, CheckCircle2,
+  Edit3, Check, Search, X, Moon, Plus, Minus, ListPlus, BookmarkPlus, BookmarkMinus, BookOpen
 } from 'lucide-react';
 import { API_BASE_URL } from '../config';
-import { useAudioPlayer, useAudioProgress } from '../context/AudioContext';
+import { useAudioPlayer } from '../context/AudioContext';
+import { subscribeWebAudioProgress, getWebAudioProgressSnapshot } from '../context/audio/AudioProgressProvider';
 import { useUser } from '../context/UserContext';
 import { useUI } from '../context/UIContext';
 import { useTranslation } from '../context/PreferencesContext';
@@ -18,11 +19,14 @@ import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent, cleanQuranTrackTitle, getQuranReciterName, isRadioTrack } from '../utils/quranUtils';
 import { isPodcastContent } from '../utils/podcastUtils';
-import PodcastPlayerControls, { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
+import { usePodcastResumeProgress } from './podcast/PodcastPlayerControls';
 import { parseLrcLyrics } from '../utils/lrcParser';
-import { normalizeCoverUrl, DEFAULT_COVER_FALLBACK, handleCoverImageError } from '../utils/coverUtils';
+import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 import QuranMushafViewer from './QuranMushafViewer';
 import { detectTrackGenre } from '../utils/tasteAlgorithm';
+import WebQueuePanel from './player/WebQueuePanel';
+import FullPlayerSeekBar from './player/FullPlayerSeekBar';
+import { attachQueueMeta } from '../context/audio/webQueueUtils';
 
 // ── Extract dominant color from an image URL using Canvas ──────────────
 // Works for YouTube thumbnails (no CORS needed via CSS hack approach)
@@ -112,7 +116,7 @@ function FullPlayerModal({
   queue = [],
   openAddToPlaylist,
   onPlayTrack,
-  jamSession,
+  jamSession: propJamSession,
   onAddToJamQueue,
   onRemoveFromJamQueue,
   onSelectArtist,
@@ -130,25 +134,22 @@ function FullPlayerModal({
 }) {
   const isAdmin = isUserAdmin(currentUser);
 
-  // Get audio progress from dedicated context
-  const progress = useAudioProgress();
-  const audioCurrentTime = progress?.currentTime ?? 0;
-  const audioDuration = progress?.duration ?? 210;
-
-  // Get audioRef & isYtTrack directly for frame-perfect lyrics sync
+  // Get audioRef & queue controls (high-frequency progress ticks isolated inside FullPlayerSeekBar)
   const { 
-    audioRef, isYtTrack, playTrack,
+    audioRef, isYtTrack, playTrack, playFromQueue,
     isShuffle: ctxIsShuffle, toggleShuffle: ctxToggleShuffle,
     isRepeat: ctxIsRepeat, repeatMode: ctxRepeatMode, toggleRepeat: ctxToggleRepeat, setIsRepeat,
-    currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, clearQueue: ctxClearQueue,
+    currentQueueIndex: ctxQueueIndex, reorderQueue: ctxReorderQueue, moveQueueItem,
+    clearQueue: ctxClearQueue, clearManualQueue, removeFromQueue: ctxRemoveFromQueue, queueContext,
     togglePlay: ctxTogglePlay, playNextTrack: ctxPlayNextTrack, playPrevTrack: ctxPlayPrevTrack,
     isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
+    jamSession: ctxJamSession,
     vocalIsolationStatus,
     activeTransitions = {},
-
     isLoadingTrack: ctxIsLoadingTrack
-
   } = useAudioPlayer();
+
+  const jamSession = propJamSession || ctxJamSession;
 
   const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
     ? currentQueue[((ctxQueueIndex >= 0 ? ctxQueueIndex : 0) + 1) % currentQueue.length]
@@ -172,16 +173,11 @@ function FullPlayerModal({
   const currentQueueIndex = propQueueIndex >= 0 ? propQueueIndex : (ctxQueueIndex !== undefined ? ctxQueueIndex : -1);
   const reorderQueue = propReorderQueue || ctxReorderQueue;
   const clearQueue = propClearQueue || ctxClearQueue;
+  const removeFromQueue = onRemoveFromQueue || ctxRemoveFromQueue;
 
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
-  // Detect if current track is a YouTube track (Groq doesn't support YouTube on Railway)
-  const isYouTubeTrack = Boolean(
-    currentTrack?.audioUrl &&
-    (currentTrack.audioUrl.includes('youtube.com') || currentTrack.audioUrl.includes('youtu.be'))
-  );
-
-  const { t, isRTL } = useTranslation();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('player');
   const [desktopSideTab, setDesktopSideTab] = useState('lyrics');
   const [isVinylMode, setIsVinylMode] = useState(false);
@@ -210,39 +206,28 @@ function FullPlayerModal({
       if (desktopSideTab === 'lyrics') setDesktopSideTab('queue');
     }
   }, [isCurRadio, isCurPodcast, activeTab, desktopSideTab]);
-  const displayQueue = useMemo(() => {
-    const raw = (queue || []).filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
-    if (!currentTrack) return raw;
-    const curId = String(currentTrack.id || currentTrack._id || '');
-    const hasCur = raw.some(t => String(t.id || t._id) === curId);
-    if (!hasCur && curId) {
-      return [currentTrack, ...raw];
-    }
-    return raw;
-  }, [queue, currentTrack, isCurQuran]);
 
-  // Partition queue into normal playlist queue and AI suggestions with original indices
-  const { normalQueue, aiQueue } = useMemo(() => {
-    const normal = [];
-    const ai = [];
-    (displayQueue || []).forEach((t, origIdx) => {
-      const item = { track: t, originalIndex: origIdx };
-      if (t.isAiSuggestion || t.isSmartShuffle) {
-        ai.push(item);
-      } else {
-        normal.push(item);
-      }
-    });
-    return { normalQueue: normal, aiQueue: ai };
-  }, [displayQueue]);
+  const displayQueue = useMemo(() => {
+    const list = queue || [];
+    const allMatch = list.every(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    const curId = String(currentTrack?.id || currentTrack?._id || '');
+    const hasCur = !curId || list.some(t => String(t?.id || t?._id) === curId);
+    if (allMatch && hasCur) return list;
+
+    const raw = allMatch ? list : list.filter(t => isCurQuran ? isQuranContent(t) : !isQuranContent(t));
+    if (!currentTrack) return attachQueueMeta(raw, list);
+    const rawHasCur = raw.some(t => String(t?.id || t?._id) === curId);
+    if (!rawHasCur && curId) {
+      return attachQueueMeta([currentTrack, ...raw], list);
+    }
+    return attachQueueMeta(raw, list);
+  }, [queue, currentTrack, isCurQuran]);
 
   // Track Action Menu & Toast states
   const [trackMenuTarget, setTrackMenuTarget] = useState(null);
   const [deleteConfirmTrack, setDeleteConfirmTrack] = useState(null);
   const [actionToast, setActionToast] = useState(null);
   const toastTimerRef = useRef(null);
-  const [draggedQueueIdx, setDraggedQueueIdx] = useState(null);
-  const [dragOverQueueIdx, setDragOverQueueIdx] = useState(null);
 
   const showToast = useCallback((msg) => {
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -251,6 +236,29 @@ function FullPlayerModal({
       setActionToast(prev => prev === msg ? null : prev);
       toastTimerRef.current = null;
     }, 2500);
+  }, []);
+
+  const handleQueueTrackClick = useCallback((track, queueIdx = null) => {
+    if (!track) return;
+    const curId = String(currentTrack?.id || currentTrack?._id || '');
+    const clickId = String(track.id || track._id || '');
+    if (curId && curId === clickId && (queueIdx === null || queueIdx === currentQueueIndex)) {
+      if (!isPlaying && togglePlay) {
+        togglePlay();
+      }
+      return;
+    }
+    if (!jamSession && currentQueue?.length > 0 && playFromQueue && queueIdx !== null && queueIdx !== undefined) {
+      playFromQueue(queueIdx, track);
+    } else if (onPlayTrack) {
+      onPlayTrack(track, displayQueue, false, queueIdx);
+    } else if (playTrack) {
+      playTrack(track, displayQueue, false, queueIdx);
+    }
+  }, [currentTrack, currentQueueIndex, isPlaying, togglePlay, jamSession, currentQueue, playFromQueue, onPlayTrack, playTrack, displayQueue]);
+
+  const handleOpenTrackMenu = useCallback((track, index, isAi) => {
+    setTrackMenuTarget({ track, index, isAi });
   }, []);
 
   useEffect(() => {
@@ -318,12 +326,6 @@ function FullPlayerModal({
   }, [isOpen, currentTrack?.cover, currentTrack?.color]);
 
   const trackColor = dynamicColor || currentTrack?.color || '#17a398';
-
-  const rawActiveTime = currentTime !== undefined ? currentTime : (audioCurrentTime || 0);
-  const activeTime = (rawActiveTime > 86400 && Math.round(rawActiveTime / 1000) <= 86400) ? Math.round(rawActiveTime / 1000) : rawActiveTime;
-  const rawActiveDur = (duration !== undefined && duration > 0) ? duration : (audioDuration || currentTrack?.duration || 210);
-  const activeDuration = (rawActiveDur > 86400 && Math.round(rawActiveDur / 1000) <= 86400) ? Math.round(rawActiveDur / 1000) : (rawActiveDur > 0 ? rawActiveDur : 210);
-
 
   const [localLyrics, setLocalLyrics] = useState(null);
   const [isLyricsVerified, setIsLyricsVerified] = useState(false);
@@ -494,18 +496,31 @@ function FullPlayerModal({
     });
   }, [lyrics]);
 
-  // Synchronize activeLyricIndex whenever activeTime (seek, pause, timeupdate) or lyrics change
+  // Synchronize activeLyricIndex on seek/pause/timeupdate without forcing FullPlayerModal re-renders every 500ms
   useEffect(() => {
-    const t = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime))
-      ? audioRef.current.currentTime
-      : activeTime;
-    const idx = getActiveLyricIndexForTime(t);
-    setActiveLyricIndex(prev => (prev === idx ? prev : idx));
-  }, [activeTime, lyrics, getActiveLyricIndexForTime, audioRef, isYtTrack]);
+    const syncAtCurrent = (timeVal) => {
+      const idx = getActiveLyricIndexForTime(timeVal);
+      setActiveLyricIndex(prev => (prev === idx ? prev : idx));
+    };
 
-  // High-frequency 100ms sampler during playback that ONLY triggers a state re-render when the line index actually changes
+    const initialT = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime))
+      ? audioRef.current.currentTime
+      : (currentTime !== undefined ? currentTime : getWebAudioProgressSnapshot().currentTime);
+    syncAtCurrent(initialT);
+
+    if (!isOpen || !lyrics.length) return undefined;
+    return subscribeWebAudioProgress(({ currentTime: nextTime }) => {
+      const realT = (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime))
+        ? audioRef.current.currentTime
+        : nextTime;
+      syncAtCurrent(realT);
+    });
+  }, [isOpen, currentTime, lyrics, getActiveLyricIndexForTime, audioRef, isYtTrack]);
+
+  // High-frequency 100ms sampler ONLY when lyrics view is actually visible and playing
   useEffect(() => {
-    if (!isOpen || !isPlaying || !lyrics.length) return;
+    const isShowingLyrics = activeTab === 'lyrics' || desktopSideTab === 'lyrics';
+    if (!isOpen || !isPlaying || !lyrics.length || !isShowingLyrics) return;
     const interval = setInterval(() => {
       if (audioRef?.current && !isYtTrack && !isNaN(audioRef.current.currentTime)) {
         const curr = audioRef.current.currentTime;
@@ -514,7 +529,7 @@ function FullPlayerModal({
       }
     }, 100);
     return () => clearInterval(interval);
-  }, [isOpen, isPlaying, lyrics, isYtTrack, audioRef, getActiveLyricIndexForTime]);
+  }, [isOpen, isPlaying, lyrics, isYtTrack, audioRef, getActiveLyricIndexForTime, activeTab, desktopSideTab]);
 
   const [isGeneratingLyrics, setIsGeneratingLyrics] = useState(false);
   const [isClearingLyrics, setIsClearingLyrics] = useState(false);
@@ -798,9 +813,7 @@ function FullPlayerModal({
   // ── Download handler with visual feedback ──
   const [isDownloading, setIsDownloading] = useState(false);
 
-  // ── Scrubbing & volume hooks (must be before early return to respect Rules of Hooks) ──
-  const [isScrubbing, setIsScrubbing] = useState(false);
-  const [scrubPercent, setScrubPercent] = useState(0);
+  // ── Volume hook (must be before early return to respect Rules of Hooks) ──
   const [isVolScrubbing, setIsVolScrubbing] = useState(false);
 
   const handleDownloadClick = async () => {
@@ -816,69 +829,6 @@ function FullPlayerModal({
   };
 
   if (!isOpen || !currentTrack) return null;
-
-  const formatTime = (secs) => {
-    if (!secs || isNaN(secs) || secs < 0 || !isFinite(secs)) return '0:00';
-    const sVal = (secs > 86400 && Math.round(secs / 1000) <= 86400) ? Math.round(secs / 1000) : Math.round(secs);
-    const h = Math.floor(sVal / 3600);
-    const m = Math.floor((sVal % 3600) / 60);
-    const s = Math.floor(sVal % 60);
-    if (h > 0) {
-      return `${h}:${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
-    }
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  const realPercent = activeDuration > 0 ? (activeTime / activeDuration) * 100 : 0;
-  const progressPercent = isScrubbing ? scrubPercent : realPercent;
-
-  const seekFromClientX = (clientX, targetRect) => {
-    if (!targetRect || targetRect.width <= 0) return;
-    const clickX = clientX - targetRect.left;
-    const pct = Math.max(0, Math.min(1, clickX / targetRect.width));
-    const targetDuration = (activeDuration && activeDuration > 0) ? activeDuration : (currentTrack?.duration || 210);
-    const targetSec = pct * targetDuration;
-    setScrubPercent(pct * 100);
-    if (seekTo) seekTo(targetSec);
-  };
-
-  const handleSeekPointerDown = (e) => {
-    e.preventDefault();
-    setIsScrubbing(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleSeekPointerMove = (e) => {
-    if (!isScrubbing) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    seekFromClientX(e.clientX, rect);
-  };
-
-  const handleSeekPointerUp = (e) => {
-    if (isScrubbing) {
-      setIsScrubbing(false);
-      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
-    }
-  };
-
-  const handleSeekKeyDown = (e) => {
-    const dur = (activeDuration && activeDuration > 0) ? activeDuration : (currentTrack?.duration || 210);
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (seekTo) seekTo(Math.max(0, activeTime - 5));
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (seekTo) seekTo(Math.min(dur, activeTime + 5));
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      if (seekTo) seekTo(0);
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      if (seekTo) seekTo(dur);
-    }
-  };
 
   const setVolumeFromClientX = (clientX, targetRect) => {
     if (!targetRect || targetRect.width <= 0) return;
@@ -922,24 +872,6 @@ function FullPlayerModal({
     } else if (e.key === 'End') {
       e.preventDefault();
       setVolume(1);
-    }
-  };
-
-  // Play a track from the queue
-  const handleQueueTrackClick = (track, queueIdx = null) => {
-    if (!track) return;
-    const curId = String(currentTrack?.id || currentTrack?._id || '');
-    const clickId = String(track.id || track._id || '');
-    if (curId && curId === clickId) {
-      if (!isPlaying && togglePlay) {
-        togglePlay();
-      }
-      return;
-    }
-    if (onPlayTrack) {
-      onPlayTrack(track, displayQueue, false, queueIdx);
-    } else if (playTrack) {
-      playTrack(track, displayQueue, false, queueIdx);
     }
   };
 
@@ -1049,328 +981,36 @@ function FullPlayerModal({
     </div>
   );
 
-  const renderQueueItem = (track, queueIdx, isAiItem) => {
-    const curId = String(currentTrack?.id || currentTrack?._id || '');
-    const trackId = String(track?.id || track?._id || '');
-    const isSameTrack = Boolean(curId && trackId && curId === trackId);
-    const isActive = isSameTrack && (
-      currentQueueIndex < 0 ||
-      queueIdx === currentQueueIndex ||
-      !displayQueue.some((t, i) => i === currentQueueIndex && String(t?.id || t?._id) === curId)
-    );
-    const isTrackQuran = isQuranContent(track);
-    const title = isTrackQuran ? cleanQuranTrackTitle(track.title) : track.title;
-    const subtitle = isTrackQuran ? getQuranReciterName(track) : (track.artist || 'Unknown Artist');
-    const isDragging = draggedQueueIdx === queueIdx;
-    const isDragOver = dragOverQueueIdx === queueIdx && draggedQueueIdx !== queueIdx;
-
-    return (
-      <div 
-        key={`${track.id || track._id}-${queueIdx}`}
-        data-queue-idx={queueIdx}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.dataTransfer.dropEffect = 'move';
-          if (dragOverQueueIdx !== queueIdx) {
-            setDragOverQueueIdx(queueIdx);
-          }
-        }}
-        onDragLeave={() => {
-          if (dragOverQueueIdx === queueIdx) {
-            setDragOverQueueIdx(null);
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          const fromIdx = Number(e.dataTransfer.getData('text/plain'));
-          if (!isNaN(fromIdx) && fromIdx !== queueIdx && reorderQueue) {
-            reorderQueue(fromIdx, queueIdx);
-            showToast('Queue reordered');
-          }
-          setDraggedQueueIdx(null);
-          setDragOverQueueIdx(null);
-        }}
-        onClick={() => {
-          if (isActive) {
-            if (!isPlaying && togglePlay) {
-              togglePlay();
-            }
-          } else {
-            handleQueueTrackClick(track, queueIdx);
-          }
-        }}
-        className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all brutal-btn group select-none ${
-          isDragging ? 'opacity-35 scale-[0.98]' : ''
-        } ${
-          isDragOver ? 'border-t-2 border-[#17a398] bg-[#17a398]/10 ring-2 ring-[#17a398]/40' : ''
-        } ${
-          isActive 
-            ? isDark 
-              ? 'bg-[#1b2622] border-2 border-[#26c4b7]/50 text-white font-black shadow-[inset_0_1px_0_rgba(255,255,255,0.1)]' 
-              : 'bg-[#ede5d3] brutal-border brutal-shadow-sm font-black' 
-            : isDark 
-              ? 'bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-800 text-zinc-300' 
-              : 'bg-white hover:bg-[#ede5d3] brutal-border'
-        }`}
-      >
-        <div className="relative shrink-0">
-          <img 
-            src={normalizeCoverUrl(track.cover, track)} 
-            alt={title} 
-            className="w-10 h-10 rounded-lg object-cover brutal-border bg-black" 
-            onError={handleCoverImageError}
-          />
-          {isActive ? (
-            <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <Play size={14} fill="currentColor" className="text-white ml-0.5" />
-            </div>
-          )}
-        </div>
-
-        <div className="flex-1 min-w-0 pr-1">
-          <div className="flex items-center gap-1.5">
-            <p className={`text-xs truncate font-display font-black ${
-              isActive ? 'text-[#17a398]' : isDark ? 'text-white' : 'text-[#0b1110]'
-            }`}>
-              {title}
-            </p>
-            {isAiItem && (
-              <span className="shrink-0 px-1 py-0.2 rounded text-[8px] font-mono font-bold bg-[#17a398]/15 text-[#17a398] border border-[#17a398]/30">
-                AI
-              </span>
-            )}
-          </div>
-          {isTrackQuran ? (
-            <span className={`text-[11px] truncate font-mono mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-              {subtitle}
-            </span>
-          ) : (
-            <ArtistLinks
-              track={track}
-              onSelectArtist={onSelectArtist}
-              className={`text-[11px] truncate font-sans mt-0.5 block ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}
-              linkClassName="hover:underline cursor-pointer"
-            />
-          )}
-          {isMixPlayerActive && (
-            <span className="text-[10px] text-emerald-400 font-bold block truncate mt-0.5">
-              🎛️ {mixPlaylistName || 'Mix'}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          {jamSession && onRemoveFromJamQueue && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onRemoveFromJamQueue(queueIdx, track.id || track._id);
-              }}
-              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                isDark ? 'text-zinc-400 hover:text-red-400' : 'text-zinc-600 hover:text-red-600'
-              }`}
-              title="Remove from Jam Queue"
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-
-          {/* 3-Dots Action Menu Trigger */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setTrackMenuTarget({ track, index: queueIdx, isAi: isAiItem });
-            }}
-            className={`p-1.5 sm:p-2 rounded-lg transition-colors cursor-pointer ${
-              isDark 
-                ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' 
-                : 'text-zinc-600 hover:text-black hover:bg-[#ded2bb]'
-            }`}
-            title="Track Options"
-            aria-label="Track Options"
-          >
-            <MoreVertical size={16} />
-          </button>
-
-          {/* Drag & Drop Reorder Grip Handle */}
-          {reorderQueue && displayQueue.length > 1 && (
-            <div 
-              draggable
-              onDragStart={(e) => {
-                e.stopPropagation();
-                e.dataTransfer.setData('text/plain', String(queueIdx));
-                e.dataTransfer.effectAllowed = 'move';
-                setDraggedQueueIdx(queueIdx);
-              }}
-              onDragEnd={() => {
-                setDraggedQueueIdx(null);
-                setDragOverQueueIdx(null);
-              }}
-              onTouchStart={() => {
-                setDraggedQueueIdx(queueIdx);
-              }}
-              onTouchMove={(e) => {
-                const touch = e.touches[0];
-                if (!touch) return;
-                const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                const queueRow = el?.closest('[data-queue-idx]');
-                if (queueRow) {
-                  const targetIdx = Number(queueRow.getAttribute('data-queue-idx'));
-                  if (!isNaN(targetIdx) && targetIdx !== dragOverQueueIdx) {
-                    setDragOverQueueIdx(targetIdx);
-                  }
-                }
-              }}
-              onTouchEnd={() => {
-                if (draggedQueueIdx !== null && dragOverQueueIdx !== null && draggedQueueIdx !== dragOverQueueIdx) {
-                  reorderQueue(draggedQueueIdx, dragOverQueueIdx);
-                  showToast('Queue reordered');
-                }
-                setDraggedQueueIdx(null);
-                setDragOverQueueIdx(null);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className={`p-1.5 rounded-lg transition-colors cursor-grab active:cursor-grabbing select-none touch-none ${
-                isDark ? 'text-zinc-500 hover:text-[#26c4b7] hover:bg-zinc-800' : 'text-zinc-400 hover:text-[#17a398] hover:bg-[#ede5d3]'
-              }`}
-              title="Drag to reorder in queue"
-              aria-label="Drag to reorder"
-            >
-              <GripVertical size={16} />
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderQueue = () => (
-    <div 
-      className="flex-1 overflow-y-auto space-y-4 pb-24 select-none pr-1 min-h-0 w-full"
-      style={{ scrollbarWidth: 'thin' }}
-    >
-      {/* Jam Session Notice (if connected) */}
-      {jamSession && (
-        <div className="p-3 bg-[#17a398]/10 border-2 border-[#17a398] rounded-xl flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#17a398] animate-ping" />
-            <p className={`text-xs font-mono font-bold uppercase ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
-              Jam Session Queue — {displayQueue.length} Tracks
-            </p>
-          </div>
-          <span className="text-[10px] font-mono font-black bg-[#0b1110] text-[#26c4b7] px-2 py-0.5 rounded brutal-border">
-            PIN: {jamSession.code}
-          </span>
-        </div>
-      )}
-
-      {/* ── SECTION 1: Normal / Playlist Queue ── */}
-      <div>
-        <div className={`flex items-center justify-between pb-1.5 border-b-2 border-dashed ${
-          isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
-        } mb-2.5`}>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
-              {(selectedPlaylist && (normalQueue.some(item => item.track.album === selectedPlaylist.name || item.track.playlistTitle === selectedPlaylist.name) || !selectedPlaylist.tracks?.length))
-                ? selectedPlaylist.name 
-                : (jamSession ? `Jam Session (${jamSession.code})` : (isCurQuran ? 'Quran Queue' : 'Queue'))
-              } ({normalQueue.length})
-            </span>
-            {repeatMode !== 'off' && (
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-black ${
-                repeatMode === 'one' 
-                  ? 'bg-[#26c4b7]/20 text-[#26c4b7] border border-[#26c4b7]/40' 
-                  : 'bg-[#10b981]/20 text-[#10b981] border border-[#10b981]/40'
-              } animate-pulse`}>
-                {repeatMode === 'one' ? <Repeat1 size={10} /> : <Repeat size={10} />}
-                {repeatMode === 'one' ? 'REPEAT 1 (CURRENT SONG)' : 'REPEAT ALL (QUEUE)'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {clearQueue && displayQueue.length > 1 && (
-              <button
-                onClick={() => {
-                  clearQueue();
-                  showToast('Queue cleared');
-                }}
-                className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded transition-colors cursor-pointer ${
-                  isDark ? 'text-zinc-400 hover:text-red-400 hover:bg-zinc-800' : 'text-zinc-600 hover:text-red-600 hover:bg-[#ede5d3]'
-                }`}
-                title="Clear queue (keeps current track)"
-              >
-                Clear
-              </button>
-            )}
-            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded ${
-              isDark ? 'bg-zinc-800 text-zinc-300 border border-zinc-700' : 'bg-[#ede5d3] brutal-border text-zinc-700'
-            }`}>
-              {isCurQuran ? 'QURAN' : 'PLAYLIST'}
-            </span>
-          </div>
-        </div>
-
-        {normalQueue.length === 0 ? (
-          <div className={`py-6 text-center text-xs font-mono rounded-xl border border-dashed ${
-            isDark ? 'text-zinc-500 border-zinc-800 bg-zinc-950/40' : 'text-zinc-500 border-zinc-300 bg-zinc-50/50'
-          }`}>
-            No tracks in playlist queue
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {normalQueue.map((item, i) => renderQueueItem(item.track, item.originalIndex, false))}
-          </div>
-        )}
-      </div>
-
-      {/* ── SECTION 2: AI Suggestions Queue ── */}
-      {aiQueue.length > 0 && (
-        <div className="pt-2">
-          <div className={`flex items-center justify-between pb-1.5 border-b-2 border-dashed ${
-            isDark ? 'border-zinc-800' : 'border-[#ded2bb]'
-          } mb-2.5`}>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <Sparkles size={13} className="text-[#26c4b7]" />
-              <span className={`text-[11px] font-mono font-black uppercase tracking-wider ${isDark ? 'text-[#26c4b7]' : 'text-[#082621]'}`}>
-                AI Suggestions ({aiQueue.length})
-              </span>
-              {isRepeat ? (
-                <span className="text-[9px] font-mono font-bold text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30">
-                  ⏸ Paused (Repeat active)
-                </span>
-              ) : (
-                <span className="text-[9px] font-mono font-bold text-[#17a398] bg-[#17a398]/10 px-1.5 py-0.5 rounded border border-[#17a398]/30">
-                  ▶ Plays after playlist
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] font-mono font-black text-[#0b1110] bg-[#17a398] px-1.5 py-0.2 rounded brutal-border">
-              AI DISCOVERY
-            </span>
-          </div>
-
-          <div className="space-y-1.5">
-            {aiQueue.map((item, i) => renderQueueItem(item.track, item.originalIndex, true))}
-          </div>
-        </div>
-      )}
-
-      {displayQueue.length === 0 && (
-        <div className={`py-12 text-center text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
-          <p className="font-bold">The queue is currently empty.</p>
-          <p className={`mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
-            {isCurQuran ? 'Add surahs from the Quran library.' : 'Queue up songs from your library or search.'}
-          </p>
-        </div>
-      )}
-    </div>
+  const queuePanelNode = (
+    <WebQueuePanel
+      displayQueue={displayQueue}
+      currentTrack={currentTrack}
+      currentQueueIndex={currentQueueIndex}
+      queueContext={queueContext}
+      selectedPlaylist={selectedPlaylist}
+      isPlaying={isPlaying}
+      isLoadingTrack={isLoadingTrack}
+      isDark={isDark}
+      isCurQuran={isCurQuran}
+      isCurRadio={isCurRadio}
+      isCurPodcast={isCurPodcast}
+      isShuffle={isShuffle}
+      repeatMode={repeatMode}
+      isRepeat={isRepeat}
+      jamSession={jamSession}
+      onTogglePlay={togglePlay}
+      onQueueTrackClick={handleQueueTrackClick}
+      onReorderQueue={reorderQueue}
+      onMoveQueueItem={moveQueueItem}
+      onRemoveFromQueue={removeFromQueue}
+      onRemoveFromJamQueue={onRemoveFromJamQueue}
+      onClearManualQueue={clearManualQueue}
+      onClearQueue={clearQueue}
+      onOpenTrackMenu={handleOpenTrackMenu}
+      onSelectArtist={onSelectArtist}
+      onShowToast={showToast}
+    />
   );
-
-  if (!isOpen || !currentTrack) return null;
 
   return (
     <div 
@@ -1665,57 +1305,17 @@ function FullPlayerModal({
             </button>
           </div>
 
-          {/* Seekbar */}
-          <div className="mb-2 shrink-0">
-            <div 
-              role="slider"
-              tabIndex={0}
-              aria-label="Seek track"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(progressPercent)}
-              onKeyDown={handleSeekKeyDown}
-              className="relative w-full group h-8 flex items-center cursor-pointer select-none py-2 touch-none focus:outline-none"
-              onPointerDown={handleSeekPointerDown}
-              onPointerMove={handleSeekPointerMove}
-              onPointerUp={handleSeekPointerUp}
-              onPointerCancel={handleSeekPointerUp}
-            >
-              <div className={`w-full h-2 group-hover:h-2.5 rounded-full overflow-hidden transition-all pointer-events-none ${
-                isDark ? 'bg-[#070c0a] border-2 border-[#090e0c] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)]' : 'bg-[#ede5d3] brutal-border'
-              }`}>
-                <div 
-                  className={`h-full bg-[#17a398] group-hover:bg-[#26c4b7] transition-all duration-75 pointer-events-none ${
-                    isDark ? 'shadow-[0_0_10px_rgba(23,163,152,0.4)]' : ''
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}%` }}
-                />
-              </div>
-              <div 
-                className={`absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full pointer-events-none transition-transform group-hover:scale-125 z-10 ${
-                  isDark 
-                    ? 'border-2 border-[#090e0c] shadow-[0_0_8px_rgba(23,163,152,0.5),2px_2px_0px_#050807]' 
-                    : 'brutal-border shadow-md'
-                }`}
-                style={{ left: `calc(${Math.min(100, Math.max(0, isNaN(progressPercent) ? 0 : progressPercent))}% - 7px)` }}
-              />
-            </div>
-            <div className={`flex justify-between items-center mt-1 font-mono font-bold text-[10px] ${
-              isDark ? 'text-[#26c4b7]' : 'text-zinc-600'
-            }`}>
-              {currentTrack?.isLive ? (
-                <div className="flex items-center gap-1.5 text-red-500 font-bold">
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                  <span>LIVE 24/7 BROADCAST</span>
-                </div>
-              ) : (
-                <>
-                  <span className="tabular-nums">{formatTime(activeTime)}</span>
-                  <span className="tabular-nums">{formatTime(activeDuration)}</span>
-                </>
-              )}
-            </div>
-          </div>
+          {/* Seekbar & Podcast Controls (isolated from FullPlayerModal re-renders) */}
+          <FullPlayerSeekBar
+            currentTrack={currentTrack}
+            seekTo={seekTo}
+            isDark={isDark}
+            isCurPodcast={isCurPodcast}
+            audioRef={audioRef}
+            isPlaying={isPlaying}
+            propCurrentTime={currentTime}
+            propDuration={duration}
+          />
 
           {/* Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) */}
           {!isCurQuran && vocalIsolationStatus?.isProcessing && (
@@ -1736,18 +1336,6 @@ function FullPlayerModal({
                 />
               </div>
             </div>
-          )}
-
-          {isCurPodcast && (
-            <PodcastPlayerControls
-              audioRef={audioRef}
-              currentTrack={currentTrack}
-              currentTime={currentTime}
-              duration={duration}
-              seekTo={seekTo}
-              compact={false}
-              isDark={isDark}
-            />
           )}
 
           {/* Mechanical Transport Controls */}
@@ -2078,7 +1666,7 @@ function FullPlayerModal({
           <div className={`lg:hidden flex-1 flex flex-col overflow-hidden w-full max-w-md mx-auto min-h-0 ${
             isDark ? 'bg-[#101514] text-[#fdfbf7] border-2 border-zinc-700' : 'bg-[#fdfbf7] text-[#0b1110] brutal-border-thick'
           } rounded-2xl p-4 brutal-shadow-lg`}>
-            {renderQueue()}
+            {queuePanelNode}
           </div>
         )}
 
@@ -2168,7 +1756,7 @@ function FullPlayerModal({
               ) : (
                 renderLyrics(desktopLyricsContainerRef, desktopLyricRefs)
               )
-            ) : renderQueue()}
+            ) : queuePanelNode}
           </div>
         </div>
 
@@ -2271,12 +1859,19 @@ function FullPlayerModal({
 
 
 
-              {/* Adjust in Queue: Move to Top */}
-              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index > 0 && (
+              {/* Adjust in Queue: Move to Top of Upcoming */}
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index !== currentQueueIndex && (
                 <button
                   onClick={() => {
-                    reorderQueue(trackMenuTarget.index, 0);
-                    showToast('Moved to top of queue');
+                    if (moveQueueItem) {
+                      moveQueueItem(trackMenuTarget.index, 'top');
+                    } else {
+                      const targetTop = currentQueueIndex >= 0 && trackMenuTarget.index > currentQueueIndex
+                        ? Math.min(displayQueue.length - 1, currentQueueIndex + 1)
+                        : 0;
+                      reorderQueue(trackMenuTarget.index, targetTop);
+                    }
+                    showToast('Moved to top of upcoming queue');
                     setTrackMenuTarget(null);
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
@@ -2284,15 +1879,19 @@ function FullPlayerModal({
                   }`}
                 >
                   <ChevronsUp size={16} className="text-[#26c4b7]" />
-                  <span>Move to Top of Queue</span>
+                  <span>Move to Next Up</span>
                 </button>
               )}
 
               {/* Adjust in Queue: Move to Bottom */}
-              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index < displayQueue.length - 1 && (
+              {reorderQueue && trackMenuTarget.index !== undefined && trackMenuTarget.index < displayQueue.length - 1 && trackMenuTarget.index !== currentQueueIndex && (
                 <button
                   onClick={() => {
-                    reorderQueue(trackMenuTarget.index, displayQueue.length - 1);
+                    if (moveQueueItem) {
+                      moveQueueItem(trackMenuTarget.index, 'bottom');
+                    } else {
+                      reorderQueue(trackMenuTarget.index, displayQueue.length - 1);
+                    }
                     showToast('Moved to bottom of queue');
                     setTrackMenuTarget(null);
                   }}
@@ -2322,12 +1921,12 @@ function FullPlayerModal({
                 </button>
               )}
 
-              {/* Add to Queue: End of Queue */}
+              {/* Add to Queue: End of Next in Queue */}
               {onAddToQueue && (
                 <button
                   onClick={() => {
                     onAddToQueue(trackMenuTarget.track, false);
-                    showToast(jamSession ? 'Added to Jam queue' : (currentTrack ? 'Added to end of queue' : 'Now playing'));
+                    showToast(jamSession ? 'Added to Jam queue' : (currentTrack ? 'Added to queue' : 'Now playing'));
                     setTrackMenuTarget(null);
                   }}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors cursor-pointer ${
@@ -2340,11 +1939,11 @@ function FullPlayerModal({
               )}
 
               {/* Remove from Queue */}
-              {onRemoveFromQueue && (
+              {removeFromQueue && trackMenuTarget.index !== currentQueueIndex && (
                 <button
                   onClick={() => {
                     const idxOrId = trackMenuTarget.index !== undefined ? trackMenuTarget.index : (trackMenuTarget.track.id || trackMenuTarget.track._id);
-                    onRemoveFromQueue(idxOrId);
+                    removeFromQueue(idxOrId);
                     showToast('Removed from queue');
                     setTrackMenuTarget(null);
                   }}

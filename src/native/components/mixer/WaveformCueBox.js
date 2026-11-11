@@ -1,13 +1,7 @@
 import React, { useRef, useMemo } from 'react';
 import { View, Text, PanResponder } from 'react-native';
+import { formatTime } from '../../utils/timeUtils';
 import { styles } from './miniMixerStyles';
-
-function formatTime(seconds) {
-  if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-}
 
 /**
  * Memoized peak bars view: prevents re-rendering all 75 bars during high-frequency cue scrubbing

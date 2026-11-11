@@ -9,6 +9,7 @@
     BOOL _hasListeners;
     BOOL _remoteCommandsConfigured;
     BOOL _audioSessionConfigured;
+    BOOL _isCurrentLive;
     NSString *_currentCoverUrl;
     MPMediaItemArtwork *_currentArtwork;
 }
@@ -33,6 +34,10 @@ RCT_EXPORT_MODULE(RivoMediaControls);
 
 - (instancetype)init {
     if (self = [super init]) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                                 selector:@selector(handleAudioSessionInterruption:)
+                                                     name:AVAudioSessionInterruptionNotification
+                                                   object:[AVAudioSession sharedInstance]];
         dispatch_async(dispatch_get_main_queue(), ^{
             [self configureAudioSession];
             [self setupRemoteCommands];
@@ -41,27 +46,60 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     return self;
 }
 
+- (void)dealloc {
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)handleAudioSessionInterruption:(NSNotification *)notification {
+    NSDictionary *userInfo = notification.userInfo;
+    NSNumber *typeValue = userInfo[AVAudioSessionInterruptionTypeKey];
+    if (!typeValue) return;
+
+    AVAudioSessionInterruptionType type = (AVAudioSessionInterruptionType)[typeValue unsignedIntegerValue];
+    if (type == AVAudioSessionInterruptionTypeBegan) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy];
+            if (now) {
+                now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
+                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+            }
+        });
+        [self sendActionSafely:@"interruption_began"];
+    } else if (type == AVAudioSessionInterruptionTypeEnded) {
+        NSNumber *optionsValue = userInfo[AVAudioSessionInterruptionOptionKey];
+        AVAudioSessionInterruptionOptions options = optionsValue ? (AVAudioSessionInterruptionOptions)[optionsValue unsignedIntegerValue] : 0;
+        BOOL shouldResume = (options & AVAudioSessionInterruptionOptionShouldResume) != 0;
+        if (shouldResume) {
+            @try {
+                [[AVAudioSession sharedInstance] setActive:YES error:nil];
+            } @catch (NSException *e) {}
+            [self sendActionSafely:@"interruption_ended_resume"];
+        } else {
+            [self sendActionSafely:@"interruption_ended"];
+        }
+    }
+}
+
 - (void)configureAudioSession {
     if (_audioSessionConfigured) return;
     _audioSessionConfigured = YES;
     @try {
         AVAudioSession *session = [AVAudioSession sharedInstance];
         NSError *categoryError = nil;
-        AVAudioSessionCategoryOptions options = AVAudioSessionCategoryOptionAllowBluetooth |
-                                                AVAudioSessionCategoryOptionAllowBluetoothA2DP;
-        if (@available(iOS 10.0, *)) {
-            options |= AVAudioSessionCategoryOptionAllowAirPlay;
-        }
 
         [session setCategory:AVAudioSessionCategoryPlayback
-                 withOptions:options
+                        mode:AVAudioSessionModeDefault
+                     options:0
                        error:&categoryError];
 
         if (categoryError) {
-            NSLog(@"[RivoMediaControls] setCategory error: %@", categoryError.localizedDescription);
+            NSError *fallbackError = nil;
+            [session setCategory:AVAudioSessionCategoryPlayback error:&fallbackError];
+            if (fallbackError) {
+                NSLog(@"[RivoMediaControls] setCategory error: %@", fallbackError.localizedDescription);
+            }
         }
 
-        [session setMode:AVAudioSessionModeDefault error:nil];
         [session setActive:YES error:nil];
         [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     } @catch (NSException *e) {
@@ -86,6 +124,7 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     _remoteCommandsConfigured = YES;
 
     MPRemoteCommandCenter *center = [MPRemoteCommandCenter sharedCommandCenter];
+    __weak typeof(self) weakSelf = self;
 
     // Remove any previously registered targets to prevent duplicate handler invocation
     [center.playCommand removeTarget:nil];
@@ -109,30 +148,36 @@ RCT_EXPORT_MODULE(RivoMediaControls);
     // Play Command
     [center.playCommand setEnabled:YES];
     [center.playCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
         dispatch_async(dispatch_get_main_queue(), ^{
             NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
             now[MPNowPlayingInfoPropertyPlaybackRate] = @(1.0);
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-        [self sendActionSafely:@"play"];
+        [strongSelf sendActionSafely:@"play"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Pause Command
     [center.pauseCommand setEnabled:YES];
     [center.pauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
         dispatch_async(dispatch_get_main_queue(), ^{
             NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
             now[MPNowPlayingInfoPropertyPlaybackRate] = @(0.0);
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-        [self sendActionSafely:@"pause"];
+        [strongSelf sendActionSafely:@"pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Toggle Play/Pause Command
     [center.togglePlayPauseCommand setEnabled:YES];
     [center.togglePlayPauseCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
         dispatch_async(dispatch_get_main_queue(), ^{
             NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
             double currentRate = [now[MPNowPlayingInfoPropertyPlaybackRate] doubleValue];
@@ -140,53 +185,83 @@ RCT_EXPORT_MODULE(RivoMediaControls);
             now[MPNowPlayingInfoPropertyPlaybackRate] = willPlay ? @(1.0) : @(0.0);
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
         });
-        [self sendActionSafely:@"play_pause"];
+        [strongSelf sendActionSafely:@"play_pause"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Next Track Command
     [center.nextTrackCommand setEnabled:YES];
     [center.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self sendActionSafely:@"next"];
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
+        [strongSelf sendActionSafely:@"next"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Previous Track Command
     [center.previousTrackCommand setEnabled:YES];
     [center.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self sendActionSafely:@"prev"];
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
+        [strongSelf sendActionSafely:@"prev"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Scrub / Seek Command (Position Slider on Lock Screen and Dynamic Island)
     [center.changePlaybackPositionCommand setEnabled:YES];
     [center.changePlaybackPositionCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        MPChangePlaybackPositionCommandEvent *posEvent = (MPChangePlaybackPositionCommandEvent *)event;
-        if (posEvent) {
-            double targetSecs = posEvent.positionTime;
-            dispatch_async(dispatch_get_main_queue(), ^{
-                NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
-                now[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(targetSecs);
-                [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
-            });
-            [self sendActionSafely:[NSString stringWithFormat:@"seek:%f", targetSecs]];
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf || strongSelf->_isCurrentLive) {
+            return MPRemoteCommandHandlerStatusCommandFailed;
         }
+        if (![event isKindOfClass:[MPChangePlaybackPositionCommandEvent class]]) {
+            return MPRemoteCommandHandlerStatusCommandFailed;
+        }
+        MPChangePlaybackPositionCommandEvent *posEvent = (MPChangePlaybackPositionCommandEvent *)event;
+        double targetSecs = posEvent.positionTime;
+        if (isnan(targetSecs) || isinf(targetSecs) || targetSecs < 0.0) {
+            targetSecs = 0.0;
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSMutableDictionary *now = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+            now[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(targetSecs);
+            [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = now;
+        });
+        [strongSelf sendActionSafely:[NSString stringWithFormat:@"seek:%f", targetSecs]];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 
     // Like Command
     [center.likeCommand setEnabled:YES];
     [center.likeCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent * _Nonnull event) {
-        [self sendActionSafely:@"like"];
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return MPRemoteCommandHandlerStatusCommandFailed;
+        [strongSelf sendActionSafely:@"like"];
         return MPRemoteCommandHandlerStatusSuccess;
     }];
 }
 
-RCT_EXPORT_METHOD(showNotification:(NSDictionary *)options) {
-    [self updatePlayback:options];
+static double sanitizePlaybackSeconds(id rawValue, BOOL allowZero) {
+    if (rawValue == nil || [rawValue isKindOfClass:[NSNull class]] || ![rawValue respondsToSelector:@selector(doubleValue)]) {
+        return -1.0;
+    }
+    double val = [rawValue doubleValue];
+    if (isnan(val) || isinf(val) || val < 0.0 || (!allowZero && val == 0.0)) {
+        return -1.0;
+    }
+    // Convert millisecond inputs (> 24h) to seconds without truncating valid multi-hour tracks (e.g. 714:59 = 42,899s)
+    if (val > 86400.0) {
+        double inSec = round(val / 1000.0);
+        if (inSec > 0.0 && inSec <= 86400.0) {
+            return inSec;
+        }
+        return -1.0;
+    }
+    return val;
 }
 
-RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
+- (void)applyPlaybackOptions:(NSDictionary *)options isInitialShow:(BOOL)isInitialShow {
+    if (!options || ![options isKindOfClass:[NSDictionary class]]) return;
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
             [self configureAudioSession];
@@ -199,42 +274,83 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
             }
 
             if (!isLockscreenEnabled) {
+                self->_isCurrentLive = NO;
                 [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
                 return;
             }
 
-            BOOL isPlaying = [options[@"isPlaying"] boolValue];
+            id rawIsPlaying = options[@"isPlaying"];
+            BOOL isPlaying = (rawIsPlaying != nil && ![rawIsPlaying isKindOfClass:[NSNull class]] && [rawIsPlaying respondsToSelector:@selector(boolValue)])
+                ? [rawIsPlaying boolValue]
+                : NO;
+
             NSMutableDictionary *nowPlaying = [[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo mutableCopy] ?: [NSMutableDictionary dictionary];
+            NSString *prevTitle = nowPlaying[MPMediaItemPropertyTitle];
+            NSString *prevArtist = nowPlaying[MPMediaItemPropertyArtist];
+            BOOL prevIsLive = [nowPlaying[MPNowPlayingInfoPropertyIsLiveStream] boolValue];
+
+            id rawTitle = options[@"title"];
+            NSString *incomingTitle = ([rawTitle isKindOfClass:[NSString class]]) ? (NSString *)rawTitle : nil;
+            id rawArtist = options[@"artist"];
+            NSString *incomingArtist = ([rawArtist isKindOfClass:[NSString class]]) ? (NSString *)rawArtist : nil;
+
+            BOOL trackChanged = NO;
+            if (incomingTitle && incomingTitle.length > 0 && prevTitle && ![incomingTitle isEqualToString:prevTitle]) {
+                trackChanged = YES;
+            }
+            if (incomingArtist && incomingArtist.length > 0 && prevArtist && ![incomingArtist isEqualToString:prevArtist]) {
+                trackChanged = YES;
+            }
 
             // Metadata for Lock Screen & Dynamic Island (Now Playing Widget)
             nowPlaying[MPMediaItemPropertyMediaType] = @(MPMediaTypeMusic);
-            nowPlaying[MPNowPlayingInfoPropertyIsLiveStream] = @(NO);
 
-            NSString *title = options[@"title"];
-            nowPlaying[MPMediaItemPropertyTitle] = (title && title.length > 0) ? title : @"Rivo Music";
+            id rawIsLive = options[@"isLive"];
+            BOOL hasIsLive = (rawIsLive != nil && ![rawIsLive isKindOfClass:[NSNull class]] && [rawIsLive respondsToSelector:@selector(boolValue)]);
+            BOOL isLive = hasIsLive ? [rawIsLive boolValue] : ((isInitialShow || trackChanged) ? NO : prevIsLive);
+            self->_isCurrentLive = isLive;
+            nowPlaying[MPNowPlayingInfoPropertyIsLiveStream] = @(isLive);
 
-            NSString *artist = options[@"artist"];
-            nowPlaying[MPMediaItemPropertyArtist] = (artist && artist.length > 0) ? artist : @"Rivo";
+            [MPRemoteCommandCenter sharedCommandCenter].changePlaybackPositionCommand.enabled = !isLive;
+
+            if (incomingTitle && incomingTitle.length > 0) {
+                nowPlaying[MPMediaItemPropertyTitle] = incomingTitle;
+            } else if (!prevTitle || prevTitle.length == 0) {
+                nowPlaying[MPMediaItemPropertyTitle] = @"Rivo Music";
+            }
+
+            if (incomingArtist && incomingArtist.length > 0) {
+                nowPlaying[MPMediaItemPropertyArtist] = incomingArtist;
+            } else if (!prevArtist || prevArtist.length == 0) {
+                nowPlaying[MPMediaItemPropertyArtist] = @"Rivo";
+            }
 
             nowPlaying[MPMediaItemPropertyAlbumTitle] = @"Rivo Music";
-
             nowPlaying[MPNowPlayingInfoPropertyPlaybackRate] = isPlaying ? @(1.0) : @(0.0);
             nowPlaying[MPNowPlayingInfoPropertyDefaultPlaybackRate] = @(1.0);
 
-            double duration = [options[@"duration"] doubleValue];
-            if (duration > 10000.0) duration = round(duration / 1000.0);
-            nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration > 0 ? duration : 240.0);
+            if (isLive) {
+                [nowPlaying removeObjectForKey:MPMediaItemPropertyPlaybackDuration];
+                [nowPlaying removeObjectForKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+            } else {
+                double duration = sanitizePlaybackSeconds(options[@"duration"], NO);
+                if (duration > 0.0) {
+                    nowPlaying[MPMediaItemPropertyPlaybackDuration] = @(duration);
+                } else if (isInitialShow || trackChanged || prevIsLive || !nowPlaying[MPMediaItemPropertyPlaybackDuration]) {
+                    [nowPlaying removeObjectForKey:MPMediaItemPropertyPlaybackDuration];
+                }
 
-            if (options[@"currentTime"] != nil && ![options[@"currentTime"] isKindOfClass:[NSNull class]]) {
-                double currentTime = [options[@"currentTime"] doubleValue];
-                if (currentTime > 10000.0) currentTime = round(currentTime / 1000.0);
-                if (currentTime >= 0) {
+                double currentTime = sanitizePlaybackSeconds(options[@"currentTime"], YES);
+                if (currentTime >= 0.0) {
                     nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(currentTime);
+                } else if (isInitialShow || trackChanged || prevIsLive) {
+                    nowPlaying[MPNowPlayingInfoPropertyElapsedPlaybackTime] = @(0.0);
                 }
             }
 
             // Handle Artwork
-            NSString *coverUrl = options[@"coverUrl"];
+            id rawCoverUrl = options[@"coverUrl"];
+            NSString *coverUrl = ([rawCoverUrl isKindOfClass:[NSString class]]) ? (NSString *)rawCoverUrl : nil;
             if (coverUrl && coverUrl.length > 0) {
                 UIImage *cachedImg = [RivoArtworkLoader cachedImageForSource:coverUrl];
                 if (cachedImg) {
@@ -246,8 +362,11 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                     nowPlaying[MPMediaItemPropertyArtwork] = artwork;
                 } else if (![coverUrl isEqualToString:self->_currentCoverUrl]) {
                     self->_currentCoverUrl = [coverUrl copy];
-                    if (self->_currentArtwork) {
+                    if (self->_currentArtwork && !trackChanged) {
                         nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
+                    } else if (trackChanged) {
+                        self->_currentArtwork = nil;
+                        [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
                     }
 
                     [RivoArtworkLoader loadImageWithSource:coverUrl completion:^(UIImage * _Nullable loadedImg) {
@@ -264,7 +383,7 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
                 } else if (self->_currentArtwork) {
                     nowPlaying[MPMediaItemPropertyArtwork] = self->_currentArtwork;
                 }
-            } else {
+            } else if (rawCoverUrl != nil || isInitialShow || trackChanged) {
                 self->_currentCoverUrl = nil;
                 self->_currentArtwork = nil;
                 [nowPlaying removeObjectForKey:MPMediaItemPropertyArtwork];
@@ -277,9 +396,18 @@ RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
     });
 }
 
+RCT_EXPORT_METHOD(showNotification:(NSDictionary *)options) {
+    [self applyPlaybackOptions:options isInitialShow:YES];
+}
+
+RCT_EXPORT_METHOD(updatePlayback:(NSDictionary *)options) {
+    [self applyPlaybackOptions:options isInitialShow:NO];
+}
+
 RCT_EXPORT_METHOD(hideNotification) {
     dispatch_async(dispatch_get_main_queue(), ^{
         @try {
+            self->_isCurrentLive = NO;
             self->_currentCoverUrl = nil;
             self->_currentArtwork = nil;
             [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;

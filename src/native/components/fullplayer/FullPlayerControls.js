@@ -6,15 +6,9 @@ import {
   RotateCcw, RotateCw,
 } from 'lucide-react-native';
 import { useAudioProgress } from '../../context/AudioProgressContext';
+import { formatTime, sanitizeDuration } from '../../utils/timeUtils';
 import { controlStyles as styles } from './fullPlayerControlsStyles';
 import { colors } from './fullPlayerStyles';
-
-const formatTime = (secs) => {
-  const s = Math.max(0, Math.floor(Number(secs) || 0));
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return `${m}:${rem < 10 ? '0' : ''}${rem}`;
-};
 
 export const FullPlayerControls = React.memo(function FullPlayerControls({
   currentTrack,
@@ -59,7 +53,9 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
   const seekbarLayoutRef = useRef({ x: 32, width: width - 64 });
 
   const isLiveRadio = Boolean(currentTrack?.isLive || isCurRadio);
-  const effectiveDuration = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
+  const effectiveDuration = (duration && duration > 0)
+    ? sanitizeDuration(duration, 240)
+    : sanitizeDuration(currentTrack?.duration, 240);
   const progressPercent = Math.min(100, Math.max(0, progress * 100));
 
   const seekPanResponder = useMemo(() => PanResponder.create({
@@ -75,10 +71,9 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
       }
       touchX = Math.max(0, Math.min(barW, touchX));
       const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
       setIsScrubbing(true);
       setScrubPercent(pct * 100);
-      setScrubTime(Math.round(pct * effDur));
+      setScrubTime(Math.round(pct * effectiveDuration));
     },
     onPanResponderMove: (evt) => {
       const pageX = evt.nativeEvent.pageX;
@@ -90,9 +85,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
       }
       touchX = Math.max(0, Math.min(barW, touchX));
       const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
       setScrubPercent(pct * 100);
-      setScrubTime(Math.round(pct * effDur));
+      setScrubTime(Math.round(pct * effectiveDuration));
     },
     onPanResponderRelease: (evt) => {
       const pageX = evt.nativeEvent.pageX;
@@ -104,8 +98,7 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
       }
       touchX = Math.max(0, Math.min(barW, touchX));
       const pct = Math.max(0, Math.min(1, touchX / barW));
-      const effDur = (duration && duration > 0) ? duration : Number(currentTrack?.duration || 240);
-      const targetSec = Math.max(0, Math.min(effDur, Math.round(pct * effDur)));
+      const targetSec = Math.max(0, Math.min(effectiveDuration, Math.round(pct * effectiveDuration)));
       setScrubPercent(pct * 100);
       setScrubTime(targetSec);
       if (typeof seekTo === 'function') {
@@ -118,7 +111,7 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
     onPanResponderTerminate: () => {
       setIsScrubbing(false);
     }
-  }), [isLiveRadio, duration, currentTrack?.duration, seekTo]);
+  }), [isLiveRadio, effectiveDuration, seekTo]);
 
   const handleVolumePress = useCallback((evt) => {
     const touchX = evt.nativeEvent.locationX;

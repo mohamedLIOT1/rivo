@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useUI } from '../context/UIContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useJam } from '../context/JamContext';
@@ -166,6 +166,18 @@ export default function AppModals({
     setIsJamOpen(false);
   };
 
+  const modalQueue = useMemo(() => {
+    const isCurQ = isQuranContent(currentTrack);
+    if (!jamSession && currentQueue?.length > 0) {
+      const allMatch = currentQueue.every(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
+      if (allMatch) return currentQueue;
+    }
+    const rawQ = jamSession
+      ? (jamSession.queue || [])
+      : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks).slice(0, 60));
+    return rawQ.filter(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
+  }, [currentTrack, jamSession, currentQueue, quranTracks, musicTracks]);
+
   return (
     <>
       <FullPlayerModal
@@ -187,11 +199,8 @@ export default function AppModals({
         isRepeat={isRepeat}
         repeatMode={repeatMode}
         toggleRepeat={toggleRepeat}
-        queue={(() => {
-          const isCurQ = isQuranContent(currentTrack);
-          const rawQ = jamSession ? (jamSession.queue || []) : (currentQueue?.length > 0 ? currentQueue : (isCurQ ? quranTracks : musicTracks));
-          return rawQ.filter(t => isCurQ ? isQuranContent(t) : !isQuranContent(t));
-        })()}
+        queue={modalQueue}
+        jamSession={jamSession}
         onRemoveFromJamQueue={removeFromJamQueue}
         openAddToPlaylist={(targetTrack) => {
           setAddToPlaylistTarget(targetTrack || null);

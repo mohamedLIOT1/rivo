@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Rivo",
-  "version": "2.2.0",
+  "version": "2.4.10",
   "identifier": "com.rivo.desktop",
   "mainBinaryName": "Rivo",
   "build": {
@@ -65,7 +65,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxNTIzNTA2NENDNDQ4QTcKUldTblNNUk1CalZTc1hycUVESDVDVEJ0d2Rsa2luRFd4Q2JjUVF6dHphalpPTFNsbXY5WVM0RTAK",
       "endpoints": [
-        "https://github.com/WhooAre-you/Rivo/releases/latest/download/windows-update.json",
+        "https://github.com/mohamedLIOT1/rivo/releases/latest/download/windows-update.json",
         "https://rivo-m.duckdns.org/downloads/windows-update.json"
       ]
     }
