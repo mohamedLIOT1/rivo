@@ -1,10 +1,18 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { translate, SUPPORTED_LANGUAGES, DEFAULT_LANGUAGE } from '../i18n';
 import { useUser } from './UserContext';
 
 const LANGUAGE_STORAGE_KEY = '@rivo_language_preference';
 const LEGACY_STORAGE_KEY = '@rivo_language';
+export const LITE_MODE_STORAGE_KEY = '@rivo_lite_mode';
+
+export const getDefaultLiteMode = () => {
+  if (Platform.OS !== 'android') return false;
+  const apiLevel = Number(Platform.Version);
+  return Number.isFinite(apiLevel) && apiLevel > 0 && apiLevel <= 27;
+};
 
 export const LocalizationContext = createContext({
   language: DEFAULT_LANGUAGE,
@@ -16,11 +24,17 @@ export const LocalizationContext = createContext({
   setLanguage: () => {},
   t: (key, params) => key,
   isLanguageLoaded: false,
+  isLiteMode: getDefaultLiteMode(),
+  isLowEndAndroid: getDefaultLiteMode(),
+  setLiteMode: () => {},
+  toggleLiteMode: () => {},
 });
 
 export const LocalizationProvider = ({ children }) => {
+  const isLowEndAndroid = useMemo(() => getDefaultLiteMode(), []);
   const [language, setLanguageState] = useState(DEFAULT_LANGUAGE);
   const [isLanguageLoaded, setIsLanguageLoaded] = useState(false);
+  const [isLiteMode, setIsLiteModeState] = useState(isLowEndAndroid);
 
   // Safely extract UserContext if wrapped inside UserProvider
   let currentUser = null;
@@ -35,15 +49,16 @@ export const LocalizationProvider = ({ children }) => {
     // LocalizationProvider can function independently if mounted outside UserProvider
   }
 
-  // 1. Initial Storage Hydration
+  // 1. Initial Storage Hydration (Language + Lite Mode)
   useEffect(() => {
     let isMounted = true;
 
-    const loadLanguage = async () => {
+    const loadPreferences = async () => {
       try {
-        const [storedLang, legacyLang] = await Promise.all([
+        const [storedLang, legacyLang, storedLite] = await Promise.all([
           AsyncStorage.getItem(LANGUAGE_STORAGE_KEY),
           AsyncStorage.getItem(LEGACY_STORAGE_KEY),
+          AsyncStorage.getItem(LITE_MODE_STORAGE_KEY),
         ]);
 
         const saved = storedLang || legacyLang;
@@ -54,9 +69,17 @@ export const LocalizationProvider = ({ children }) => {
           } else if (currentUser?.preferredLanguage === 'ar' || currentUser?.preferredLanguage === 'en') {
             setLanguageState(currentUser.preferredLanguage);
           }
+
+          if (storedLite === 'true') {
+            setIsLiteModeState(true);
+          } else if (storedLite === 'false') {
+            setIsLiteModeState(false);
+          } else {
+            setIsLiteModeState(isLowEndAndroid);
+          }
         }
       } catch (err) {
-        console.warn('[LocalizationContext] Error loading stored language:', err);
+        console.warn('[LocalizationContext] Error loading preferences:', err);
       } finally {
         if (isMounted) {
           setIsLanguageLoaded(true);
@@ -64,12 +87,12 @@ export const LocalizationProvider = ({ children }) => {
       }
     };
 
-    loadLanguage();
+    loadPreferences();
 
     return () => {
       isMounted = false;
     };
-  }, [currentUser?.preferredLanguage]);
+  }, [currentUser?.preferredLanguage, isLowEndAndroid]);
 
   // 2. Set Language Handler (Immediate state update + Persistent Storage + Profile Sync)
   const setLanguage = useCallback(async (newLang) => {
@@ -94,6 +117,20 @@ export const LocalizationProvider = ({ children }) => {
     }
   }, [updateProfile]);
 
+  const setLiteMode = useCallback((enabled) => {
+    const next = Boolean(enabled);
+    setIsLiteModeState(next);
+    AsyncStorage.setItem(LITE_MODE_STORAGE_KEY, String(next)).catch(() => {});
+  }, []);
+
+  const toggleLiteMode = useCallback((explicitVal) => {
+    setIsLiteModeState((prev) => {
+      const next = typeof explicitVal === 'boolean' ? explicitVal : !prev;
+      AsyncStorage.setItem(LITE_MODE_STORAGE_KEY, String(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
   // 3. Translation Helper
   const t = useCallback((keyPath, params) => {
     return translate(language, keyPath, params);
@@ -116,6 +153,10 @@ export const LocalizationProvider = ({ children }) => {
     setLanguage,
     t,
     isLanguageLoaded,
+    isLiteMode,
+    isLowEndAndroid,
+    setLiteMode,
+    toggleLiteMode,
   }), [
     language,
     isRTL,
@@ -125,6 +166,10 @@ export const LocalizationProvider = ({ children }) => {
     setLanguage,
     t,
     isLanguageLoaded,
+    isLiteMode,
+    isLowEndAndroid,
+    setLiteMode,
+    toggleLiteMode,
   ]);
 
   return (
@@ -136,5 +181,15 @@ export const LocalizationProvider = ({ children }) => {
 
 export const useTranslation = () => useContext(LocalizationContext);
 export const useLocalization = useTranslation;
+
+export const useLiteMode = () => {
+  const ctx = useContext(LocalizationContext);
+  return useMemo(() => ({
+    isLiteMode: Boolean(ctx?.isLiteMode),
+    isLowEndAndroid: Boolean(ctx?.isLowEndAndroid),
+    setLiteMode: ctx?.setLiteMode || (() => {}),
+    toggleLiteMode: ctx?.toggleLiteMode || (() => {}),
+  }), [ctx?.isLiteMode, ctx?.isLowEndAndroid, ctx?.setLiteMode, ctx?.toggleLiteMode]);
+};
 
 export default LocalizationContext;

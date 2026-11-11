@@ -23,6 +23,7 @@ const { User, Track, Album } = require('./models');
 const { auth, adminAuth, optionalAuth } = require('./middleware/auth');
 const { uploadsDir } = require('./middleware/upload');
 const { validateSafeUrl } = require('./utils/security');
+const { handleCloudMediaRequest } = require('./utils/cloudMediaServer');
 const { searchTracksInternal, isQuranContent, ensureYtDlpBinary, initWarmYtWorker } = require('./utils/helpers');
 const { syncUserLikedTracks } = require('./utils/likedTracksSync');
 
@@ -157,6 +158,10 @@ app.use(express.static(path.join(__dirname, '../dist'), {
     }
   }
 }));
+
+// Cloud media streaming (Telegram + Backblaze B2 + bounded LRU cache)
+app.get('/uploads/cloud/:file', handleCloudMediaRequest);
+app.get('/api/tracks/media/:file', handleCloudMediaRequest);
 
 // Static uploads & downloads
 app.use('/uploads', express.static(uploadsDir));

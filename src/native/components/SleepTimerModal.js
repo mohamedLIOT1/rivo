@@ -1,51 +1,59 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
-import { X, Moon, Clock, Ban, CheckCircle } from 'lucide-react-native';
-import { useSleepTimer } from '../context/SleepTimerContext';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { X, Moon, Clock, Ban } from 'lucide-react-native';
+import { useSleepTimer, useSleepTimerRemaining } from '../context/SleepTimerContext';
 import { useAudioPlayer } from '../context/AudioContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 
-const OPTIONS = [
-  { label: '15 Minutes', minutes: 15 },
-  { label: '30 Minutes', minutes: 30 },
-  { label: '45 Minutes', minutes: 45 },
-  { label: '60 Minutes', minutes: 60 },
-  { label: 'End of Current Track', minutes: 'end_of_track' },
-];
+const formatRemaining = (seconds) => {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+};
+
+const SleepTimerCountdownText = React.memo(function SleepTimerCountdownText({
+  visible,
+  sleepTimerMode,
+  isRTL,
+}) {
+  const sleepTimerRemaining = useSleepTimerRemaining(visible && sleepTimerMode === 'minutes');
+  return (
+    <Text style={[styles.activeTime, isRTL && { letterSpacing: 0 }]}>
+      {sleepTimerMode === 'end_of_track'
+        ? (isRTL ? 'إيقاف التشغيل عند نهاية المقطع الحالي' : 'Stopping when current track ends')
+        : (isRTL ? `إيقاف التشغيل خلال ${formatRemaining(sleepTimerRemaining || 0)}` : `Auto-stop in ${formatRemaining(sleepTimerRemaining || 0)}`)}
+    </Text>
+  );
+});
 
 export default function SleepTimerModal({ visible, onClose }) {
   const { isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
   const sleepTimer = useSleepTimer();
   const audioPlayer = useAudioPlayer();
 
   // Support both isolated SleepTimerContext and AudioPlayer fallback
-  const sleepTimerRemaining = sleepTimer?.sleepTimerRemaining ?? null;
   const sleepTimerMode = sleepTimer?.sleepTimerMode ?? 'off';
   const startSleepTimer = sleepTimer?.startSleepTimer || audioPlayer?.startSleepTimer;
   const cancelSleepTimer = sleepTimer?.cancelSleepTimer || audioPlayer?.cancelSleepTimer;
 
-  const isTimerActive = sleepTimerMode !== 'off' || sleepTimerRemaining !== null;
+  const isTimerActive = sleepTimerMode !== 'off';
 
-  const formatRemaining = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const timerOptions = [
+  const timerOptions = useMemo(() => [
     { label: isRTL ? '١٥ دقيقة' : '15 Minutes', minutes: 15 },
     { label: isRTL ? '٣٠ دقيقة' : '30 Minutes', minutes: 30 },
     { label: isRTL ? '٤٥ دقيقة' : '45 Minutes', minutes: 45 },
     { label: isRTL ? '٦٠ دقيقة' : '60 Minutes', minutes: 60 },
     { label: isRTL ? 'نهاية المقطع الحالي' : 'End of Current Track', minutes: 'end_of_track' },
-  ];
+  ], [isRTL]);
 
   if (!visible) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFillObject, { zIndex: 99999, elevation: Platform.OS === 'android' ? 50 : 0 }]}>
+    <View style={[StyleSheet.absoluteFillObject, { zIndex: 99999, elevation: Platform.OS === 'android' ? 8 : 0 }]}>
       <TouchableOpacity
         style={StyleSheet.absoluteFillObject}
         activeOpacity={1}
@@ -53,7 +61,7 @@ export default function SleepTimerModal({ visible, onClose }) {
       />
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.sheetOuter}>
-          <View style={styles.hardShadow} />
+          {!isLiteMode && <View style={styles.hardShadow} />}
           <View style={styles.sheet}>
             {/* Header */}
             <View style={styles.header}>
@@ -80,11 +88,11 @@ export default function SleepTimerModal({ visible, onClose }) {
                   <Text style={[styles.activeLabel, isRTL && { letterSpacing: 0 }]}>
                     {isRTL ? 'المؤقت مفعّل حالياً' : 'TIMER CURRENTLY ACTIVE'}
                   </Text>
-                  <Text style={[styles.activeTime, isRTL && { letterSpacing: 0 }]}>
-                    {sleepTimerMode === 'end_of_track'
-                      ? (isRTL ? 'إيقاف التشغيل عند نهاية المقطع الحالي' : 'Stopping when current track ends')
-                      : (isRTL ? `إيقاف التشغيل خلال ${formatRemaining(sleepTimerRemaining || 0)}` : `Auto-stop in ${formatRemaining(sleepTimerRemaining || 0)}`)}
-                  </Text>
+                  <SleepTimerCountdownText
+                    visible={visible}
+                    sleepTimerMode={sleepTimerMode}
+                    isRTL={isRTL}
+                  />
                 </View>
                 <TouchableOpacity
                   style={styles.cancelBtn}

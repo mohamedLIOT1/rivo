@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.11',
+      version: '2.4.12',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي واستقرار الأداء.'
+      notes: 'تحديث v2.4.12 • توصيات وكيو ذكي شخصي مثل سبوتيفاي، تنزيل تلقائي بعد الاستماع، وتحسينات الأداء والسحابة.'
     },
     windows: {
-      version: '2.4.11',
-      displayVersion: '2.4.11',
+      version: '2.4.12',
+      displayVersion: '2.4.12',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.11.exe',
+      directFile: 'Rivo-v2.4.12.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي واستقرار الأداء.'
+      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي بالذكاء الاصطناعي، تنزيل تلقائي بعد إكمال الأغنية، واستقرار التشغيل السحابي.'
     },
     android: {
-      version: '2.4.11',
-      build: 141,
+      version: '2.4.12',
+      build: 142,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.11.apk',
+      directFile: 'Rivo-v2.4.12.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي.',
-      notesEn: 'Update v2.4.11 • Lock-screen playback recovery, reliable background downloads queue, and performance fixes.',
+      notes: 'تحديث v2.4.12 • وضع الأداء الخفيف لتابلت سامسونج ٢٠١٦، إصلاح التنزيل التلقائي بعد نهاية الأغنية، وكيو شخصي بالذكاء الاصطناعي.',
+      notesEn: 'Update v2.4.12 • Low-RAM Tablet Lite Mode (Galaxy Tab A 2016), full-listen auto-download fix, and Spotify-style AI queue.',
       ota: {
         enabled: true,
-        version: '2.4.21',
+        version: '2.4.22',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.21 • إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي',
-        notesEn: 'Instant OTA update v2.4.21 • Fix lock-screen playback recovery and reliable auto-downloads.',
+        notes: 'تحديث هوائي فوري v2.4.22 • وضع الأداء الخفيف وإصلاح التنزيل التلقائي والكيو الشخصي',
+        notesEn: 'Instant OTA update v2.4.22 • Tablet Lite Mode performance overhaul, full-listen auto-download fix, and personalized AI queue.',
         bundleSize: 5205050,
         sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.11',
-      build: 141,
+      version: '2.4.12',
+      build: 142,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.11.ipa',
+      directFile: 'Rivo-v2.4.12.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي واستقرار النظام.'
+      notes: 'تحديث v2.4.12 • إصلاح التنزيل التلقائي، كيو وتوصيات شخصية بالذكاء الاصطناعي، وتشغيل مباشر من السحابة.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.11',
+      version: '2.4.12',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي.'
+      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي وتنزيل تلقائي بعد الاستماع.'
     },
     windows: {
-      version: '2.4.11',
-      displayVersion: '2.4.11',
+      version: '2.4.12',
+      displayVersion: '2.4.12',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.11.exe',
+      directFile: 'Rivo-v2.4.12.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي.'
+      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي وتنزيل تلقائي بعد الاستماع.'
     },
     android: {
-      version: '2.4.11',
-      build: 141,
+      version: '2.4.12',
+      build: 142,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.11.apk',
+      directFile: 'Rivo-v2.4.12.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي.',
-      notesEn: 'Update v2.4.11 • Lock-screen playback recovery, reliable background downloads queue, and sync fixes.',
+      notes: 'تحديث v2.4.12 • وضع الأداء الخفيف لتابلت ٢٠١٦ وإصلاح التنزيل التلقائي والكيو الشخصي.',
+      notesEn: 'Update v2.4.12 • Tablet Lite Mode, full-listen auto-download fix, and personalized AI queue.',
       ota: {
         enabled: true,
-        version: '2.4.21',
+        version: '2.4.22',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.21 • إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي',
-        notesEn: 'Instant OTA update v2.4.21 • Fix lock-screen playback recovery and reliable auto-downloads.',
+        notes: 'تحديث هوائي فوري v2.4.22 • وضع الأداء الخفيف وإصلاح التنزيل التلقائي والكيو الشخصي',
+        notesEn: 'Instant OTA update v2.4.22 • Tablet Lite Mode, full-listen auto-download fix, and personalized AI queue.',
         bundleSize: 5205050,
         sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.11',
-      build: 141,
+      version: '2.4.12',
+      build: 142,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.11.ipa',
+      directFile: 'Rivo-v2.4.12.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي واستقرار النظام.'
+      notes: 'تحديث v2.4.12 • إصلاح التنزيل التلقائي، كيو وتوصيات شخصية، وتشغيل سحابي فوري.'
     }
   }
 };
@@ -190,7 +190,7 @@ router.get('/api/app/version', optionalAuth, (req, res) => {
       if (manifest.platforms && manifest.platforms.web) manifest.platforms.web.version = pkg.version;
       if (manifest.platforms && manifest.platforms.windows) {
         manifest.platforms.windows.displayVersion = pkg.version;
-        manifest.platforms.windows.version = '2.2.5';
+        manifest.platforms.windows.version = pkg.version;
         manifest.platforms.windows.directFile = `Rivo-v${pkg.version}.exe`;
       }
       if (manifest.platforms && manifest.platforms.android) {

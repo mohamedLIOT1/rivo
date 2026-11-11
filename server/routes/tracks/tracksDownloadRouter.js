@@ -13,6 +13,7 @@ const {
   isAudioFileValid,
   resolveOfficialYouTubeAudioStream,
 } = require('../../utils/helpers');
+const { serveCloudDownload } = require('../../utils/cloudMediaServer');
 const { resolveTrackStemInfo } = require('./vocalsRouter');
 
 router.get('/download', async (req, res) => {
@@ -78,6 +79,21 @@ router.get('/download', async (req, res) => {
           });
           return res.sendFile(stemFile);
         }
+      }
+    }
+
+    // Cloud-migrated track download (Telegram / Backblaze B2 / local cloud cache)
+    if (dbTrack?.cloudStorage?.provider || (url && url.includes('/uploads/cloud/'))) {
+      let targetTrack = dbTrack;
+      if (!targetTrack && url) {
+        const m = url.match(/\/uploads\/cloud\/([a-fA-F0-9]{24})/);
+        if (m?.[1] && mongoose.isValidObjectId(m[1])) {
+          try { targetTrack = await Track.findById(m[1]).lean(); } catch {}
+        }
+      }
+      if (targetTrack?.cloudStorage?.provider) {
+        const served = await serveCloudDownload(targetTrack, cleanFilename, req, res);
+        if (served) return;
       }
     }
 

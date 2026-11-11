@@ -15,7 +15,9 @@ async function connectDB() {
   try { 
     await mongoose.connect(MONGO_URI); 
     console.log('✅ DB Connected'); 
-    await User.updateMany({}, { $set: { 'currentListening.isPlaying': false } }).catch(() => {});
+    if (!process.env.SKIP_STARTUP_USER_RESET) {
+      await User.updateMany({}, { $set: { 'currentListening.isPlaying': false } }).catch(() => {});
+    }
   } catch (err) { 
     console.error('DB connect error:', err.message);
     setTimeout(connectDB, 5000); 

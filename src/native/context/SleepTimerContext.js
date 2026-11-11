@@ -3,6 +3,19 @@ import { useToast } from './ToastContext';
 
 const SleepTimerContext = createContext(null);
 
+// High-frequency 1s tick isolation: subscribers read countdown ticks without re-rendering root trees
+const remainingListeners = new Set();
+let currentRemainingSeconds = null;
+
+const notifyRemainingListeners = (val) => {
+  currentRemainingSeconds = val;
+  remainingListeners.forEach((listener) => {
+    try {
+      listener(val);
+    } catch {}
+  });
+};
+
 // Shared singleton ref for checking end-of-track sleep timer from outside React render cycle
 export const sleepTimerEndOfTrackSignal = {
   isEndOfTrackActive: false,
@@ -17,10 +30,10 @@ export const sleepTimerEndOfTrackSignal = {
 
 /**
  * Isolated Sleep Timer Provider
- * Isolates high-frequency (1s) countdown ticks so root AudioContext does NOT re-render every second.
+ * Isolates high-frequency (1s) countdown ticks via subscriber listeners so root AudioContext
+ * and app trees do NOT re-render every second.
  */
 export function SleepTimerProvider({ children, onStopPlayback }) {
-  const [sleepTimerRemaining, setSleepTimerRemaining] = useState(null);
   const [sleepTimerMode, setSleepTimerMode] = useState('off'); // 'off' | 'minutes' | 'end_of_track'
   const sleepTimerRef = useRef(null);
   const onStopPlaybackRef = useRef(onStopPlayback);
@@ -40,7 +53,7 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
 
   const cancelSleepTimer = useCallback(() => {
     clearTimer();
-    setSleepTimerRemaining(null);
+    notifyRemainingListeners(null);
     setSleepTimerMode('off');
     if (showToast) {
       showToast('Sleep timer cancelled', 'info');
@@ -54,7 +67,7 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
     if (option === 'end_of_track' || option === -1) {
       sleepTimerEndOfTrackSignal.isEndOfTrackActive = true;
       setSleepTimerMode('end_of_track');
-      setSleepTimerRemaining(null);
+      notifyRemainingListeners(null);
       if (showToast) {
         showToast('Sleep timer: Stop at end of current track', 'info');
       }
@@ -69,20 +82,19 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
 
     let remaining = Math.round(minutes * 60);
     setSleepTimerMode('minutes');
-    setSleepTimerRemaining(remaining);
+    notifyRemainingListeners(remaining);
     if (showToast) {
       showToast(`Sleep timer set: ${minutes} min`, 'info');
     }
 
     sleepTimerRef.current = setInterval(() => {
       remaining -= 1;
-      setSleepTimerRemaining(remaining);
       if (remaining <= 0) {
         if (sleepTimerRef.current) {
           clearInterval(sleepTimerRef.current);
           sleepTimerRef.current = null;
         }
-        setSleepTimerRemaining(null);
+        notifyRemainingListeners(null);
         setSleepTimerMode('off');
         if (typeof onStopPlaybackRef.current === 'function') {
           onStopPlaybackRef.current('timer_expired');
@@ -90,6 +102,8 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
         if (showToast) {
           showToast('Playback stopped by sleep timer', 'info');
         }
+      } else {
+        notifyRemainingListeners(remaining);
       }
     }, 1000);
   }, [clearTimer, cancelSleepTimer, showToast]);
@@ -99,17 +113,18 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
     return () => {
       if (sleepTimerRef.current) {
         clearInterval(sleepTimerRef.current);
+        sleepTimerRef.current = null;
       }
+      notifyRemainingListeners(null);
     };
   }, []);
 
   const value = useMemo(() => ({
-    sleepTimerRemaining,
     sleepTimerMode,
     isSleepTimerActive: sleepTimerMode !== 'off',
     startSleepTimer,
     cancelSleepTimer,
-  }), [sleepTimerRemaining, sleepTimerMode, startSleepTimer, cancelSleepTimer]);
+  }), [sleepTimerMode, startSleepTimer, cancelSleepTimer]);
 
   return (
     <SleepTimerContext.Provider value={value}>
@@ -118,11 +133,35 @@ export function SleepTimerProvider({ children, onStopPlayback }) {
   );
 }
 
+/**
+ * Isolated subscriber hook for 1s countdown updates.
+ * Only subscribes when `enabled` is true (e.g., while SleepTimerModal is visible).
+ */
+export function useSleepTimerRemaining(enabled = true) {
+  const [remaining, setRemaining] = useState(() => (enabled ? currentRemainingSeconds : null));
+
+  useEffect(() => {
+    if (!enabled) {
+      setRemaining(null);
+      return undefined;
+    }
+    setRemaining(currentRemainingSeconds);
+    const listener = (val) => {
+      setRemaining(val);
+    };
+    remainingListeners.add(listener);
+    return () => {
+      remainingListeners.delete(listener);
+    };
+  }, [enabled]);
+
+  return remaining;
+}
+
 export function useSleepTimer() {
   const context = useContext(SleepTimerContext);
   if (!context) {
     return {
-      sleepTimerRemaining: null,
       sleepTimerMode: 'off',
       isSleepTimerActive: false,
       startSleepTimer: () => {},

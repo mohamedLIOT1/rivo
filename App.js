@@ -44,7 +44,7 @@ import {
 } from 'lucide-react-native';
 
 import { UserProvider, useUser } from './src/native/context/UserContext';
-import { LocalizationProvider, useTranslation } from './src/native/context/LocalizationContext';
+import { LocalizationProvider, useTranslation, useLiteMode } from './src/native/context/LocalizationContext';
 import { ToastProvider, useToast } from './src/native/context/ToastContext';
 import { AudioProvider, useAudioPlayer } from './src/native/context/AudioContext';
 import { SocketProvider, useSocket } from './src/native/context/SocketContext';
@@ -130,6 +130,7 @@ function MainAppShell() {
  */
 function NativeAppShell() {
   const { t, isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
 
   const rtlTextStyle = useMemo(() => (
     isRTL ? {
@@ -360,9 +361,11 @@ function NativeAppShell() {
     });
 
     // 3. Resume from background
+    let resumeTimerId = null;
     const appStateSub = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        setTimeout(() => {
+        if (resumeTimerId) clearTimeout(resumeTimerId);
+        resumeTimerId = setTimeout(() => {
           if (AppState.currentState === 'active') {
             getInitialChatSenderId().then((senderId) => {
               if (senderId) {
@@ -377,6 +380,7 @@ function NativeAppShell() {
     return () => {
       unsubscribe();
       appStateSub.remove();
+      if (resumeTimerId) clearTimeout(resumeTimerId);
     };
   }, [handleOpenChatFromNotification]);
 
@@ -415,16 +419,10 @@ function NativeAppShell() {
     }
   }, []);
 
-  const [visitedTabs, setVisitedTabs] = useState(() => new Set(['home']));
-
-  useEffect(() => {
-    const tabKey = (activeTab === 'music' ? 'home' : activeTab);
-    setVisitedTabs(prev => {
-      if (prev.has(tabKey)) return prev;
-      const next = new Set(prev);
-      next.add(tabKey);
-      return next;
-    });
+  const normalizedTab = useMemo(() => {
+    if (activeTab === 'music') return 'home';
+    const valid = ['home', 'search', 'library', 'podcasts', 'quran', 'offline', 'profile', 'stats', 'admin'];
+    return valid.includes(activeTab) ? activeTab : 'home';
   }, [activeTab]);
 
   return (
@@ -507,7 +505,7 @@ function NativeAppShell() {
             activeOpacity={0.8}
           >
             {currentUser?.avatar ? (
-              <Image source={{ uri: currentUser.avatar }} style={styles.avatarImg} />
+              <Image source={{ uri: currentUser.avatar }} style={styles.avatarImg} fadeDuration={0} />
             ) : (
               <Text style={styles.avatarLetter}>
                 {currentUser?.name ? currentUser.name[0].toUpperCase() : 'R'}
@@ -518,22 +516,24 @@ function NativeAppShell() {
       </View>
 
       {/* ─────────────────────────────────────────
-          ACTIVE SCREEN (Instant Tab Switching via Lazy Keep-Alive)
+          ACTIVE SCREEN (Low-RAM Tab Mounting: Unmounts inactive screens)
           ───────────────────────────────────────── */}
       <View style={[styles.screenContainer, !isDark && styles.screenContainerLight]}>
-        <View style={[{ flex: 1 }, (activeTab === 'home' || activeTab === 'music' || (!['search', 'library', 'podcasts', 'quran', 'profile', 'stats', 'offline', 'admin'].includes(activeTab))) ? { display: 'flex' } : { display: 'none' }]}>
-          <HomeScreen
-            initialFilter="all"
-            onOpenAddSong={handleOpenAddSong}
-            onTrackAction={handleTrackAction}
-            onOpenFullPlayer={handleOpenFullPlayer}
-            onSelectAlbum={handleSelectAlbum}
-            onSelectArtist={handleSelectArtist}
-          />
-        </View>
+        {(normalizedTab === 'home' || !isLiteMode) && (
+          <View style={[{ flex: 1 }, normalizedTab === 'home' ? { display: 'flex' } : { display: 'none' }]}>
+            <HomeScreen
+              initialFilter="all"
+              onOpenAddSong={handleOpenAddSong}
+              onTrackAction={handleTrackAction}
+              onOpenFullPlayer={handleOpenFullPlayer}
+              onSelectAlbum={handleSelectAlbum}
+              onSelectArtist={handleSelectArtist}
+            />
+          </View>
+        )}
 
-        {visitedTabs.has('search') && (
-          <View style={[{ flex: 1 }, activeTab === 'search' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'search' && (
+          <View style={{ flex: 1 }}>
             <SearchScreen
               initialQuery={headerSearchText}
               onQueryChange={handleQueryChange}
@@ -546,8 +546,8 @@ function NativeAppShell() {
           </View>
         )}
 
-        {visitedTabs.has('library') && (
-          <View style={[{ flex: 1 }, activeTab === 'library' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'library' && (
+          <View style={{ flex: 1 }}>
             <LibraryScreen
               onOpenCreatePlaylist={handleOpenCreatePlaylist}
               onNavigateOffline={handleNavigateOffline}
@@ -556,26 +556,26 @@ function NativeAppShell() {
           </View>
         )}
 
-        {visitedTabs.has('podcasts') && (
-          <View style={[{ flex: 1 }, activeTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'podcasts' && (
+          <View style={{ flex: 1 }}>
             <PodcastScreen onTrackAction={handleTrackAction} />
           </View>
         )}
 
-        {visitedTabs.has('quran') && (
-          <View style={[{ flex: 1 }, activeTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'quran' && (
+          <View style={{ flex: 1 }}>
             <QuranScreen onTrackAction={handleTrackAction} />
           </View>
         )}
 
-        {visitedTabs.has('offline') && (
-          <View style={[{ flex: 1 }, activeTab === 'offline' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'offline' && (
+          <View style={{ flex: 1 }}>
             <OfflineScreen />
           </View>
         )}
 
-        {visitedTabs.has('profile') && (
-          <View style={[{ flex: 1 }, activeTab === 'profile' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'profile' && (
+          <View style={{ flex: 1 }}>
             <ProfileScreen
               onOpenSettings={handleOpenSettings}
               onOpenAuth={handleOpenAuth}
@@ -592,14 +592,14 @@ function NativeAppShell() {
           </View>
         )}
 
-        {visitedTabs.has('stats') && (
-          <View style={[{ flex: 1 }, activeTab === 'stats' ? { display: 'flex' } : { display: 'none' }]}>
+        {normalizedTab === 'stats' && (
+          <View style={{ flex: 1 }}>
             <StatsScreen />
           </View>
         )}
 
-        {activeTab === 'admin' && (
-          <View style={[{ flex: 1 }]}>
+        {normalizedTab === 'admin' && (
+          <View style={{ flex: 1 }}>
             <AdminScreen />
           </View>
         )}
@@ -658,7 +658,7 @@ function NativeAppShell() {
       <Modal
         visible={isMenuOpen}
         transparent={true}
-        animationType="fade"
+        animationType={isLiteMode || Platform.OS === 'android' ? 'none' : 'fade'}
         onRequestClose={handleCloseMenu}
       >
         <TouchableOpacity

@@ -9,12 +9,14 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Play, Plus, Disc } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
+import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import FeaturedAlbumCard from '../components/home/FeaturedAlbumCard';
@@ -25,6 +27,7 @@ import { isQuranContent } from '../../utils/quranUtils';
 import { resolveAlbumTracks } from '../utils/resolveAlbumTracks';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
+import { getListeningStats } from '../context/audio/audioApiHelpers';
 import { deduplicateTrackList } from '../services/downloadManager';
 
 const keyExtractor = (item, index) => String(item._id || item.id || index);
@@ -45,11 +48,12 @@ function HomeScreen({
     return Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
   }, [width, numColumns]);
 
-  const { playTrack, currentTrack, isPlaying, isLoading, downloadedTracks = [] } = useAudioPlayer();
-  const { currentUser, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
+  const { playTrack, setQueue, currentTrack, isPlaying, isLoading, downloadedTracks = [] } = useAudioPlayer();
+  const { currentUser, token, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
   const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const isOffline = appMode === 'offline';
   const [activeFilter, setActiveFilter] = useState(initialFilter);
@@ -60,15 +64,17 @@ function HomeScreen({
     }
   }, [initialFilter]); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(30);
+  const [visibleCount, setVisibleCount] = useState(() => (isLiteMode ? 15 : 30));
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [loadingAlbumId, setLoadingAlbumId] = useState(null);
   const albumPlayAbortRef = useRef(null);
+  const smartMixAbortRef = useRef(null);
 
   useEffect(() => {
     return () => {
       albumPlayAbortRef.current?.abort();
+      smartMixAbortRef.current?.abort();
     };
   }, []);
 
@@ -183,23 +189,92 @@ function HomeScreen({
     }
   }, [isRTL]);
 
-  const handlePlaySmartCassette = useCallback(() => {
+  const handlePlaySmartCassette = useCallback(async () => {
     const pool = displayTracks.length > 0 ? displayTracks : (userTracks || []);
+    const localStats = getListeningStats?.() || {};
+    const statTracks = Object.values(localStats.trackStats || {}).slice(0, 10);
+    const recentTracks = [
+      ...(currentTrack ? [currentTrack] : []),
+      ...statTracks,
+      ...(Array.isArray(currentUser?.recentTracks) ? currentUser.recentTracks.slice(0, 8) : []),
+    ].filter(Boolean).slice(0, 15).map(tr => ({
+      id: String(tr._id || tr.id || ''),
+      title: tr.title || '',
+      artist: tr.artist || '',
+      genre: tr.genre || '',
+    }));
+
     const smart10 = getSmartTasteAndMoodTracks({
       allTracks: pool,
       currentUser,
       followedArtists: currentUser?.following || [],
       likedTrackIds,
+      listeningStats: { ...localStats, history: recentTracks },
+      currentTrack,
       limit: 10,
     });
 
-    if (smart10.length > 0) {
-      const tagged = smart10.map(t => ({ ...t, isSmartMoodQueue: true }));
-      playTrack(tagged[0], tagged);
-    } else if (displayTracks.length > 0) {
-      playTrack(displayTracks[0], displayTracks.slice(0, 10));
+    const initialList = smart10.length > 0
+      ? smart10.map(tr => ({ ...tr, isSmartMoodQueue: true }))
+      : displayTracks.slice(0, 10).map(tr => ({ ...tr, isSmartMoodQueue: true }));
+
+    if (initialList.length > 0) {
+      playTrack(initialList[0], initialList);
     }
-  }, [displayTracks, userTracks, currentUser, likedTrackIds, playTrack]);
+
+    if (isOffline || !API_BASE_URL) return;
+
+    smartMixAbortRef.current?.abort();
+    const controller = new AbortController();
+    smartMixAbortRef.current = controller;
+    const timeoutId = setTimeout(() => {
+      try { controller.abort(); } catch {}
+    }, 3500);
+
+    try {
+      const authToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2').catch(() => null));
+      if (controller.signal.aborted) return;
+      const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+        body: JSON.stringify({
+          mood: currentMood?.id || 'neutral',
+          timeOfDay: currentMood?.id || 'evening',
+          recentTracks,
+          seedTracks: (initialList.length > 0 ? initialList : pool).slice(0, 5),
+          likedTrackIds: Array.isArray(likedTrackIds) ? likedTrackIds.slice(0, 50) : [],
+          followedArtists: currentUser?.following || [],
+          isQuran: false,
+          refresh: true,
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok || controller.signal.aborted) return;
+      const data = await res.json();
+      const rawRecs = data?.recommendations || data?.tracks || [];
+      if (data?.success && Array.isArray(rawRecs) && rawRecs.length > 0) {
+        const musicRecs = rawRecs.filter(tr => tr && !isQuranContent(tr)).map(tr => ({
+          ...tr,
+          isSmartMoodQueue: true,
+          isAiSuggestion: true,
+        }));
+        if (musicRecs.length === 0) return;
+        if (initialList.length > 0 && typeof setQueue === 'function') {
+          const head = initialList[0];
+          const headId = String(head._id || head.id || '');
+          const merged = [head, ...musicRecs.filter(r => String(r._id || r.id || '') !== headId)].slice(0, 12);
+          setQueue(merged);
+        } else {
+          playTrack(musicRecs[0], musicRecs);
+        }
+      }
+    } catch {} finally {
+      clearTimeout(timeoutId);
+    }
+  }, [displayTracks, userTracks, currentUser, token, likedTrackIds, currentTrack, currentMood?.id, isOffline, playTrack, setQueue]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -290,7 +365,7 @@ function HomeScreen({
 
           {/* 2-Column Grid */}
           <View style={styles.albumsGrid}>
-            {displayAlbums.slice(0, 8).map((alb, index) => {
+            {displayAlbums.slice(0, isLiteMode ? 4 : 8).map((alb, index) => {
               const albKey = String(alb._id || alb.id || alb.name || `album-${index}`);
               return (
                 <FeaturedAlbumCard
@@ -353,14 +428,14 @@ function HomeScreen({
         )}
       </View>
     </View>
-  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
+  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
       return (
         <TouchableOpacity
           style={styles.loadMoreBtn}
-          onPress={() => setVisibleCount((c) => c + 30)}
+          onPress={() => setVisibleCount((c) => c + (isLiteMode ? 15 : 30))}
           activeOpacity={0.8}
         >
           <Text style={[styles.loadMoreText, rtlTextStyle]}>
@@ -385,7 +460,7 @@ function HomeScreen({
     }
 
     return null;
-  }, [displayTracks.length, visibleCount, isOffline, isRTL, rtlTextStyle]);
+  }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isRTL, rtlTextStyle]);
 
   const handlePlaySong = useCallback((track) => {
     playTrack(track, displayTracks);
@@ -422,9 +497,9 @@ function HomeScreen({
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-        maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
-        windowSize={Platform.OS === 'android' ? 3 : 5}
+        initialNumToRender={isLiteMode ? 5 : 8}
+        maxToRenderPerBatch={isLiteMode ? 4 : 6}
+        windowSize={5}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
@@ -437,7 +512,7 @@ function HomeScreen({
           />
         }
       />
-      {!onSelectAlbum && (
+      {!onSelectAlbum && Boolean(selectedAlbum) && (
         <AlbumDetailModal
           visible={Boolean(selectedAlbum)}
           album={selectedAlbum}
@@ -455,7 +530,7 @@ function HomeScreen({
           }}
         />
       )}
-      {!onSelectArtist && (
+      {!onSelectArtist && Boolean(selectedArtist) && (
         <ArtistDetailModal
           visible={Boolean(selectedArtist)}
           artist={selectedArtist}

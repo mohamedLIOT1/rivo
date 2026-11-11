@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Switch, Alert, TextInput, ActivityIndicator, Platform } from 'react-native';
 import { X, Server, Trash2, ShieldCheck, Info, Wifi, Volume2, Cpu, LogOut, HardDrive, FolderPlus, RefreshCw, Radio, Copy, Check, Unlink, Sun, Moon, Compass, LayoutGrid, Smartphone, Maximize2 } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -22,10 +22,12 @@ import {
 } from '../services/mediaControls';
 import LockscreenSettingCard from './settings/LockscreenSettingCard';
 import LanguageSettingCard from './settings/LanguageSettingCard';
-import { useTranslation } from '../context/LocalizationContext';
+import LiteModeSettingCard from './settings/LiteModeSettingCard';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 
 export default function SettingsModal({ visible, onClose }) {
   const { t, isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
   const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const { currentUser, token, logout } = useUser();
   const { showToast } = useToast();
@@ -78,30 +80,56 @@ export default function SettingsModal({ visible, onClose }) {
   const [showTokenInput, setShowTokenInput] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
 
+  const discordAbortRef = useRef(null);
+
+  const loadStorageInfo = useCallback(async () => {
+    try {
+      const info = await getStorageLocationInfo();
+      setStorageInfo(info);
+    } catch {}
+  }, []);
+
+  const fetchDiscordStatus = useCallback(async () => {
+    if (!token) return;
+    if (discordAbortRef.current) {
+      try { discordAbortRef.current.abort(); } catch {}
+    }
+    const controller = new AbortController();
+    discordAbortRef.current = controller;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/discord/status`, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
+      const data = await res.json();
+      if (!controller.signal.aborted && !data.error) setDiscordStatus(data);
+    } catch {}
+  }, [token]);
+
   useEffect(() => {
     if (visible) {
       loadStorageInfo();
       fetchDiscordStatus();
     }
-  }, [visible]);
+    return () => {
+      if (discordAbortRef.current) {
+        try { discordAbortRef.current.abort(); } catch {}
+      }
+    };
+  }, [visible, loadStorageInfo, fetchDiscordStatus]);
 
-  const loadStorageInfo = async () => {
-    try {
-      const info = await getStorageLocationInfo();
-      setStorageInfo(info);
-    } catch {}
-  };
-
-  const fetchDiscordStatus = async () => {
-    if (!token) return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/discord/status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (!data.error) setDiscordStatus(data);
-    } catch {}
-  };
+  const handleToggleAutoDownload = useCallback((val) => {
+    toggleAutoDownloadFinished?.(val);
+    if (showToast) {
+      showToast(
+        val
+          ? (isRTL ? 'تم تفعيل التنزيل التلقائي بعد إكمال الاستماع' : 'Auto-download after full listen enabled')
+          : (isRTL ? 'تم إيقاف التنزيل التلقائي' : 'Auto-download disabled'),
+        'info'
+      );
+    }
+  }, [toggleAutoDownloadFinished, showToast, isRTL]);
 
   const handleGenerateDiscordCode = async () => {
     if (!token) return;
@@ -265,10 +293,12 @@ export default function SettingsModal({ visible, onClose }) {
   const textMuted = isDark ? '#9ca3af' : colors.inkMuted;
 
   return (
-    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={isLiteMode || Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={styles.modalCard}>
-          <View style={[styles.hardShadow, { backgroundColor: isDark ? '#050a09' : colors.ink }]} />
+          {!isLiteMode && (
+            <View style={[styles.hardShadow, { backgroundColor: isDark ? '#050a09' : colors.ink }]} />
+          )}
           <View style={[styles.sheet, { backgroundColor: sheetBg, borderColor }]}>
             {/* Header */}
             <View style={[styles.header, { backgroundColor: cardBg, borderBottomColor: borderColor }]}>
@@ -284,6 +314,15 @@ export default function SettingsModal({ visible, onClose }) {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               {/* ── Language Selector ── */}
               <LanguageSettingCard
+                cardBg={cardBg}
+                borderColor={borderColor}
+                textTitle={textTitle}
+                textMuted={textMuted}
+                isDark={isDark}
+              />
+
+              {/* ── Performance & Lite Mode ── */}
+              <LiteModeSettingCard
                 cardBg={cardBg}
                 borderColor={borderColor}
                 textTitle={textTitle}
@@ -654,14 +693,18 @@ export default function SettingsModal({ visible, onClose }) {
                   </TouchableOpacity>
                 </View>
 
-                <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 12 }]}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.switchTitle, { color: textTitle }, rtlTextStyle]}>{t('settings.autoDownloadFinishedTitle')}</Text>
-                    <Text style={[styles.switchDesc, { color: textMuted }]}>{t('settings.autoDownloadFinishedDesc')}</Text>
+                <View style={[styles.switchRow, { borderBottomWidth: 0, paddingBottom: 0, marginTop: 12 }, isRTL && { flexDirection: 'row-reverse' }]}>
+                  <View style={{ flex: 1, paddingRight: isRTL ? 0 : 8, paddingLeft: isRTL ? 8 : 0 }}>
+                    <Text style={[styles.switchTitle, { color: textTitle }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                      {t('settings.autoDownloadFinishedTitle')}
+                    </Text>
+                    <Text style={[styles.switchDesc, { color: textMuted }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                      {t('settings.autoDownloadFinishedDesc')}
+                    </Text>
                   </View>
                   <Switch
                     value={Boolean(autoDownloadFinished)}
-                    onValueChange={toggleAutoDownloadFinished}
+                    onValueChange={handleToggleAutoDownload}
                     trackColor={{ false: '#374151', true: colors.mint }}
                     thumbColor="#fdfbf7"
                   />

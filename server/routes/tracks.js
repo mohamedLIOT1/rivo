@@ -17,20 +17,15 @@ const {
 } = require('../utils/helpers');
 const { checkMemoryCache, cacheStreamUrl } = require('../utils/streamFallbackProvider');
 
-// URL alias map for renewed stream URLs upon 403 token renewal
 const urlAliasMap = new Map();
+const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
-// Helper to invalidate stream cache upon failure
 function clearStreamCache(videoId) {
-  if (videoId) {
-    if (typeof clearStreamMemoryCache === 'function') {
-      clearStreamMemoryCache(videoId);
-    }
-    invalidateAudioCache(videoId, false);
-  }
+  if (!videoId) return;
+  if (typeof clearStreamMemoryCache === 'function') clearStreamMemoryCache(videoId);
+  invalidateAudioCache(videoId, false);
 }
 
-// Sub-routers for modularization (<400 lines each per AGENTS.md)
 const tracksPersistenceRouter = require('./tracks/tracksPersistenceRouter');
 const tracksImportRouter = require('./tracks/tracksImportRouter');
 const tracksCrudRouter = require('./tracks/tracksCrudRouter');
@@ -39,10 +34,35 @@ const tracksDownloadRouter = require('./tracks/tracksDownloadRouter');
 const tracksResolutionRouter = require('./tracks/tracksResolutionRouter');
 const lyricsRouter = require('./tracks/lyricsRouter');
 const vocalsRouter = require('./tracks/vocalsRouter');
-const { getCachedTracks, setCachedTracks } = require('./tracks/tracksCache');
+const { getCachedTracks, setCachedTracks, invalidateTracksCache } = require('./tracks/tracksCache');
 
-// Mount sub-routers
-router.use(tracksPersistenceRouter, tracksImportRouter, tracksCrudRouter, tracksStreamRouter, tracksDownloadRouter, tracksResolutionRouter.router, lyricsRouter, vocalsRouter);
+// Share Socket.IO instance with resolution auto-persister across sub-routers
+router.use((req, _res, next) => {
+  const io = req.app?.get('io') || req.io;
+  if (io && typeof tracksResolutionRouter.setIo === 'function') tracksResolutionRouter.setIo(io);
+  next();
+});
+
+// Internal loopback-only cache invalidation endpoint for background migration bot
+router.post('/internal/invalidate-cache', (req, res) => {
+  const peerIp = req.socket?.remoteAddress || req.ip || '';
+  if (!LOOPBACK_IPS.has(peerIp) || req.headers['x-forwarded-for']) {
+    return res.status(403).json({ error: 'Loopback access only' });
+  }
+  invalidateTracksCache();
+  return res.json({ success: true });
+});
+
+router.use(
+  tracksPersistenceRouter,
+  tracksImportRouter,
+  tracksCrudRouter,
+  tracksStreamRouter,
+  tracksDownloadRouter,
+  tracksResolutionRouter.router,
+  lyricsRouter,
+  vocalsRouter
+);
 
 // Get all tracks with pagination, limit cap, and ETag / Cache-Control support
 router.get('/', async (req, res) => {
@@ -69,21 +89,14 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const filter = {
-      source: { $ne: 'SoundCloud' },
-      album: { $ne: 'SoundCloud' }
-    };
+    const filter = { source: { $ne: 'SoundCloud' }, album: { $ne: 'SoundCloud' } };
 
     if (req.query.album) {
       const rawAlbName = req.query.album.trim().replace(/^album-/i, '');
       const escaped = rawAlbName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const flexiblePattern = escaped.replace(/[-_\s]+/g, '[-_\\s]*');
-
       const foundAlbum = await Album.findOne({
-        $or: [
-          { name: new RegExp(`^${flexiblePattern}$`, 'i') },
-          { id: rawAlbName }
-        ]
+        $or: [{ name: new RegExp(`^${flexiblePattern}$`, 'i') }, { id: rawAlbName }]
       }).lean();
 
       if (foundAlbum && Array.isArray(foundAlbum.trackIds) && foundAlbum.trackIds.length > 0) {
@@ -118,7 +131,6 @@ router.get('/', async (req, res) => {
 
     const payload = JSON.stringify({ success: true, tracks, page, limit });
     const etag = `"${crypto.createHash('md5').update(payload).digest('hex')}"`;
-
     res.setHeader('Cache-Control', 'public, max-age=120');
     res.setHeader('ETag', etag);
 
@@ -127,10 +139,7 @@ router.get('/', async (req, res) => {
       return res.status(304).end();
     }
 
-    if (isDefaultRequest) {
-      setCachedTracks(payload);
-    }
-
+    if (isDefaultRequest) setCachedTracks(payload);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     return res.send(payload);
   } catch (e) {
@@ -143,21 +152,15 @@ router.get('/stream-proxy', async (req, res) => {
   let targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send('URL required');
 
-  // Check URL alias mapping for renewed stream URLs upon previous 403 recovery
   if (urlAliasMap.has(targetUrl)) {
     const alias = urlAliasMap.get(targetUrl);
-    if (alias && alias.expiresAt > Date.now()) {
-      targetUrl = alias.renewedUrl;
-    } else {
-      urlAliasMap.delete(targetUrl);
-    }
+    if (alias && alias.expiresAt > Date.now()) targetUrl = alias.renewedUrl;
+    else urlAliasMap.delete(targetUrl);
   }
 
   if (targetUrl.startsWith('/uploads/') || targetUrl.startsWith('uploads/')) {
     const resolvedPath = safeResolveUpload(targetUrl, uploadsDir);
-    if (!resolvedPath || !fs.existsSync(resolvedPath)) {
-      return res.status(403).send('Forbidden or non-existent file path');
-    }
+    if (!resolvedPath || !fs.existsSync(resolvedPath)) return res.status(403).send('Forbidden or non-existent file path');
     return res.sendFile(resolvedPath);
   }
 
@@ -186,47 +189,31 @@ router.get('/stream-proxy', async (req, res) => {
 
   if (videoId) {
     const cachedM4a = path.join(uploadsDir, 'audio-cache', `${videoId}.m4a`);
-    if (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a)) {
-      return res.sendFile(cachedM4a);
-    }
+    if (fs.existsSync(cachedM4a) && isAudioFileValid(cachedM4a)) return res.sendFile(cachedM4a);
     const cachedMp3 = path.join(uploadsDir, 'audio-cache', `${videoId}.mp3`);
-    if (fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) {
-      return res.sendFile(cachedMp3);
-    }
+    if (fs.existsSync(cachedMp3) && isAudioFileValid(cachedMp3)) return res.sendFile(cachedMp3);
 
-    // Check in-memory stream cache
     const memCached = checkMemoryCache(videoId);
     if (memCached && memCached.url) {
       const expMatch = targetUrl.match(/[?&]expire=([0-9]+)/);
-      if (expMatch && Number(expMatch[1]) * 1000 <= Date.now()) {
-        targetUrl = memCached.url;
-      }
+      if (expMatch && Number(expMatch[1]) * 1000 <= Date.now()) targetUrl = memCached.url;
     }
   }
 
   const { valid, error } = await validateSafeUrl(targetUrl);
-  if (!valid) {
-    return res.status(403).json({ error: error || 'SSRF verification failed' });
-  }
+  if (!valid) return res.status(403).json({ error: error || 'SSRF verification failed' });
 
   let activeAbortController = new AbortController();
   let upstreamStream = null;
-
   const cleanupStream = () => {
     try {
       if (activeAbortController) activeAbortController.abort();
-      if (upstreamStream && typeof upstreamStream.destroy === 'function') {
-        upstreamStream.destroy();
-      }
+      if (upstreamStream && typeof upstreamStream.destroy === 'function') upstreamStream.destroy();
     } catch {}
   };
 
-  req.on('close', () => {
-    if (!res.writableEnded) cleanupStream();
-  });
-  res.on('close', () => {
-    if (!res.writableEnded) cleanupStream();
-  });
+  req.on('close', () => { if (!res.writableEnded) cleanupStream(); });
+  res.on('close', () => { if (!res.writableEnded) cleanupStream(); });
   res.on('error', cleanupStream);
 
   const getMatchingUserAgent = (url) => {
@@ -235,17 +222,16 @@ router.get('/stream-proxy', async (req, res) => {
     if (url.includes('c=ANDROID')) return 'com.google.android.youtube/20.01.35 (Linux; U; Android 11) gzip';
     if (url.includes('c=IOS')) return 'com.google.ios.youtube/20.01.35 (iPhone15,2; U; CPU iOS 18_0 like Mac OS X; en_US)';
     if (url.includes('googlevideo.com')) return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-    if (req.headers['user-agent']) return req.headers['user-agent'];
-    return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
+    return req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
   };
 
-  // Strict CORS origin configuration (no wildcard * with credentials per AGENTS.md)
   const applyStrictCors = () => {
     const clientOrigin = req.headers.origin;
     if (clientOrigin) {
       const isAllowed = clientOrigin.startsWith('http://localhost:') || clientOrigin.startsWith('http://127.0.0.1:') ||
         clientOrigin === 'tauri://localhost' || clientOrigin === 'https://tauri.localhost' ||
-        clientOrigin.endsWith('.rivo.app') || clientOrigin.endsWith('.pages.dev') || clientOrigin.endsWith('.railway.app') || clientOrigin.includes('duckdns.org');
+        clientOrigin.endsWith('.rivo.app') || clientOrigin.endsWith('.pages.dev') ||
+        clientOrigin.endsWith('.railway.app') || clientOrigin.includes('duckdns.org');
       if (isAllowed) {
         res.setHeader('Access-Control-Allow-Origin', clientOrigin);
         res.setHeader('Vary', 'Origin');
@@ -266,9 +252,7 @@ router.get('/stream-proxy', async (req, res) => {
 
     res.status(streamResponse.status);
     if (streamResponse.status === 416) {
-      if (streamResponse.headers['content-range']) {
-        res.setHeader('Content-Range', streamResponse.headers['content-range']);
-      }
+      if (streamResponse.headers['content-range']) res.setHeader('Content-Range', streamResponse.headers['content-range']);
       return res.end();
     }
 
@@ -277,9 +261,7 @@ router.get('/stream-proxy', async (req, res) => {
     for (const [key, value] of Object.entries(streamResponse.headers)) {
       const lowerKey = key.toLowerCase();
       if (!HOP_BY_HOP.includes(lowerKey)) {
-        if (lowerKey === 'content-length' && isGoogleVid && streamResponse.status === 200 && !req.headers.range) {
-          continue;
-        }
+        if (lowerKey === 'content-length' && isGoogleVid && streamResponse.status === 200 && !req.headers.range) continue;
         if (lowerKey === 'content-type' && (String(value).includes('video/mp4') || isGoogleVid)) {
           res.setHeader('Content-Type', 'audio/mp4');
           continue;
@@ -292,14 +274,11 @@ router.get('/stream-proxy', async (req, res) => {
   };
 
   try {
-    const isGoogleVideo = targetUrl.includes('googlevideo.com');
     const headers = { 'User-Agent': getMatchingUserAgent(targetUrl) };
     if (req.headers.range && !targetUrl.includes('sndcdn.com') && !targetUrl.includes('soundcloud.')) {
       headers['Range'] = req.headers.range;
     }
 
-    console.log('[AXIOS GOOGLEVIDEO URL]:', targetUrl);
-    console.log('[AXIOS GOOGLEVIDEO HEADERS]:', headers);
     const response = await axios({
       method: 'get',
       url: targetUrl,
@@ -326,13 +305,11 @@ router.get('/stream-proxy', async (req, res) => {
     cleanupStream();
     console.error('[STREAM PROXY ERROR]:', err.message, err.stack);
 
-    // Check upstream timeout conditions
     const isTimeout = err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT' || (err.message && err.message.toLowerCase().includes('timeout'));
     if (isTimeout && !res.headersSent) {
       return res.status(504).json({ error: 'GATEWAY_TIMEOUT', message: 'Upstream stream request timed out' });
     }
 
-    // Auto-recovery: If stream proxy failed (403 Forbidden / expired token / stream failure), attempt fresh resolution
     const isForbidden = err.response?.status === 403 || (err.message && err.message.includes('403'));
     if (!res.headersSent && !res.writableEnded && (isForbidden || videoId || title || artist)) {
       try {
@@ -340,24 +317,19 @@ router.get('/stream-proxy', async (req, res) => {
           clearStreamCache(videoId);
           invalidateAudioCache(videoId, false);
         }
-        // 1. First attempt: refresh stream URL for same videoId without in-memory cache
-        let freshDirect = null;
-        if (videoId) {
-          freshDirect = await resolveOfficialYouTubeAudioStream(videoId, title, artist, { bypassCache: true, bypassInnertube: isForbidden });
-        }
+        let freshDirect = videoId
+          ? await resolveOfficialYouTubeAudioStream(videoId, title, artist, { bypassCache: true, bypassInnertube: isForbidden })
+          : null;
         let freshResolved = freshDirect ? (freshDirect.url || String(freshDirect)) : null;
 
-        // 2. If that failed, returned null, or returned the same 403 URL, search for an alternative video
-        if (!freshResolved || freshResolved === targetUrl) {
-          if (title || artist) {
-            freshDirect = await resolveOfficialYouTubeAudioStream('', title, artist, {
-              retryAlt: true,
-              excludeVideoId: videoId,
-              bypassCache: true,
-              bypassInnertube: isForbidden
-            });
-            freshResolved = freshDirect ? (freshDirect.url || String(freshDirect)) : null;
-          }
+        if ((!freshResolved || freshResolved === targetUrl) && (title || artist)) {
+          freshDirect = await resolveOfficialYouTubeAudioStream('', title, artist, {
+            retryAlt: true,
+            excludeVideoId: videoId,
+            bypassCache: true,
+            bypassInnertube: isForbidden
+          });
+          freshResolved = freshDirect ? (freshDirect.url || String(freshDirect)) : null;
         }
 
         if (freshResolved) {
@@ -371,9 +343,7 @@ router.get('/stream-proxy', async (req, res) => {
 
           if (freshResolved.startsWith('/uploads/') || freshResolved.startsWith('uploads/')) {
             const localFile = safeResolveUpload(freshResolved, uploadsDir);
-            if (localFile && fs.existsSync(localFile)) {
-              return res.sendFile(localFile);
-            }
+            if (localFile && fs.existsSync(localFile)) return res.sendFile(localFile);
           } else if ((freshResolved.startsWith('http://') || freshResolved.startsWith('https://')) && freshResolved !== targetUrl) {
             const { valid: freshValid } = await validateSafeUrl(freshResolved);
             if (freshValid && !res.headersSent && !res.writableEnded) {
@@ -396,7 +366,7 @@ router.get('/stream-proxy', async (req, res) => {
             }
           }
         }
-      } catch (recErr) {}
+      } catch {}
     }
     applyStrictCors();
     if (!res.headersSent) res.status(500).send('Proxy streaming failed');
@@ -404,5 +374,4 @@ router.get('/stream-proxy', async (req, res) => {
 });
 
 router.urlAliasMap = urlAliasMap;
-
 module.exports = router;

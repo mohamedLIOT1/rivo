@@ -71,6 +71,13 @@ export function useWebQueue({
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
   const isFetchingAiShuffleRef = useRef(false);
+  const smartShuffleAbortRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      smartShuffleAbortRef.current?.abort();
+    };
+  }, []);
 
   const setCurrentQueue = useCallback((nextOrUpdater) => {
     setCurrentQueueState((prev) => {
@@ -128,15 +135,23 @@ export function useWebQueue({
   const fetchSmartShuffleTracks = useCallback(
     async (seedTrack, currentList = [], signal = null) => {
       if (!seedTrack || isFetchingAiShuffleRef.current || signal?.aborted) return [];
+      let effectiveSignal = signal;
+      if (!effectiveSignal) {
+        smartShuffleAbortRef.current?.abort();
+        const controller = new AbortController();
+        smartShuffleAbortRef.current = controller;
+        effectiveSignal = controller.signal;
+      }
       isFetchingAiShuffleRef.current = true;
       try {
         const freshTracks = await fetchSmartShuffleTracksApi({
           seedTrack,
           currentList,
           existingQueue: currentQueueRef.current,
-          signal,
+          signal: effectiveSignal,
+          token: currentUserRef.current?.token || '',
         });
-        if (freshTracks.length > 0 && !signal?.aborted) {
+        if (freshTracks.length > 0 && !effectiveSignal?.aborted) {
           setCurrentQueue((prev) => attachQueueMeta([...prev, ...freshTracks], prev));
         }
         return freshTracks;
@@ -149,7 +164,7 @@ export function useWebQueue({
       }
       return [];
     },
-    [setCurrentQueue]
+    [currentUserRef, setCurrentQueue]
   );
 
   const addToQueue = useCallback(

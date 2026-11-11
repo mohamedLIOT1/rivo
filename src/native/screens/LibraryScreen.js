@@ -52,7 +52,7 @@ import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
@@ -63,6 +63,79 @@ import SongItem from '../ui/SongItem';
 import MiniMixerModal from '../components/MiniMixerModal';
 
 const { width } = Dimensions.get('window');
+
+const QuickAddRecommendationRow = React.memo(function QuickAddRecommendationRow({
+  track,
+  isJustAdded,
+  isRTL,
+  rtlTextStyle,
+  onPlay,
+  onAdd,
+}) {
+  return (
+    <View style={styles.recItemRow}>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+        onPress={() => onPlay?.(track)}
+        activeOpacity={0.7}
+      >
+        <Image
+          source={{ uri: normalizeCoverUri(track.cover || track.coverUrl) }}
+          style={styles.recItemCover}
+          fadeDuration={0}
+        />
+        <View style={{ flex: 1, marginLeft: 10 }}>
+          <Text style={styles.recItemTitle} numberOfLines={1}>
+            {track.title}
+          </Text>
+          <Text style={styles.recItemArtist} numberOfLines={1}>
+            {track.artist || (isRTL ? 'فنان غير معروف' : 'Unknown Artist')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.quickAddBtn, isJustAdded && styles.quickAddBtnDone]}
+        onPress={() => onAdd(track)}
+        disabled={isJustAdded}
+        activeOpacity={0.8}
+      >
+        {isJustAdded ? (
+          <>
+            <Check size={12} color="#082621" strokeWidth={3} />
+            <Text style={[styles.quickAddBtnTextDone, rtlTextStyle]}>{isRTL ? 'تمت الإضافة' : 'ADDED'}</Text>
+          </>
+        ) : (
+          <>
+            <Plus size={12} color="#082621" strokeWidth={3} />
+            <Text style={[styles.quickAddBtnText, rtlTextStyle]}>{isRTL ? 'إضافة' : 'ADD'}</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+});
+
+const CoverPickerThumb = React.memo(function CoverPickerThumb({ track, selected, onSelect }) {
+  const tCover = track.cover || track.coverUrl;
+  if (!tCover) return null;
+  return (
+    <TouchableOpacity
+      onPress={() => onSelect(tCover)}
+      style={[
+        styles.trackThumbBtn,
+        selected && { borderColor: colors.mint, borderWidth: 2 }
+      ]}
+      activeOpacity={0.8}
+    >
+      <Image
+        source={{ uri: normalizeCoverUri(tCover, track) }}
+        style={{ width: 44, height: 44, borderRadius: 6 }}
+        fadeDuration={0}
+      />
+    </TouchableOpacity>
+  );
+});
 
 const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
   playlist,
@@ -171,6 +244,7 @@ function LibraryScreen({
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
   const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
   const isOffline = appMode === 'offline';
   const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
@@ -254,6 +328,24 @@ function LibraryScreen({
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [justAddedSongId, setJustAddedSongId] = useState(null);
 
+  const allTracks = isOffline
+    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
+    : ((userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []));
+  const safeLikedIds = useMemo(() => (Array.isArray(likedTrackIds) ? likedTrackIds : []), [likedTrackIds]);
+
+  // Unified track pool (declared before fetchLikedPlaylist to avoid TDZ reference)
+  const trackPoolMap = useMemo(() => {
+    const list = [...(allTracks || []), ...(fetchedTracks || []), ...(fetchedLikedTracks || [])];
+    const map = new Map();
+    for (const t of list) {
+      if (t) {
+        const id = String(t._id || t.id || '');
+        if (id) map.set(id, t);
+      }
+    }
+    return map;
+  }, [allTracks, fetchedTracks, fetchedLikedTracks]);
+
   // Hardware Back button returns to library main view instead of closing app
   useEffect(() => {
     const onBackPress = () => {
@@ -330,24 +422,6 @@ function LibraryScreen({
   useEffect(() => {
     setCoverFailed(false);
   }, [selectedView?.id, selectedView?._id]);
-
-  const allTracks = isOffline
-    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
-    : ((userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []));
-  const safeLikedIds = Array.isArray(likedTrackIds) ? likedTrackIds : [];
-
-  // Unified track pool
-  const trackPoolMap = useMemo(() => {
-    const list = [...(allTracks || []), ...(fetchedTracks || []), ...(fetchedLikedTracks || [])];
-    const map = new Map();
-    for (const t of list) {
-      if (t) {
-        const id = String(t._id || t.id || '');
-        if (id) map.set(id, t);
-      }
-    }
-    return map;
-  }, [allTracks, fetchedTracks, fetchedLikedTracks]);
 
   // Liked tracks
   const likedTracks = useMemo(() => {
@@ -1109,7 +1183,7 @@ function LibraryScreen({
         activeOpacity={0.9}
         onPress={() => setSelectedView('liked')}
       >
-        <View style={styles.cardShadow} />
+        {!isLiteMode && <View style={styles.cardShadow} />}
         <View style={[styles.likedBanner, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}>
           <View style={styles.likedBannerIcon}>
             <Heart size={28} color={colors.rust} fill={colors.rust} />
@@ -1135,7 +1209,7 @@ function LibraryScreen({
         activeOpacity={0.9}
         onPress={onNavigateOffline}
       >
-        <View style={styles.cardShadow} />
+        {!isLiteMode && <View style={styles.cardShadow} />}
         <View style={[styles.likedBanner, !isDark ? { backgroundColor: '#ede5d3', borderColor: '#0b1110' } : { backgroundColor: '#162e2a' }]}>
           <View style={[styles.likedBannerIcon, { backgroundColor: colors.teal }]}>
             <Download size={24} color={colors.ink} />
@@ -1225,7 +1299,7 @@ function LibraryScreen({
             selectedView === 'liked' ? (
               <View>
                 <View style={styles.likedHeroCard}>
-                  <View style={styles.hardShadow} />
+                  {!isLiteMode && <View style={styles.hardShadow} />}
                   <View style={[styles.likedHero, !isDark && styles.likedHeroLight]}>
                     <View style={styles.heartBigBox}>
                       <Heart size={32} color={colors.rust} fill={colors.rust} />
@@ -1279,7 +1353,7 @@ function LibraryScreen({
             ) : (
               <View>
                 <View style={styles.playlistHeroCard}>
-                  <View style={styles.hardShadow} />
+                  {!isLiteMode && <View style={styles.hardShadow} />}
                   <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
                     <View style={styles.playlistBigBox}>
                       <View style={StyleSheet.absoluteFillObject}>
@@ -1544,59 +1618,27 @@ function LibraryScreen({
                   ) : null}
                 </View>
 
-                {/* Tracks List: Search Results or AI Recommendations (Capped to 15 for low-end tablets) */}
-                {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).slice(0, 15).map((recTrack) => {
+                {/* Tracks List: Search Results or AI Recommendations (Capped for low-end tablets) */}
+                {(songSearchQuery.trim() ? searchResultsForAdd : aiRecommendations).slice(0, isLiteMode ? 8 : 15).map((recTrack) => {
                   const recId = String(recTrack._id || recTrack.id);
-                  const isJustAdded = justAddedSongId === recId;
                   return (
-                    <View key={recId} style={styles.recItemRow}>
-                      <TouchableOpacity
-                        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-                        onPress={() => playTrack && playTrack(recTrack)}
-                        activeOpacity={0.7}
-                      >
-                        <Image
-                          source={{ uri: normalizeCoverUri(recTrack.cover || recTrack.coverUrl) }}
-                          style={styles.recItemCover}
-                          fadeDuration={0}
-                        />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text style={styles.recItemTitle} numberOfLines={1}>
-                            {recTrack.title}
-                          </Text>
-                          <Text style={styles.recItemArtist} numberOfLines={1}>
-                            {recTrack.artist || (isRTL ? 'فنان غير معروف' : 'Unknown Artist')}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.quickAddBtn, isJustAdded && styles.quickAddBtnDone]}
-                        onPress={() => handleQuickAddTrack(recTrack)}
-                        disabled={isJustAdded}
-                        activeOpacity={0.8}
-                      >
-                        {isJustAdded ? (
-                          <>
-                            <Check size={12} color="#082621" strokeWidth={3} />
-                            <Text style={[styles.quickAddBtnTextDone, rtlTextStyle]}>{isRTL ? 'تمت الإضافة' : 'ADDED'}</Text>
-                          </>
-                        ) : (
-                          <>
-                            <Plus size={12} color="#082621" strokeWidth={3} />
-                            <Text style={[styles.quickAddBtnText, rtlTextStyle]}>{isRTL ? 'إضافة' : 'ADD'}</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
+                    <QuickAddRecommendationRow
+                      key={recId}
+                      track={recTrack}
+                      isJustAdded={justAddedSongId === recId}
+                      isRTL={isRTL}
+                      rtlTextStyle={rtlTextStyle}
+                      onPlay={playTrack}
+                      onAdd={handleQuickAddTrack}
+                    />
                   );
                 })}
               </View>
             ) : <View style={{ height: 32 }} />
           }
-          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
-          windowSize={Platform.OS === 'android' ? 3 : 5}
+          initialNumToRender={isLiteMode ? 6 : 8}
+          maxToRenderPerBatch={isLiteMode ? 4 : 6}
+          windowSize={5}
           updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
@@ -1622,9 +1664,9 @@ function LibraryScreen({
           columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
-          windowSize={Platform.OS === 'android' ? 3 : 5}
+          initialNumToRender={isLiteMode ? 6 : 8}
+          maxToRenderPerBatch={isLiteMode ? 4 : 6}
+          windowSize={5}
           updateCellsBatchingPeriod={50}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
@@ -1639,9 +1681,10 @@ function LibraryScreen({
       )}
 
       {/* ── Edit Playlist Modal ── */}
+      {isEditModalOpen && (
       <Modal
         visible={isEditModalOpen}
-        animationType={Platform.OS === 'android' ? 'none' : 'slide'}
+        animationType={isLiteMode || Platform.OS === 'android' ? 'none' : 'slide'}
         transparent
         onRequestClose={() => setIsEditModalOpen(false)}
       >
@@ -1693,28 +1736,24 @@ function LibraryScreen({
                   <Text style={[styles.inputLabel, { color: isDark ? colors.paperMuted : '#4b5563' }, rtlTextStyle]}>
                     {isRTL ? 'أو استخدم غلاف أحد المقاطع:' : 'OR USE TRACK ARTWORK:'}
                   </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 4 }}>
-                    {activePlaylistTracks.slice(0, 8).map((t, idx) => {
-                      const tCover = t.cover || t.coverUrl;
-                      if (!tCover) return null;
-                      return (
-                        <TouchableOpacity
-                          key={t._id || t.id || idx}
-                          onPress={() => setEditCover(tCover)}
-                          style={[
-                            styles.trackThumbBtn,
-                            editCover === tCover && { borderColor: colors.mint, borderWidth: 2 }
-                          ]}
-                          activeOpacity={0.8}
-                        >
-                          <Image
-                            source={{ uri: normalizeCoverUri(tCover, t) }}
-                            style={{ width: 44, height: 44, borderRadius: 6 }}
-                          />
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
+                  <FlatList
+                    horizontal
+                    data={activePlaylistTracks.slice(0, 8)}
+                    keyExtractor={(t, idx) => String(t._id || t.id || idx)}
+                    renderItem={({ item }) => (
+                      <CoverPickerThumb
+                        track={item}
+                        selected={editCover === (item.cover || item.coverUrl)}
+                        onSelect={setEditCover}
+                      />
+                    )}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingTop: 4 }}
+                    windowSize={5}
+                    initialNumToRender={6}
+                    maxToRenderPerBatch={6}
+                    removeClippedSubviews={Platform.OS === 'android'}
+                  />
                 </View>
               )}
 
@@ -1853,7 +1892,9 @@ function LibraryScreen({
           </View>
         </View>
       </Modal>
+      )}
       {/* Rivo MiniMixer Sheet Modal */}
+      {Boolean(activeMixerPair) && (
       <MiniMixerModal
         visible={Boolean(activeMixerPair)}
         onClose={() => setActiveMixerPair(null)}
@@ -1922,6 +1963,7 @@ function LibraryScreen({
           }
         }}
       />
+      )}
     </View>
   );
 }

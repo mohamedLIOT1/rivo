@@ -17,17 +17,31 @@ export function sanitizeDuration(val, fallback = 210) {
 
 /**
  * Requests an alternative stream from backend with retryAlt=1
- * Bypasses cached / blocked video IDs and resolves alternative source
+ * Bypasses cached / blocked video IDs and resolves alternative source.
+ * Cloud/uploaded tracks (/uploads/cloud/, /uploads/) recover via /api/tracks/:id/stream
+ * or direct URL without attempting YouTube fallbacks.
  */
 export async function requestAlternativeStream(track, apiBaseUrl, signal = null) {
-  if (!track) return null;
+  if (!track || signal?.aborted) return null;
   const trackId = String(track.id || track._id || '');
+  const rawAudioUrl = String(track.audioUrl || track.resolvedAudioUrl || '').trim();
+  const normalizedAudioUrl = rawAudioUrl.startsWith('uploads/') ? `/${rawAudioUrl}` : rawAudioUrl;
+  const isCloudOrUpload = Boolean(
+    track.cloudStorage?.provider ||
+    normalizedAudioUrl.startsWith('/uploads/cloud/') ||
+    normalizedAudioUrl.includes('/uploads/cloud/') ||
+    normalizedAudioUrl.startsWith('/uploads/') ||
+    normalizedAudioUrl.startsWith('/api/tracks/media/')
+  );
+
   const qTitle = encodeURIComponent(track.title || '');
   const qArtist = encodeURIComponent(track.artist || '');
   const qAlbum = encodeURIComponent(track.album || '');
   const qDuration = encodeURIComponent(track.duration || '');
+  const qUrl = encodeURIComponent(normalizedAudioUrl);
+  const retryQuery = isCloudOrUpload ? '' : '&retryAlt=1';
 
-  // 1. Try endpoint /api/tracks/:id/stream with retryAlt=1 (timeout: 12s)
+  // 1. Try endpoint /api/tracks/:id/stream (timeout: 12s)
   const controller1 = new AbortController();
   const t1 = setTimeout(() => { try { controller1.abort(); } catch {} }, 12000);
   const onParentAbort1 = () => { clearTimeout(t1); try { controller1.abort(); } catch {} };
@@ -35,11 +49,9 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
 
   try {
     const sRes = await fetch(
-      `${apiBaseUrl}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}&retryAlt=1`,
+      `${apiBaseUrl}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${qUrl}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}${retryQuery}`,
       { signal: controller1.signal }
     );
-    clearTimeout(t1);
-    if (signal) signal.removeEventListener('abort', onParentAbort1);
 
     if (sRes.ok) {
       const sData = await sRes.json();
@@ -54,11 +66,31 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
         };
       }
     }
-  } catch (err) {
+  } catch {
+    if (signal?.aborted) return null;
+  } finally {
     clearTimeout(t1);
     if (signal) signal.removeEventListener('abort', onParentAbort1);
-    if (signal?.aborted) return null;
   }
+
+  // Cloud / uploaded tracks: recover directly via URL and never fall back to YouTube
+  if (isCloudOrUpload) {
+    if (signal?.aborted || !normalizedAudioUrl) return null;
+    const directCloudUrl = normalizedAudioUrl.startsWith('/')
+      ? `${apiBaseUrl}${normalizedAudioUrl}`
+      : normalizedAudioUrl;
+    if (!directCloudUrl.includes('youtube.com') && !directCloudUrl.includes('youtu.be')) {
+      return {
+        url: directCloudUrl,
+        duration: sanitizeDuration(track.duration, 210),
+        cover: track.cover || track.coverUrl,
+        track: null
+      };
+    }
+    return null;
+  }
+
+  if (signal?.aborted) return null;
 
   // 2. Try endpoint /api/tracks/resolve-stream with retryAlt=1 (timeout: 12s)
   const controller2 = new AbortController();
@@ -71,8 +103,6 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
       `${apiBaseUrl}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}&retryAlt=1`,
       { signal: controller2.signal }
     );
-    clearTimeout(t2);
-    if (signal) signal.removeEventListener('abort', onParentAbort2);
 
     if (res.ok) {
       const d = await res.json();
@@ -87,10 +117,11 @@ export async function requestAlternativeStream(track, apiBaseUrl, signal = null)
         };
       }
     }
-  } catch (err) {
+  } catch {
+    if (signal?.aborted) return null;
+  } finally {
     clearTimeout(t2);
     if (signal) signal.removeEventListener('abort', onParentAbort2);
-    if (signal?.aborted) return null;
   }
 
   return null;

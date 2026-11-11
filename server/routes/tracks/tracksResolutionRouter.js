@@ -4,8 +4,14 @@ const mongoose = require('mongoose');
 const { Track } = require('../../models');
 const { escapeRegex, resolveOfficialYouTubeAudioStream } = require('../../utils/helpers');
 const { classifyGenre, isQuranContent, isPodcastContent } = require('../../utils/genreClassifier');
+const { invalidateTracksCache } = require('./tracksCache');
 
-async function autoPersistExternalTrack({ id, trackId, title, artist, album, cover, audioUrl, duration, genre, tags, description }) {
+let sharedIo = null;
+function setIo(io) {
+  if (io) sharedIo = io;
+}
+
+async function autoPersistExternalTrack({ id, trackId, title, artist, album, cover, audioUrl, duration, genre, tags, description, io }) {
   if (!title) return null;
   try {
     const targetId = id || trackId;
@@ -75,29 +81,22 @@ async function autoPersistExternalTrack({ id, trackId, title, artist, album, cov
         source: 'Rivo',
         addedBy: 'auto-search'
       });
+      invalidateTracksCache();
+      const targetIo = io || sharedIo;
+      if (targetIo && t) {
+        const createdPayload = typeof t.toObject === 'function' ? { ...t.toObject(), id: String(t._id) } : t;
+        targetIo.emit('track:created', createdPayload);
+      }
     }
     const resolvedGenre = t.genre || classifyGenre({
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      genre: t.genre,
-      tags: t.tags,
-      description: t.description
+      title: t.title, artist: t.artist, album: t.album, genre: t.genre, tags: t.tags, description: t.description
     }).genre;
     const isPodcast = Boolean(t.isPodcast || t.contentType === 'podcast' || resolvedGenre === 'Podcast' || isPodcastContent(t.title, t.artist, t.album, resolvedGenre));
     return {
-      id: String(t._id || t.id),
-      _id: String(t._id || t.id),
-      title: t.title,
-      artist: t.artist,
-      album: t.album,
-      cover: t.cover,
-      audioUrl: t.audioUrl,
-      duration: t.duration || duration || 210,
-      genre: resolvedGenre,
-      source: t.source || 'Rivo',
-      isQuran: Boolean(t.isQuran),
-      isPodcast,
+      id: String(t._id || t.id), _id: String(t._id || t.id),
+      title: t.title, artist: t.artist, album: t.album, cover: t.cover, audioUrl: t.audioUrl,
+      duration: t.duration || duration || 210, genre: resolvedGenre, source: t.source || 'Rivo',
+      isQuran: Boolean(t.isQuran), isPodcast,
       contentType: t.isQuran ? 'quran' : (isPodcast ? 'podcast' : (t.contentType || 'music')),
       lyrics: t.lyrics || []
     };
@@ -129,8 +128,9 @@ const resolveStreamHandler = async (req, res) => {
       try {
         const dbTrack = await Track.findById(targetDbId).lean();
         if (dbTrack) {
-          if (dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
-            const cleanPath = dbTrack.audioUrl ? (dbTrack.audioUrl.startsWith('/') ? dbTrack.audioUrl : `/${dbTrack.audioUrl}`) : '';
+          if (dbTrack.cloudStorage?.provider || dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
+            const rawCloud = dbTrack.audioUrl || `/uploads/cloud/${dbTrack._id}.${dbTrack.cloudStorage?.ext || 'm4a'}`;
+            const cleanPath = rawCloud.startsWith('/') ? rawCloud : `/${rawCloud}`;
             return res.json({
               success: true,
               url: cleanPath,
@@ -205,8 +205,9 @@ const resolveStreamHandler = async (req, res) => {
           dbTrack = await Track.findOne(query).lean();
         }
         if (dbTrack) {
-          if (dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
-            const cleanPath = dbTrack.audioUrl ? (dbTrack.audioUrl.startsWith('/') ? dbTrack.audioUrl : `/${dbTrack.audioUrl}`) : '';
+          if (dbTrack.cloudStorage?.provider || dbTrack.source === 'Upload' || (dbTrack.audioUrl && (dbTrack.audioUrl.startsWith('/uploads/') || dbTrack.audioUrl.includes('/uploads/')))) {
+            const rawCloud = dbTrack.audioUrl || `/uploads/cloud/${dbTrack._id}.${dbTrack.cloudStorage?.ext || 'm4a'}`;
+            const cleanPath = rawCloud.startsWith('/') ? rawCloud : `/${rawCloud}`;
             return res.json({
               success: true,
               url: cleanPath,
@@ -301,7 +302,8 @@ const resolveStreamHandler = async (req, res) => {
               duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
               genre: req.query.genre,
               tags: req.query.tags,
-              description: req.query.description
+              description: req.query.description,
+              io: req.app?.get('io') || req.io
             });
             return res.json({
               success: true,
@@ -349,7 +351,8 @@ const resolveStreamHandler = async (req, res) => {
           duration: (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : 210,
           genre: req.query.genre,
           tags: req.query.tags,
-          description: req.query.description
+          description: req.query.description,
+          io: req.app?.get('io') || req.io
         });
         return res.json({
           success: true,
@@ -378,5 +381,6 @@ router.get('/resolve-stream', resolveStreamHandler);
 module.exports = {
   router,
   autoPersistExternalTrack,
-  resolveStreamHandler
+  resolveStreamHandler,
+  setIo
 };

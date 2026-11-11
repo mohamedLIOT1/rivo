@@ -375,7 +375,26 @@ export async function saveTrackOffline(track, options = {}) {
   }
 
   try {
-    let targetUrl = track.audioUrl || '';
+    const normalizeUploadUrl = (u) => {
+      if (!u || typeof u !== 'string') return '';
+      const trimmed = u.trim();
+      return trimmed.startsWith('uploads/') ? `/${trimmed}` : trimmed;
+    };
+    const isCloudOrUploadPath = (u) => {
+      const norm = normalizeUploadUrl(u);
+      return Boolean(
+        norm && (
+          norm.startsWith('/uploads/cloud/') ||
+          norm.startsWith('/uploads/') ||
+          norm.startsWith('/api/tracks/media/') ||
+          norm.includes('/uploads/cloud/') ||
+          norm.includes('/uploads/')
+        )
+      );
+    };
+
+    let targetUrl = normalizeUploadUrl(track.audioUrl || track.resolvedAudioUrl || '');
+    const isCloudOrServerUpload = isCloudOrUploadPath(targetUrl) || Boolean(track.cloudStorage?.provider);
     let audioBlob = null;
     const isVocalOnlyActive = typeof window !== 'undefined' && localStorage.getItem('rivo_vocal_only') === 'true';
 
@@ -411,14 +430,15 @@ export async function saveTrackOffline(track, options = {}) {
       }
     }
 
-    // 2. Direct audio / MP3 URLs
+    // 2. Direct audio / Cloud (/uploads/cloud/) / Upload (/uploads/) / MP3 URLs
     if (!audioBlob && targetUrl && !targetUrl.includes('youtube.com') && !targetUrl.includes('youtu.be')) {
       try {
         if (signal?.aborted) return null;
-        let directRes = await fetch(targetUrl, { signal }).catch(() => null);
-        if (!directRes || !directRes.ok) {
+        const fetchUrl = targetUrl.startsWith('/') ? `${API_BASE_URL}${targetUrl}` : targetUrl;
+        let directRes = await fetch(fetchUrl, { signal }).catch(() => null);
+        if ((!directRes || !directRes.ok) && !isCloudOrServerUpload && !targetUrl.startsWith('/') && fetchUrl.startsWith('http')) {
           if (signal?.aborted) return null;
-          directRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(targetUrl)}`, { signal }).catch(() => null);
+          directRes = await fetch(`${API_BASE_URL}/api/proxy-audio?url=${encodeURIComponent(fetchUrl)}`, { signal }).catch(() => null);
         }
         if (directRes && directRes.ok) {
           const ct = directRes.headers.get('content-type') || '';
@@ -432,8 +452,10 @@ export async function saveTrackOffline(track, options = {}) {
       }
     }
 
-    // 3. YouTube tracks
-    const ytId = extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null);
+    // 3. YouTube tracks (never fall back to YouTube client-side resolution for /uploads/cloud/ or /uploads/)
+    const ytId = !isCloudOrServerUpload
+      ? (extractYtId(targetUrl) || (track.source === 'YouTube' ? extractYtId(track.id || track._id) : null))
+      : null;
     if (!audioBlob && ytId) {
       try {
         if (signal?.aborted) return null;
@@ -477,11 +499,12 @@ export async function saveTrackOffline(track, options = {}) {
     if (track.cover) {
       if (track.cover.startsWith('data:')) {
         coverBlob = dataURItoBlob(track.cover);
-      } else if (track.cover.startsWith('http')) {
+      } else if (track.cover.startsWith('http') || track.cover.startsWith('/')) {
         try {
-          let coverRes = await fetch(track.cover).catch(() => null);
-          if (!coverRes || !coverRes.ok) {
-            coverRes = await fetch(`${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(track.cover)}`).catch(() => null);
+          const coverUrl = track.cover.startsWith('/') ? `${API_BASE_URL}${track.cover}` : track.cover;
+          let coverRes = await fetch(coverUrl, { signal }).catch(() => null);
+          if ((!coverRes || !coverRes.ok) && !track.cover.startsWith('/')) {
+            coverRes = await fetch(`${API_BASE_URL}/api/proxy-image?url=${encodeURIComponent(coverUrl)}`, { signal }).catch(() => null);
           }
           if (coverRes && coverRes.ok) {
             const cb = await coverRes.blob();
@@ -559,6 +582,10 @@ export async function saveTrackOffline(track, options = {}) {
       } catch (err) {
         console.error('Failed to save track in desktop app folder:', err);
       }
+    }
+
+    if (!audioBlob && !desktopRecord?.file_path && !track.localFilePath) {
+      return null;
     }
 
     const db = await openDB();
@@ -834,6 +861,15 @@ export async function isTrackSavedOffline(trackId, title = null, artist = null) 
   }
 
   try {
+    const isNativeStored = typeof window !== 'undefined' && Boolean(window.RIVO_NATIVE || window.ReactNativeWebView);
+    const hasValidOfflineRecord = (item) => Boolean(
+      item && (
+        (item.audioBlob && item.audioBlob.size > 10000) ||
+        item.localFilePath ||
+        (isNativeStored && item.downloaded)
+      )
+    );
+
     const db = await openDB();
     return new Promise((resolve) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
@@ -842,7 +878,7 @@ export async function isTrackSavedOffline(trackId, title = null, artist = null) 
       if (idStr) {
         const req = store.get(idStr);
         req.onsuccess = () => {
-          if (req.result) {
+          if (hasValidOfflineRecord(req.result)) {
             resolve(true);
             return;
           }
@@ -861,7 +897,7 @@ export async function isTrackSavedOffline(trackId, title = null, artist = null) 
           const normTitle = (title || '').toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
           const normArtist = (artist || '').toLowerCase().trim();
           const exists = all.some(item => {
-            if (!item.title) return false;
+            if (!hasValidOfflineRecord(item) || !item.title) return false;
             const itemTitle = item.title.toLowerCase().trim().replace(/[/\\?%*:|"<>]/g, '');
             if (itemTitle === normTitle) {
               if (!normArtist || !item.artist) return true;

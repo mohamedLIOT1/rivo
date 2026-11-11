@@ -19,8 +19,8 @@ if not os.path.exists(BASE_IPA):
 HERMESC = os.path.join(ROOT_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 USER_DOWNLOADS = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-VERSION = '2.4.11'
-BUILD_NUM = '141'
+VERSION = '2.4.12'
+BUILD_NUM = '142'
 NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
 NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
 

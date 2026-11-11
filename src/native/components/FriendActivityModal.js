@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Modal,
   View,
@@ -9,6 +9,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  AppState,
 } from 'react-native';
 import {
   Users,
@@ -21,7 +22,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useSocket } from '../context/SocketContext';
 import { useTheme } from '../context/ThemeContext';
-import { useLocalization } from '../context/LocalizationContext';
+import { useLocalization, useLiteMode } from '../context/LocalizationContext';
 import FriendActivityCard from './FriendActivityCard';
 import UserDetailModal from './UserDetailModal';
 import { styles } from './friendActivityModalStyles';
@@ -32,33 +33,66 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
   const { socket } = useSocket();
   const { isDark = true } = useTheme();
   const { isRTL = false } = useLocalization() || {};
+  const { isLiteMode } = useLiteMode();
 
   const [activities, setActivities] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
+  const [isAppActive, setIsAppActive] = useState(() => AppState.currentState === 'active');
+  const fetchAbortRef = useRef(null);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      setIsAppActive(nextState === 'active');
+    });
+    return () => sub?.remove?.();
+  }, []);
 
   const fetchActivities = useCallback(async () => {
+    if (fetchAbortRef.current) {
+      try { fetchAbortRef.current.abort(); } catch {}
+    }
+    const controller = new AbortController();
+    fetchAbortRef.current = controller;
+
     setIsLoading(true);
     try {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_BASE_URL}/api/users/listening-activity`, { headers });
+      const res = await fetch(`${API_BASE_URL}/api/users/listening-activity`, {
+        headers,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted) return;
       if (res.ok) {
         const data = await res.json();
-        if (data?.success && Array.isArray(data.activities)) {
+        if (!controller.signal.aborted && data?.success && Array.isArray(data.activities)) {
           setActivities(data.activities);
         }
       }
     } catch {}
-    setIsLoading(false);
+    if (!controller.signal.aborted) {
+      setIsLoading(false);
+    }
   }, [token]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || !isAppActive) {
+      if (fetchAbortRef.current) {
+        try { fetchAbortRef.current.abort(); } catch {}
+      }
+      return undefined;
+    }
     fetchActivities();
-    const interval = setInterval(fetchActivities, 20000);
-    return () => clearInterval(interval);
-  }, [visible, fetchActivities]);
+    const pollMs = isLiteMode ? 45000 : 20000;
+    const interval = setInterval(fetchActivities, pollMs);
+    return () => {
+      clearInterval(interval);
+      if (fetchAbortRef.current) {
+        try { fetchAbortRef.current.abort(); } catch {}
+      }
+    };
+  }, [visible, isAppActive, isLiteMode, fetchActivities]);
 
   // Real-time socket updates for zero latency without wiping offline tracks
   useEffect(() => {
@@ -185,7 +219,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
   ), [isDark, handleOpenProfile, handleListenAlong]);
 
   return (
-    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType={isLiteMode || Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={[styles.container, !isDark && styles.containerLight]}>
           {/* Header */}
@@ -277,7 +311,7 @@ export default function FriendActivityModal({ visible, onClose, onViewProfile })
         </View>
       </View>
 
-      {!onViewProfile && (
+      {!onViewProfile && Boolean(selectedUser) && (
         <UserDetailModal
           visible={Boolean(selectedUser)}
           user={selectedUser}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const fs = require('fs');
+const path = require('path');
 const rateLimit = require('express-rate-limit');
 const { Track, Album, User, SongLyrics } = require('../../models');
 const { auth, adminAuth, isAdminUser } = require('../../middleware/auth');
@@ -20,7 +21,6 @@ const { invalidateTracksCache } = require('./tracksCache');
 const { performTrackDeduplication } = require('./tracksDedupeHelper');
 const { classifyGenre } = require('../../utils/genreClassifier');
 
-// Rate limiter for track creation to prevent DoS / spam
 const trackCreateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 60,
@@ -28,6 +28,23 @@ const trackCreateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Too many tracks created from this IP, please try again after 15 minutes.' }
 });
+
+function safeUnlink(filePath) {
+  if (!filePath) return;
+  try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch {}
+}
+
+function cleanupCloudCacheForTrack(trackId) {
+  const cleanId = String(trackId || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,64}$/.test(cleanId)) return;
+  const cloudCacheDir = path.join(uploadsDir, 'cloud-cache');
+  try {
+    if (!fs.existsSync(cloudCacheDir)) return;
+    for (const entry of fs.readdirSync(cloudCacheDir)) {
+      if (entry.startsWith(`${cleanId}.`)) safeUnlink(path.join(cloudCacheDir, entry));
+    }
+  } catch {}
+}
 
 // Upload local track (audio file + cover)
 router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), verifyUploadedAudioMagicBytes, async (req, res) => {
@@ -60,15 +77,9 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
       artist: { $regex: new RegExp(`^${escapeRegex(cleanA)}$`, 'i') }
     });
     if (existingTrack) {
-      if (req.files?.audio?.[0]?.path) {
-        try { fs.unlinkSync(req.files.audio[0].path); } catch {}
-      }
-      if (req.files?.cover?.[0]?.path) {
-        try { fs.unlinkSync(req.files.cover[0].path); } catch {}
-      }
-      if (req.user?.id) {
-        await autoAddTrackToUserLinksPlaylist(req.user.id, existingTrack._id, existingTrack.cover);
-      }
+      safeUnlink(req.files?.audio?.[0]?.path);
+      safeUnlink(req.files?.cover?.[0]?.path);
+      if (req.user?.id) await autoAddTrackToUserLinksPlaylist(req.user.id, existingTrack._id, existingTrack.cover);
       return res.json({ success: true, track: existingTrack, isDuplicate: true });
     }
 
@@ -94,29 +105,23 @@ router.post('/upload', auth, trackCreateLimiter, upload.fields([{ name: 'audio',
     }).save();
 
     await syncTrackToAlbum(newTrack);
+    invalidateTracksCache();
 
-    if (req.user?.id) {
-      await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
-    }
+    if (req.user?.id) await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
 
     const io = req.app?.get('io') || req.io;
     if (io) io.emit('track:created', newTrack);
 
     res.json({ success: true, track: newTrack });
   } catch (err) {
-    if (req.files?.audio?.[0]?.path) {
-      try { fs.unlinkSync(req.files.audio[0].path); } catch {}
-    }
-    if (req.files?.cover?.[0]?.path) {
-      try { fs.unlinkSync(req.files.cover[0].path); } catch {}
-    }
+    safeUnlink(req.files?.audio?.[0]?.path);
+    safeUnlink(req.files?.cover?.[0]?.path);
     res.status(500).json({ error: err.message });
   }
 });
 
 // Create track manually
 const createTrackHandler = async (req, res) => {
-  invalidateTracksCache();
   try {
     const { title, artist, album, cover, audioUrl, duration, genre, lyrics } = req.body;
     if (!title || typeof title !== 'string' || !title.trim()) {
@@ -174,10 +179,9 @@ const createTrackHandler = async (req, res) => {
     }).save();
 
     await syncTrackToAlbum(newTrack);
+    invalidateTracksCache();
 
-    if (req.user?.id) {
-      await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
-    }
+    if (req.user?.id) await autoAddTrackToUserLinksPlaylist(req.user.id, newTrack._id, newTrack.cover);
 
     const io = req.app?.get('io') || req.io;
     if (io) io.emit('track:created', newTrack);
@@ -194,7 +198,6 @@ router.post('/add', auth, trackCreateLimiter, createTrackHandler);
 
 // Delete track (Admin Only)
 const deleteTrackHandler = async (req, res) => {
-  invalidateTracksCache();
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Permission denied. Only administrators can delete songs from the website.' });
@@ -209,24 +212,19 @@ const deleteTrackHandler = async (req, res) => {
         if (existing.audioUrl) {
           invalidateAudioCache(existing.audioUrl);
           if (existing.audioUrl.startsWith('/uploads/') || existing.audioUrl.startsWith('uploads/')) {
-            const audioPath = safeResolveUpload(existing.audioUrl, uploadsDir);
-            if (audioPath && fs.existsSync(audioPath)) {
-              try { fs.unlinkSync(audioPath); } catch {}
-            }
+            safeUnlink(safeResolveUpload(existing.audioUrl, uploadsDir));
           }
         }
+        if (existing.legacyAudioUrl) invalidateAudioCache(existing.legacyAudioUrl);
         if (existing.cover && (existing.cover.startsWith('/uploads/') || existing.cover.startsWith('uploads/'))) {
-          const coverPath = safeResolveUpload(existing.cover, uploadsDir);
-          if (coverPath && fs.existsSync(coverPath)) {
-            try { fs.unlinkSync(coverPath); } catch {}
-          }
+          safeUnlink(safeResolveUpload(existing.cover, uploadsDir));
         }
       }
       await Track.deleteOne({ _id: trackId });
     } catch {}
-    try {
-      await Album.updateMany({}, { $pull: { trackIds: trackId } });
-    } catch {}
+    cleanupCloudCacheForTrack(trackId);
+    invalidateTracksCache();
+    try { await Album.updateMany({}, { $pull: { trackIds: trackId } }); } catch {}
 
     const users = await User.find({
       $or: [
@@ -269,7 +267,6 @@ router.post('/delete', adminAuth, deleteTrackHandler);
 
 // Edit / Update track details (Admin Only)
 const updateTrackHandler = async (req, res) => {
-  invalidateTracksCache();
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({ error: 'Permission denied. Only administrators can edit songs.' });
@@ -301,6 +298,7 @@ const updateTrackHandler = async (req, res) => {
     if (Array.isArray(lyrics)) track.lyrics = lyrics;
 
     await track.save();
+    invalidateTracksCache();
 
     if (Array.isArray(lyrics) && lyrics.length > 0) {
       const trackKey = getTrackKey(track.title, track.artist);

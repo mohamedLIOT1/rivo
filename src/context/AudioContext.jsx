@@ -8,7 +8,9 @@ import { API_BASE_URL } from '../config';
 import { recordListeningTick, onTrackStarted, onTrackEnded, flushSessionToServer } from '../utils/listeningTracker';
 import { useUser } from './UserContext';
 import { useUI } from './UIContext';
-import { createPlaybackWatchdog, notifyStreamUnavailable } from '../utils/streamRecoveryHelper';
+import { usePreferences } from './PreferencesContext';
+import { saveTrackOffline, isTrackSavedOffline } from '../utils/offlineStorage';
+import { createPlaybackWatchdog, notifyStreamUnavailable, requestAlternativeStream } from '../utils/streamRecoveryHelper';
 import { getTrackDedupeKey } from '../utils/tasteAlgorithm';
 import {
   AudioProgressProvider,
@@ -43,6 +45,46 @@ const AudioPlayerContext = createContext(null);
 export function AudioProvider({ children, tracks, setTracks }) {
   const userCtx = useUser();
   const { currentUser = null, likedTrackIds = [], toggleLike } = userCtx || {};
+  const { autoDownloadFinished } = usePreferences();
+  const autoDownloadFinishedRef = useRef(autoDownloadFinished);
+  const autoDownloadingIdsRef = useRef(new Set());
+  useEffect(() => {
+    autoDownloadFinishedRef.current = autoDownloadFinished;
+  }, [autoDownloadFinished]);
+
+  const triggerAutoDownloadOnComplete = useCallback((finishedTrack) => {
+    if (!autoDownloadFinishedRef.current) return;
+    if (!finishedTrack || !finishedTrack.title) return;
+    if (finishedTrack.isLive || finishedTrack.isRadio || isRadioTrack(finishedTrack)) return;
+    if (finishedTrack.downloaded) return;
+    const tid = String(finishedTrack._id || finishedTrack.id || '');
+    if (!tid || autoDownloadingIdsRef.current.has(tid)) return;
+
+    autoDownloadingIdsRef.current.add(tid);
+    (async () => {
+      try {
+        const alreadySaved = await isTrackSavedOffline(tid, finishedTrack.title, finishedTrack.artist);
+        if (alreadySaved) {
+          if (typeof setTracks === 'function') {
+            setTracks(prev => prev.map(t => String(t.id || t._id) === tid ? { ...t, downloaded: true } : t));
+          }
+          return;
+        }
+        const saved = await saveTrackOffline(finishedTrack);
+        if (saved && typeof setTracks === 'function') {
+          setTracks(prev => prev.map(t => String(t.id || t._id) === tid ? { ...t, downloaded: true } : t));
+        }
+      } catch {
+      } finally {
+        autoDownloadingIdsRef.current.delete(tid);
+      }
+    })();
+  }, [setTracks]);
+
+  const triggerAutoDownloadOnCompleteRef = useRef(triggerAutoDownloadOnComplete);
+  useEffect(() => {
+    triggerAutoDownloadOnCompleteRef.current = triggerAutoDownloadOnComplete;
+  }, [triggerAutoDownloadOnComplete]);
   const uiCtx = useUI?.() || {};
   const showToast = uiCtx?.showToast;
   const triggerToast = useCallback((msg) => {
@@ -613,6 +655,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
               currentTimeRef.current = toDeck.currentTime || 0;
               updateWebAudioProgress({ currentTime: currentTimeRef.current, duration: targetDur });
               onTrackStarted(toTrack);
+              triggerAutoDownloadOnCompleteRef.current?.(fromTrack);
             }
           };
 
@@ -900,6 +943,9 @@ export function AudioProvider({ children, tracks, setTracks }) {
           return;
         }
 
+        // Full-listen auto-download (non-blocking, deduplicated)
+        triggerAutoDownloadOnCompleteRef.current?.(finished);
+
         // Check End-of-Track Sleep Timer
         if (webSleepTimerSignal.consume()) {
           deck.pause();
@@ -1040,7 +1086,15 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const resumePos = deck.currentTime || 0;
 
         try {
-          const res = await doResolvePlayableAudioStream(cur, null, false, false, true /* isRetryAlt */);
+          const rawUrl = String(cur.audioUrl || cur.resolvedAudioUrl || '');
+          const isCloudTrack = Boolean(
+            cur.cloudStorage?.provider ||
+            rawUrl.includes('/uploads/cloud/') ||
+            rawUrl.startsWith('/uploads/')
+          );
+          const res = isCloudTrack
+            ? await requestAlternativeStream(cur, API_BASE_URL)
+            : await doResolvePlayableAudioStream(cur, null, false, false, true /* isRetryAlt */);
           if (isChangingTrackRef.current || (!isPlayingRef.current && !shouldPlayRef.current)) return;
           const latestCur = currentTrackRef.current;
           if (latestCur && String(latestCur.id || latestCur._id) === curId && res?.url && deck === audioRef.current) {

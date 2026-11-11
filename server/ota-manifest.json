@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.21",
+  "version": "2.4.22",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي",
-  "notesEn": "Fix lock-screen playback recovery and reliable auto-downloads",
-  "bundleSize": 5205050,
-  "sizeMb": "4.96 MB",
-  "updatedAt": "2026-11-11T15:43:36.208Z"
+  "notes": "تحديث هوائي فوري v2.4.22 • وضع الأداء الخفيف لتابلت ٢٠١٦ وإصلاح التنزيل التلقائي والكيو الشخصي",
+  "notesEn": "Instant OTA v2.4.22 • Tablet Lite Mode, full-listen auto-download fix, and personalized AI queue.",
+  "bundleSize": 5237028,
+  "sizeMb": "4.99 MB",
+  "updatedAt": "2026-11-11T22:06:50.699Z"
 }

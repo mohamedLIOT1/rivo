@@ -1,45 +1,94 @@
 /**
- * Recommendation & Smart Shuffle Curators
+ * Recommendation, Smart Shuffle & Personalized Mix Curators
  * Strictly modularized (< 400 lines).
  */
 
-const { Track } = require('../../models');
-const { genAI, getGeminiModel, isQuranTrack } = require('./aiHelpers');
-const { getPrimaryArtistNormalized, CANONICAL_ARTIST_MAP } = require('../../utils/artistAliases');
+const { generateAiJson, isQuranTrack, isPodcastOrAudiobookTrack } = require('./aiHelpers');
+const {
+  getEffectiveArtist,
+  getRelatedArtists,
+  resolveEffectiveMood,
+  isTrackEligibleForMode,
+  fetchDiverseCandidatePool,
+  selectAiPromptCandidates,
+  scoreTrackPersonalized
+} = require('./userTasteHelper');
 
-const RELATED_ARTIST_CLUSTERS = [
-  ['lege-cy', 'cairokee', 'wegz', 'marwan pablo', 'marwan moussa', 'abyusif', 'afroto', 'shabjdeed', 'ziad zaza', 'santa', 'abo el anwar', 'karim osama', 'mousa sam', 'shehab', 'flx', 'arsenic'],
-  ['cairokee', 'amir eid', 'massar egbari', 'sharmoofers', 'hamza namira', 'aziz maraka', 'autostrad', 'jadal', 'disco misr'],
-  ['amr diab', 'tamer hosny', 'hamaki', 'sherine', 'asala', 'elissa', 'nancy ajram', 'bahaa sultan', 'tamer ashoor', 'rami sabry'],
-  ['essam sasa', 'hamo bika', 'hassan shakosh', 'omar kamal', '3enba', 'double zuksh', 'houda bondok', 'reda el bahrawy', 'mahmoud el leithy', 'ahmed sheba']
-];
-
-function getEffectiveArtist(track) {
-  if (!track) return 'unknown';
-  const rawArtist = track.artist || '';
-  const normArt = getPrimaryArtistNormalized(rawArtist);
-  const GENERIC_UPLOADERS = new Set(['zk studios', 'dark side', 'sherif', 'official', 'records', 'music', 'unknown']);
-  if (GENERIC_UPLOADERS.has(normArt) || !normArt || normArt === 'unknown') {
-    const title = (track.title || '').toLowerCase();
-    for (const [alias, canonical] of Object.entries(CANONICAL_ARTIST_MAP)) {
-      if (title.includes(alias)) {
-        return canonical;
-      }
+function buildExcludedIdSet(trackIds = [], rawSeeds = [], excludeTrackIds = []) {
+  const excluded = new Set();
+  for (const id of (trackIds || [])) {
+    if (id) excluded.add(String(id));
+  }
+  for (const s of (rawSeeds || [])) {
+    if (s && typeof s === 'object' && (s.id || s._id)) {
+      excluded.add(String(s.id || s._id));
     }
   }
-  return normArt;
+  for (const id of (excludeTrackIds || [])) {
+    if (id) excluded.add(String(id));
+  }
+  return excluded;
 }
 
-function getRelatedArtists(artists) {
-  const related = new Set();
-  for (const art of artists) {
-    for (const cluster of RELATED_ARTIST_CLUSTERS) {
-      if (cluster.includes(art)) {
-        cluster.forEach(a => { if (a !== art) related.add(a); });
+function capTracksByArtist(tracks, limit = 10, maxPerArtist = 2, preSeededCounts = new Map()) {
+  const selected = [];
+  const seenIds = new Set();
+  const artistCounts = new Map(preSeededCounts);
+
+  const runPass = (cap) => {
+    for (const t of tracks) {
+      if (!t || selected.length >= limit) break;
+      const tId = String(t._id || t.id);
+      if (seenIds.has(tId)) continue;
+      const art = getEffectiveArtist(t);
+      const count = artistCounts.get(art) || 0;
+      if (count < cap) {
+        selected.push(t);
+        seenIds.add(tId);
+        artistCounts.set(art, count + 1);
       }
     }
+  };
+
+  runPass(maxPerArtist);
+  if (selected.length < limit) runPass(maxPerArtist + 1);
+  return selected;
+}
+
+function matchAiTitlesToPool(suggested, pool) {
+  if (!Array.isArray(suggested) || suggested.length === 0) return [];
+  const matched = [];
+  const seen = new Set();
+  for (const item of suggested) {
+    const rawTitle = typeof item === 'object' && item !== null ? (item.title || item.name || '') : String(item || '');
+    const cleanTarget = rawTitle.toLowerCase().trim();
+    if (!cleanTarget) continue;
+    const found = pool.find((t) => {
+      const id = String(t._id || t.id);
+      if (seen.has(id)) return false;
+      const tTitle = String(t.title || '').toLowerCase().trim();
+      return tTitle === cleanTarget ||
+        (tTitle.length >= 4 && cleanTarget.includes(tTitle.slice(0, 8))) ||
+        (cleanTarget.length >= 4 && tTitle.includes(cleanTarget.slice(0, 8)));
+    });
+    if (found) {
+      seen.add(String(found._id || found.id));
+      matched.push(found);
+    }
   }
-  return related;
+  return matched;
+}
+
+function buildSeedContext(rawSeeds = []) {
+  const seedArtists = new Set();
+  const seedGenres = new Set();
+  for (const t of rawSeeds) {
+    if (t && typeof t === 'object') {
+      if (t.artist) seedArtists.add(getEffectiveArtist(t));
+      if (t.genre) seedGenres.add(String(t.genre).trim());
+    }
+  }
+  return { seedArtists, relatedArtists: getRelatedArtists(seedArtists), seedGenres };
 }
 
 async function getCuratedRecommendations({
@@ -52,253 +101,266 @@ async function getCuratedRecommendations({
   effectiveName = '',
   trackIds = [],
   excludeTrackIds = [],
-  refresh = false
+  refresh = false,
+  userTaste = null,
+  signal = null
 }) {
-  const isPlQuran = Boolean(isQuran);
+  const mode = isQuran ? 'quran' : 'music';
   const rawSeeds = (recentTracks && recentTracks.length > 0) ? recentTracks : seedTracks;
-  const normalizedSeeds = rawSeeds.map(t => {
-    if (typeof t === 'string') return t;
-    return `${t.title || ''} ${t.artist || ''}`.trim();
-  }).filter(Boolean);
+  const normalizedSeeds = rawSeeds
+    .map((t) => (typeof t === 'string' ? t : `${t.title || ''} ${t.artist || ''}`.trim()))
+    .filter(Boolean);
+  const excludedIds = buildExcludedIdSet(trackIds, rawSeeds, excludeTrackIds);
 
-  const incomingIds = (trackIds || []).map(String);
-  rawSeeds.forEach(t => {
-    if (typeof t === 'object' && (t.id || t._id)) {
-      incomingIds.push(String(t.id || t._id));
-    }
-  });
-  (excludeTrackIds || []).forEach(id => {
-    if (id) incomingIds.push(String(id));
-  });
-  const excludedIds = new Set(incomingIds);
+  let pool = [];
+  let buckets = null;
+  let seedCtx = buildSeedContext(rawSeeds);
 
-  let pool = availableTracks;
-  if (!pool || pool.length === 0) {
-    if (isPlQuran) {
-      pool = await Track.find({
-        $or: [
-          { isQuran: true },
-          { category: 'quran' },
-          { genre: 'Quran' },
-          { title: /سورة|سوره|قرآن|قران/i }
-        ]
-      }).sort(refresh ? { _id: -1 } : { plays: -1 }).limit(250).lean();
-    } else {
-      const skipCount = refresh ? Math.floor(Math.random() * 40) : 0;
-      pool = await Track.find({
-        isQuran: { $ne: true },
-        category: { $ne: 'quran' },
-        genre: { $ne: 'Quran' }
-      }).sort(refresh ? { createdAt: -1 } : { plays: -1 }).skip(skipCount).limit(250).lean();
-    }
-  }
-
-  const filteredPool = pool.filter(t => {
-    if (excludedIds.has(String(t._id || t.id))) return false;
-    const q = isQuranTrack(t);
-    return isPlQuran ? q : !q;
-  });
-
-  let finalRecs = [];
-  if (process.env.GEMINI_API_KEY && genAI) {
-    try {
-      const model = getGeminiModel();
-      if (model) {
-        // Diversely sample candidate tracks rather than a static slice(0, 50)
-        let candidatePoolForPrompt = [...filteredPool];
-        if (refresh || candidatePoolForPrompt.length > 50) {
-          candidatePoolForPrompt.sort(() => Math.random() - 0.5);
-        }
-        const trackList = candidatePoolForPrompt.slice(0, 50).map(t => `"${t.title}" by ${t.artist}`).join(', ');
-        const prompt = `You are an expert music and recitation curator. Given these available tracks: ${trackList}
-Context: ${isPlQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${effectiveName || 'My Playlist'}", User mood: ${mood || 'neutral'}, Time of day: ${timeOfDay || 'evening'}, Seed / Recent tracks: ${normalizedSeeds.slice(0, 5).join(', ')}.
-Select the 10 best matching tracks from the available list that fit the style and mood. Return ONLY a valid JSON array of track titles exactly as written. No markdown, no explanation.`;
-        const result = await model.generateContent(prompt);
-        const text = result.response.text().trim();
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        const suggested = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
-        const matched = filteredPool.filter(t =>
-          suggested.some(s => {
-            const sClean = String(s).toLowerCase();
-            const tClean = String(t.title).toLowerCase();
-            return sClean.includes(tClean.slice(0, 8)) || tClean.includes(sClean.slice(0, 8));
-          })
-        );
-        if (matched.length > 0) {
-          finalRecs = capTracksByArtist(matched, 10, 2);
-        }
-      }
-    } catch (geminiErr) {
-      console.warn('[AI Recommendations Gemini]', geminiErr.message);
-    }
-  }
-
-  if (finalRecs.length === 0) {
-    const seedArtists = new Set();
-    rawSeeds.forEach(t => {
-      if (typeof t === 'object' && t.artist) seedArtists.add(getEffectiveArtist(t));
+  if (Array.isArray(availableTracks) && availableTracks.length > 0) {
+    pool = availableTracks.filter((t) => !excludedIds.has(String(t._id || t.id)) && isTrackEligibleForMode(t, mode));
+  } else {
+    const diverse = await fetchDiverseCandidatePool({
+      mode,
+      userTaste,
+      seedTracks: rawSeeds,
+      mood: mood || timeOfDay || '',
+      excludeIds: excludedIds,
+      refresh
     });
-    const relatedArtists = getRelatedArtists(seedArtists);
-
-    const scoredPool = filteredPool.map(t => {
-      let score = Math.random() * 20;
-      const art = getEffectiveArtist(t);
-      if (seedArtists.has(art)) {
-        score += refresh ? 15 : 35;
-      } else if (relatedArtists.has(art)) {
-        score += refresh ? 35 : 20; // On refresh, boost similar artists over repeating seed artists!
-      }
-      if (refresh) {
-        score += Math.random() * 30; // Exploration bonus
-      }
-      score += Math.min(15, Math.log10((Number(t.plays) || 0) + 1) * 4);
-      return { track: t, score };
-    });
-
-    scoredPool.sort((a, b) => b.score - a.score);
-    finalRecs = capTracksByArtist(scoredPool.map(s => s.track), 10, 2);
+    pool = diverse.candidates;
+    buckets = diverse.buckets;
+    seedCtx = {
+      seedArtists: diverse.seedArtists,
+      relatedArtists: diverse.relatedArtists,
+      seedGenres: diverse.seedGenres
+    };
   }
 
-  return finalRecs;
+  if (pool.length === 0) return [];
+
+  const promptPool = buckets
+    ? selectAiPromptCandidates(buckets, pool, 60)
+    : [...pool].sort(() => Math.random() - 0.5).slice(0, 60);
+
+  const trackList = promptPool
+    .map((t) => `"${t.title}" by ${t.artist}${t.genre ? ` [${t.genre}]` : ''}`)
+    .join(', ');
+  const tasteLine = userTaste?.summaryText ? `User taste profile: ${userTaste.summaryText}.` : '';
+  const prompt = `You are an expert ${isQuran ? 'Quran recitation' : 'music'} curator.
+Available catalog: ${trackList}
+Context: ${isQuran ? 'Quran Recitations' : 'Music Playlist'}, Name: "${effectiveName || 'My Playlist'}", Mood: ${mood || 'balanced'}, Time: ${timeOfDay || 'any'}, Seeds: ${normalizedSeeds.slice(0, 5).join(', ') || 'none'}.
+${tasteLine}
+Select the 10 best matching tracks from the available catalog that match the playlist vibe AND the user's personal listening taste.
+Return ONLY a valid JSON array of track titles exactly as written. No markdown, no explanation.`;
+
+  const suggested = await generateAiJson(prompt, { signal, maxTokens: 500 });
+  const matched = matchAiTitlesToPool(suggested, pool);
+  if (matched.length > 0) {
+    return capTracksByArtist(matched, 10, 2);
+  }
+
+  const scored = pool.map((t) => ({
+    track: t,
+    score: scoreTrackPersonalized(t, {
+      userTaste,
+      seedArtists: seedCtx.seedArtists,
+      relatedArtists: seedCtx.relatedArtists,
+      seedGenres: seedCtx.seedGenres,
+      mood: mood || timeOfDay || '',
+      preferFamiliar: false,
+      penalizeRecent: true,
+      refresh
+    })
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return capTracksByArtist(scored.map((s) => s.track), 10, 2);
 }
 
-function capTracksByArtist(tracks, limit = 10, maxPerArtist = 2, preSeededCounts = new Map()) {
-  const selected = [];
-  const seenIds = new Set();
-  const artistCounts = new Map(preSeededCounts);
-
-  for (const t of tracks) {
-    if (!t || selected.length >= limit) break;
-    const tId = String(t._id || t.id);
-    if (seenIds.has(tId)) continue;
-    const art = getEffectiveArtist(t);
-    const count = artistCounts.get(art) || 0;
-    if (count < maxPerArtist) {
-      selected.push(t);
-      seenIds.add(tId);
-      artistCounts.set(art, count + 1);
-    }
-  }
-
-  if (selected.length < limit) {
-    for (const t of tracks) {
-      if (!t || selected.length >= limit) break;
-      const tId = String(t._id || t.id);
-      if (seenIds.has(tId)) continue;
-      const art = getEffectiveArtist(t);
-      const count = artistCounts.get(art) || 0;
-      if (count < maxPerArtist + 1) {
-        selected.push(t);
-        seenIds.add(tId);
-        artistCounts.set(art, count + 1);
-      }
-    }
-  }
-
-  return selected;
-}
-
-async function getSmartShuffleTracks({ currentTrack, seedTracks = [], followedArtists = [], limit = 8 }) {
+async function getSmartShuffleTracks({
+  currentTrack,
+  seedTracks = [],
+  followedArtists = [],
+  userTaste = null,
+  limit = 8,
+  signal = null
+}) {
   const isCurQuran = isQuranTrack(currentTrack);
+  const isCurPodcast = !isCurQuran && isPodcastOrAudiobookTrack(currentTrack);
+  const mode = isCurQuran ? 'quran' : (isCurPodcast ? 'podcast' : 'music');
+  const safeLimit = Math.max(1, Math.min(25, Number(limit) || 8));
 
-  const excludeIds = new Set();
-  if (currentTrack) excludeIds.add(String(currentTrack.id || currentTrack._id));
-  (seedTracks || []).forEach(s => {
-    if (s) excludeIds.add(String(s.id || s._id));
+  const excludeIds = buildExcludedIdSet([], [currentTrack, ...(seedTracks || [])], []);
+  const { candidates, buckets, seedArtists, relatedArtists, seedGenres } = await fetchDiverseCandidatePool({
+    mode,
+    userTaste,
+    seedTracks,
+    currentTrack,
+    excludeIds,
+    refresh: true
   });
 
-  const followedSet = new Set((followedArtists || []).map(a => String(a).toLowerCase().trim()));
+  if (candidates.length === 0) return [];
 
-  let query = isCurQuran
-    ? {
-        $or: [
-          { isQuran: true },
-          { category: 'quran' },
-          { genre: 'Quran' },
-          { title: /سورة|سوره|قرآن|قران/i }
-        ]
-      }
-    : {
-        isQuran: { $ne: true },
-        category: { $ne: 'quran' },
-        genre: { $ne: 'Quran' }
-      };
+  const curArtistNorm = currentTrack ? getEffectiveArtist(currentTrack) : '';
+  const preSeeded = new Map();
+  if (curArtistNorm && curArtistNorm !== 'unknown') preSeeded.set(curArtistNorm, 1);
 
-  const candidatePool = await Track.find(query).sort({ plays: -1 }).limit(150).lean();
-  const available = candidatePool.filter(t => !excludeIds.has(String(t._id || t.id)));
+  if (candidates.length >= Math.min(3, safeLimit)) {
+    const sampleList = selectAiPromptCandidates(buckets, candidates, 55)
+      .map((t) => `"${t.title}" by ${t.artist}${t.genre ? ` [${t.genre}]` : ''}`)
+      .join(', ');
+    const seedStr = currentTrack ? `"${currentTrack.title}" by ${currentTrack.artist}` : 'General mix';
+    const tasteLine = userTaste?.summaryText ? `Listener profile: ${userTaste.summaryText}.` : '';
+    const prompt = `You are an expert streaming radio DJ. The listener is currently playing: ${seedStr}.
+${tasteLine}
+Candidate tracks: ${sampleList}.
+Select ${safeLimit} tracks from the candidates that flow best sonically after the current track while matching the listener's taste.
+Return ONLY a valid JSON array of track titles exactly as written. No markdown, no explanation.`;
 
-  if (available.length === 0) return [];
-
-  let finalTracks = [];
-
-  if (process.env.GEMINI_API_KEY && genAI && available.length >= limit) {
-    try {
-      const model = getGeminiModel();
-      if (model) {
-        const sampleList = available.slice(0, 45).map(t => `"${t.title}" by ${t.artist}`).join(', ');
-        const seedStr = currentTrack ? `"${currentTrack.title}" by ${currentTrack.artist}` : 'General music';
-        const prompt = `You are an expert streaming radio DJ. The user is listening to: ${seedStr}.
-Available tracks in library: ${sampleList}.
-Select the top ${limit} tracks from this list that flow best sonically and stylistically after the seed track.
-Return ONLY a valid JSON array of track titles exactly as written. No explanations, no markdown.`;
-        const result = await model.generateContent(prompt);
-        const raw = result.response.text().trim();
-        const jsonMatch = raw.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          const titles = JSON.parse(jsonMatch[0]);
-          const matched = available.filter(t =>
-            titles.some(titleStr => {
-              const a = String(titleStr).toLowerCase();
-              const b = String(t.title).toLowerCase();
-              return a.includes(b.slice(0, 8)) || b.includes(a.slice(0, 8));
-            })
-          );
-          if (matched.length >= Math.min(3, limit)) {
-            const curArtistNorm = currentTrack ? getPrimaryArtistNormalized(currentTrack.artist) : '';
-            const preSeeded = new Map();
-            if (curArtistNorm) preSeeded.set(curArtistNorm, 1);
-            finalTracks = capTracksByArtist(matched, limit, 2, preSeeded);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[Smart Shuffle Gemini]', e.message);
+    const aiTitles = await generateAiJson(prompt, { signal, maxTokens: 450 });
+    const matched = matchAiTitlesToPool(aiTitles, candidates);
+    if (matched.length >= Math.min(3, safeLimit)) {
+      return capTracksByArtist(matched, safeLimit, 2, preSeeded);
     }
   }
 
-  if (finalTracks.length === 0) {
-    const curArtistNorm = currentTrack ? getPrimaryArtistNormalized(currentTrack.artist) : '';
-    const curGenre = (currentTrack?.genre || '').toLowerCase().trim();
-    const preSeeded = new Map();
-    if (curArtistNorm) preSeeded.set(curArtistNorm, 1);
-
-    const scored = available.map(t => {
-      let score = Math.random() * 12;
-      const tArtistNorm = getPrimaryArtistNormalized(t.artist);
-      const tGenre = (t.genre || '').toLowerCase().trim();
-
-      if (followedSet.has(tArtistNorm) || [...followedSet].some(fa => tArtistNorm.includes(fa))) {
-        score += 45;
-      }
-      if (curArtistNorm && tArtistNorm === curArtistNorm) {
-        score += 25;
-      }
-      if (curGenre && tGenre && (curGenre === tGenre || curGenre.includes(tGenre))) {
-        score += 35;
-      }
-      score += Math.min(15, Math.log10((Number(t.plays) || 0) + 1) * 4);
-
-      return { track: t, score };
+  const extraFollowed = new Set((followedArtists || []).map((a) => String(a).toLowerCase().trim()).filter(Boolean));
+  const scored = candidates.map((t) => {
+    let score = scoreTrackPersonalized(t, {
+      userTaste,
+      seedArtists,
+      relatedArtists,
+      seedGenres,
+      preferFamiliar: false,
+      penalizeRecent: true,
+      refresh: true
     });
+    const effArt = getEffectiveArtist(t);
+    if (extraFollowed.has(effArt)) score += 30;
+    return { track: t, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  return capTracksByArtist(scored.map((s) => s.track), safeLimit, 2, preSeeded);
+}
 
-    scored.sort((a, b) => b.score - a.score);
-    finalTracks = capTracksByArtist(scored.map(s => s.track), limit, 2, preSeeded);
+async function getPersonalizedMoodMix({
+  mood = '',
+  timeOfDay = '',
+  userTaste = null,
+  seedTracks = [],
+  excludeTrackIds = [],
+  isQuran = false,
+  limit = 15,
+  refresh = true,
+  signal = null
+}) {
+  const mode = isQuran ? 'quran' : 'music';
+  const effectiveMood = resolveEffectiveMood(mood, timeOfDay);
+  const safeLimit = Math.max(1, Math.min(30, Number(limit) || 15));
+  const excludeIds = buildExcludedIdSet([], seedTracks, excludeTrackIds);
+
+  const { candidates, buckets, seedArtists, relatedArtists, seedGenres } = await fetchDiverseCandidatePool({
+    mode,
+    userTaste,
+    seedTracks,
+    mood: effectiveMood,
+    excludeIds,
+    refresh
+  });
+  if (candidates.length === 0) return { mood: effectiveMood, tracks: [] };
+
+  const sampleList = selectAiPromptCandidates(buckets, candidates, 60)
+    .map((t) => `"${t.title}" by ${t.artist}${t.genre ? ` [${t.genre}]` : ''}`)
+    .join(', ');
+  const tasteLine = userTaste?.summaryText ? `User taste: ${userTaste.summaryText}.` : '';
+  const prompt = `You are a personalized mood mix DJ. Build a "${effectiveMood}" ${isQuran ? 'Quran recitation' : 'music'} mix for this user.
+${tasteLine}
+Candidate pool: ${sampleList}.
+Select ${safeLimit} tracks from the candidate pool that fit the "${effectiveMood}" mood AND match the user's personal genres/artists.
+Return ONLY a valid JSON array of track titles exactly as written.`;
+
+  const aiTitles = await generateAiJson(prompt, { signal, maxTokens: 550 });
+  const matched = matchAiTitlesToPool(aiTitles, candidates);
+  if (matched.length >= Math.min(5, safeLimit)) {
+    return { mood: effectiveMood, tracks: capTracksByArtist(matched, safeLimit, 2) };
   }
 
-  return finalTracks;
+  const scored = candidates.map((t) => ({
+    track: t,
+    score: scoreTrackPersonalized(t, {
+      userTaste,
+      seedArtists,
+      relatedArtists,
+      seedGenres,
+      mood: effectiveMood,
+      preferFamiliar: true,
+      penalizeRecent: false,
+      refresh
+    })
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return { mood: effectiveMood, tracks: capTracksByArtist(scored.map((s) => s.track), safeLimit, 2) };
+}
+
+async function getPersonalizedQuickMix({
+  userTaste = null,
+  seedTracks = [],
+  currentTrack = null,
+  excludeTrackIds = [],
+  isQuran = false,
+  limit = 12,
+  refresh = true,
+  signal = null
+}) {
+  const mode = isQuran ? 'quran' : 'music';
+  const safeLimit = Math.max(1, Math.min(30, Number(limit) || 12));
+  const excludeIds = buildExcludedIdSet([], [currentTrack, ...(seedTracks || [])], excludeTrackIds);
+
+  const { candidates, buckets, seedArtists, relatedArtists, seedGenres } = await fetchDiverseCandidatePool({
+    mode,
+    userTaste,
+    seedTracks,
+    currentTrack,
+    excludeIds,
+    refresh
+  });
+  if (candidates.length === 0) return [];
+
+  const sampleList = selectAiPromptCandidates(buckets, candidates, 60)
+    .map((t) => `"${t.title}" by ${t.artist}${t.genre ? ` [${t.genre}]` : ''}`)
+    .join(', ');
+  const tasteLine = userTaste?.summaryText ? `User listening profile: ${userTaste.summaryText}.` : 'User has no history yet, build a vibrant discovery mix.';
+  const prompt = `You are a Spotify-style personalized mix generator creating a Quick Mix (${safeLimit} tracks).
+${tasteLine}
+Available tracks: ${sampleList}.
+Blend familiar favorites from the user's genres/artists with complementary discovery picks.
+Return ONLY a valid JSON array of ${safeLimit} track titles exactly as written.`;
+
+  const aiTitles = await generateAiJson(prompt, { signal, maxTokens: 500 });
+  const matched = matchAiTitlesToPool(aiTitles, candidates);
+  if (matched.length >= Math.min(4, safeLimit)) {
+    return capTracksByArtist(matched, safeLimit, 2);
+  }
+
+  const scored = candidates.map((t) => ({
+    track: t,
+    score: scoreTrackPersonalized(t, {
+      userTaste,
+      seedArtists,
+      relatedArtists,
+      seedGenres,
+      preferFamiliar: true,
+      penalizeRecent: false,
+      refresh
+    })
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return capTracksByArtist(scored.map((s) => s.track), safeLimit, 2);
 }
 
 module.exports = {
   getCuratedRecommendations,
-  getSmartShuffleTracks
+  getSmartShuffleTracks,
+  getPersonalizedMoodMix,
+  getPersonalizedQuickMix
 };

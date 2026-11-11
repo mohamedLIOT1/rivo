@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
   Dimensions,
@@ -44,7 +44,7 @@ import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useLocalization } from '../context/LocalizationContext';
+import { useLocalization, useLiteMode } from '../context/LocalizationContext';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { APP_VERSION } from '../version';
 import { API_BASE_URL } from '../config';
@@ -52,6 +52,118 @@ import AlbumDetailModal from '../components/AlbumDetailModal';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 
 const { width } = Dimensions.get('window');
+
+const SocialUserRow = React.memo(function SocialUserRow({ user, onPress }) {
+  return (
+    <TouchableOpacity
+      style={styles.socialUserItem}
+      onPress={() => onPress(user)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.socialUserAvatarWrap}>
+        {user.avatar ? (
+          <Image source={{ uri: normalizeCoverUri(user.avatar) }} style={styles.socialUserAvatar} fadeDuration={0} />
+        ) : (
+          <Text style={styles.socialUserLetter}>{user.name ? user.name[0].toUpperCase() : 'U'}</Text>
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.socialUserName} numberOfLines={1}>{user.name}</Text>
+        {user.bio ? <Text style={styles.socialUserBio} numberOfLines={1}>{user.bio}</Text> : null}
+      </View>
+      <ChevronRight size={16} color="#94a3b8" />
+    </TouchableOpacity>
+  );
+});
+
+const ViewingCrateRow = React.memo(function ViewingCrateRow({ crate, onPress, rtlTextStyle, songsLabel }) {
+  return (
+    <TouchableOpacity
+      style={[styles.crateItemCard, { marginBottom: 10 }]}
+      onPress={() => onPress(crate)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.crateItemCoverWrap}>
+        {crate.cover ? (
+          <Image source={{ uri: normalizeCoverUri(crate.cover) }} style={styles.crateItemCover} fadeDuration={0} />
+        ) : (
+          <Disc size={20} color="#17a398" />
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.crateItemTitle, rtlTextStyle]} numberOfLines={1}>{crate.name}</Text>
+        <Text style={[styles.crateItemSub, rtlTextStyle]}>{songsLabel}</Text>
+      </View>
+      <View style={styles.cratePlayPill}>
+        <Play size={12} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+const ProfilePlaylistRow = React.memo(function ProfilePlaylistRow({
+  pl,
+  isPublic,
+  isToggling,
+  isDark,
+  rtlTextStyle,
+  songsCountText,
+  visibilityTag,
+  onOpen,
+  onToggleVisibility,
+  onPlay,
+}) {
+  return (
+    <View style={[styles.playlistRow, !isDark && styles.playlistRowLight]}>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
+        onPress={() => onOpen(pl)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.playlistThumb}>
+          {pl.cover ? (
+            <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg} fadeDuration={0} />
+          ) : (
+            <Disc size={20} color="#17a398" />
+          )}
+        </View>
+        <View style={{ flex: 1, marginHorizontal: 10 }}>
+          <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight, rtlTextStyle]} numberOfLines={1}>
+            {pl.name}
+          </Text>
+          <Text style={[styles.playlistRowCount, !isDark && styles.playlistRowCountLight, rtlTextStyle]}>
+            {songsCountText} • {visibilityTag}
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.playlistEyeBtn, isPublic ? styles.playlistEyeBtnPublic : styles.playlistEyeBtnPrivate]}
+        onPress={() => onToggleVisibility(pl)}
+        disabled={isToggling}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        activeOpacity={0.7}
+      >
+        {isToggling ? (
+          <ActivityIndicator size="small" color={isPublic ? '#17a398' : '#94a3b8'} />
+        ) : isPublic ? (
+          <Eye size={15} color="#17a398" strokeWidth={2.4} />
+        ) : (
+          <EyeOff size={15} color="#94a3b8" strokeWidth={2.4} />
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.playlistPlayBtn}
+        onPress={() => onPlay(pl)}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        activeOpacity={0.7}
+      >
+        <Play size={12} color="#0b1110" fill="#0b1110" />
+      </TouchableOpacity>
+    </View>
+  );
+});
 
 function ProfileScreen({
   onOpenSettings,
@@ -80,6 +192,8 @@ function ProfileScreen({
   const { isDark } = useTheme();
   const { showToast } = useToast();
   const { t, isRTL } = useLocalization();
+  const { isLiteMode } = useLiteMode();
+  const profileAbortRef = useRef(null);
 
   const rtlTextStyle = useMemo(() => (
     isRTL ? {
@@ -110,14 +224,19 @@ function ProfileScreen({
       setDiscordStatus(null);
       return;
     }
+    const controller = new AbortController();
     fetch(`${API_BASE_URL}/api/discord/status`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
     })
       .then(r => r.ok ? r.json() : null)
       .then(d => {
-        if (d && !d.error) setDiscordStatus(d);
+        if (!controller.signal.aborted && d && !d.error) setDiscordStatus(d);
       })
       .catch(() => {});
+    return () => {
+      try { controller.abort(); } catch {}
+    };
   }, [token, currentUser]);
 
   const safeLikedCount = Array.isArray(likedTrackIds) ? likedTrackIds.length : 0;
@@ -196,7 +315,7 @@ function ProfileScreen({
     }
   };
 
-  const handleSelectSocialUser = async (u) => {
+  const handleSelectSocialUser = useCallback(async (u) => {
     const targetId = typeof u === 'string' ? u : (u?._id || u?.id);
     if (!targetId) return;
     setSocialModal(p => ({ ...p, isOpen: false }));
@@ -204,6 +323,12 @@ function ProfileScreen({
       setViewingProfile(null);
       return;
     }
+    if (profileAbortRef.current) {
+      try { profileAbortRef.current.abort(); } catch {}
+    }
+    const controller = new AbortController();
+    profileAbortRef.current = controller;
+
     if (typeof u === 'object' && u !== null && (u.name || u.avatar)) {
       setViewingProfile(prev => ({
         ...(prev && (prev.id === targetId || prev._id === targetId) ? prev : {}),
@@ -218,17 +343,22 @@ function ProfileScreen({
       setViewingLoading(true);
     }
     try {
-      const token = await AsyncStorage.getItem('@rivo_auth_token_v2');
+      const storedToken = await AsyncStorage.getItem('@rivo_auth_token_v2');
+      if (controller.signal.aborted) return;
       const res = await fetch(`${API_BASE_URL}/api/users/${encodeURIComponent(targetId)}/profile`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        headers: storedToken ? { Authorization: `Bearer ${storedToken}` } : {},
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
       const data = await res.json();
-      if (data?.success && data?.user) {
+      if (!controller.signal.aborted && data?.success && data?.user) {
         setViewingProfile(data.user);
       }
     } catch {}
-    setViewingLoading(false);
-  };
+    if (!controller.signal.aborted) {
+      setViewingLoading(false);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (viewingUser) {
@@ -236,7 +366,12 @@ function ProfileScreen({
     } else {
       setViewingProfile(null);
     }
-  }, [viewingUser, currentUser]);
+    return () => {
+      if (profileAbortRef.current) {
+        try { profileAbortRef.current.abort(); } catch {}
+      }
+    };
+  }, [viewingUser, currentUser, handleSelectSocialUser]);
 
   const handleToggleFollow = async () => {
     if (!viewingProfile || followLoading) return;
@@ -361,10 +496,16 @@ function ProfileScreen({
   const userIdStr = currentUser?._id || currentUser?.id || '';
   const shortId = userIdStr ? String(userIdStr).slice(-6).toUpperCase() : 'GUEST';
 
+  const renderSocialUserItem = useCallback(({ item }) => (
+    <SocialUserRow user={item} onPress={handleSelectSocialUser} />
+  ), [handleSelectSocialUser]);
+
+  const socialKeyExtractor = useCallback((u, i) => String(u?._id || u?.id || i), []);
+
   const renderSocialModal = () => (
     <Modal
       visible={socialModal.isOpen}
-      animationType="fade"
+      animationType={isLiteMode ? 'none' : 'fade'}
       transparent={true}
       onRequestClose={() => setSocialModal(p => ({ ...p, isOpen: false }))}
     >
@@ -373,7 +514,7 @@ function ProfileScreen({
         activeOpacity={1}
         onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))}
       >
-        <View style={styles.socialModalCard}>
+        <View style={styles.socialModalCard} onStartShouldSetResponder={() => true}>
           <View style={styles.socialModalHeader}>
             <Text style={[styles.socialModalTitle, rtlTextStyle]}>{socialModal.title}</Text>
             <TouchableOpacity onPress={() => setSocialModal(p => ({ ...p, isOpen: false }))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
@@ -392,34 +533,68 @@ function ProfileScreen({
               </Text>
             </View>
           ) : (
-            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-              {socialModal.users.map((u, i) => (
-                <TouchableOpacity
-                  key={u._id || u.id || String(i)}
-                  style={styles.socialUserItem}
-                  onPress={() => handleSelectSocialUser(u)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.socialUserAvatarWrap}>
-                    {u.avatar ? (
-                      <Image source={{ uri: normalizeCoverUri(u.avatar) }} style={styles.socialUserAvatar} fadeDuration={0} />
-                    ) : (
-                      <Text style={styles.socialUserLetter}>{u.name ? u.name[0].toUpperCase() : 'U'}</Text>
-                    )}
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.socialUserName} numberOfLines={1}>{u.name}</Text>
-                    {u.bio ? <Text style={styles.socialUserBio} numberOfLines={1}>{u.bio}</Text> : null}
-                  </View>
-                  <ChevronRight size={16} color="#94a3b8" />
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <FlatList
+              data={socialModal.users}
+              keyExtractor={socialKeyExtractor}
+              renderItem={renderSocialUserItem}
+              style={{ maxHeight: 280 }}
+              showsVerticalScrollIndicator={false}
+              windowSize={5}
+              initialNumToRender={8}
+              maxToRenderPerBatch={6}
+              removeClippedSubviews={Platform.OS === 'android'}
+            />
           )}
         </View>
       </TouchableOpacity>
     </Modal>
   );
+
+  const handleOpenViewingCrate = useCallback((crate) => {
+    handleOpenPlaylistModal(crate, viewingProfile?.name || 'Listener');
+  }, [handleOpenPlaylistModal, viewingProfile?.name]);
+
+  const renderViewingCrateItem = useCallback(({ item }) => (
+    <ViewingCrateRow
+      crate={item}
+      onPress={handleOpenViewingCrate}
+      rtlTextStyle={rtlTextStyle}
+      songsLabel={t('profile.songsCount', { count: item.trackCount || (item.trackIds || []).length })}
+    />
+  ), [handleOpenViewingCrate, rtlTextStyle, t]);
+
+  const handleOpenOwnPlaylist = useCallback((pl) => {
+    handleOpenPlaylistModal(pl, currentUser?.name || 'Listener');
+  }, [handleOpenPlaylistModal, currentUser?.name]);
+
+  const handlePlayOwnPlaylist = useCallback((pl) => {
+    if (playPlaylist) playPlaylist(pl);
+    else handleOpenPlaylistModal(pl, currentUser?.name || 'Listener');
+  }, [playPlaylist, handleOpenPlaylistModal, currentUser?.name]);
+
+  const renderOwnPlaylistItem = useCallback(({ item: pl }) => {
+    const plId = String(pl.id || pl._id);
+    const livePl = playlists.find(p => String(p.id) === plId || String(p._id) === plId) || pl;
+    const isPublic = livePl.isPublic !== false;
+    const isToggling = togglingPlaylistId === plId || togglingPlaylistId === String(pl._id) || togglingPlaylistId === String(pl.id);
+
+    return (
+      <ProfilePlaylistRow
+        pl={pl}
+        isPublic={isPublic}
+        isToggling={isToggling}
+        isDark={isDark}
+        rtlTextStyle={rtlTextStyle}
+        songsCountText={t('profile.songsCount', { count: (pl.tracks || pl.trackIds || []).length })}
+        visibilityTag={isPublic ? t('profile.publicTag') : t('profile.privateTag')}
+        onOpen={handleOpenOwnPlaylist}
+        onToggleVisibility={handleTogglePlaylistPublic}
+        onPlay={handlePlayOwnPlaylist}
+      />
+    );
+  }, [playlists, togglingPlaylistId, isDark, rtlTextStyle, t, handleOpenOwnPlaylist, handleTogglePlaylistPublic, handlePlayOwnPlaylist]);
+
+  const playlistKeyExtractor = useCallback((item, idx) => String(item?._id || item?.id || idx), []);
 
   if (viewingLoading) {
     return (
@@ -436,12 +611,8 @@ function ProfileScreen({
     const vFollowers = viewingProfile.followersCount || 0;
     const vFollowing = viewingProfile.followingCount || 0;
 
-    return (
-      <ScrollView
-        style={[styles.container, !isDark && styles.containerLight]}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+    const viewingHeaderNode = (
+      <View>
         {/* Back Button Bar */}
         <TouchableOpacity
           style={styles.backNavBar}
@@ -634,52 +805,41 @@ function ProfileScreen({
             {t('profile.publicPlaylistsCount', { count: vCrates.length })}
           </Text>
         </View>
+      </View>
+    );
 
-        {vCrates.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Disc size={32} color="#94a3b8" />
-            <Text style={[styles.emptyTitle, rtlTextStyle]}>{t('profile.noPlaylistsCreated')}</Text>
-            <Text style={[styles.emptySub, rtlTextStyle]}>{t('profile.noPlaylistsCreatedSub')}</Text>
-          </View>
-        ) : (
-          <View style={{ gap: 10, marginTop: 10 }}>
-            {vCrates.map((crate, idx) => (
-              <TouchableOpacity
-                key={crate._id || crate.id || String(idx)}
-                style={styles.crateItemCard}
-                onPress={() => {
-                  handleOpenPlaylistModal(crate, viewingProfile.name || 'Listener');
-                }}
-                activeOpacity={0.8}
-              >
-                <View style={styles.crateItemCoverWrap}>
-                  {crate.cover ? (
-                    <Image source={{ uri: normalizeCoverUri(crate.cover) }} style={styles.crateItemCover}
-                    fadeDuration={0} />
-                  ) : (
-                    <Disc size={20} color="#17a398" />
-                  )}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.crateItemTitle, rtlTextStyle]} numberOfLines={1}>{crate.name}</Text>
-                  <Text style={[styles.crateItemSub, rtlTextStyle]}>{t('profile.songsCount', { count: crate.trackCount || (crate.trackIds || []).length })}</Text>
-                </View>
-                <View style={styles.cratePlayPill}>
-                  <Play size={12} color="#0b1110" fill="#0b1110" style={{ marginLeft: 1 }} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+    const viewingEmptyNode = (
+      <View style={styles.emptyCard}>
+        <Disc size={32} color="#94a3b8" />
+        <Text style={[styles.emptyTitle, rtlTextStyle]}>{t('profile.noPlaylistsCreated')}</Text>
+        <Text style={[styles.emptySub, rtlTextStyle]}>{t('profile.noPlaylistsCreatedSub')}</Text>
+      </View>
+    );
+
+    return (
+      <View style={[styles.container, !isDark && styles.containerLight]}>
+        <FlatList
+          data={vCrates}
+          keyExtractor={playlistKeyExtractor}
+          renderItem={renderViewingCrateItem}
+          ListHeaderComponent={viewingHeaderNode}
+          ListEmptyComponent={viewingEmptyNode}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          windowSize={5}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          removeClippedSubviews={Platform.OS === 'android'}
+        />
 
         {/* Social Modal within viewingProfile */}
-        {renderSocialModal()}
+        {socialModal.isOpen && renderSocialModal()}
 
         {/* Playlist Full View Modal */}
-        {!onSelectAlbum && (
+        {!onSelectAlbum && Boolean(selectedPlaylistModal) && (
           <AlbumDetailModal
             visible={Boolean(selectedPlaylistModal)}
-            album={selectedPlaylistModal ? {
+            album={{
               id: selectedPlaylistModal.id || selectedPlaylistModal._id,
               name: selectedPlaylistModal.name,
               artist: viewingProfile.name || 'Listener',
@@ -687,22 +847,18 @@ function ProfileScreen({
               tracks: selectedPlaylistModal.tracks || [],
               trackIds: selectedPlaylistModal.trackIds || [],
               isPlaylist: true,
-            } : null}
+            }}
             onOpenFullPlayer={onOpenFullPlayer}
             onClose={() => setSelectedPlaylistModal(null)}
             allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
           />
         )}
-      </ScrollView>
+      </View>
     );
   }
 
-  return (
-    <ScrollView
-      style={[styles.container, !isDark && styles.containerLight]}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+  const ownHeaderNode = (
+    <View>
       {/* ── TOP HERO PROFILE CARD ── */}
       <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
         {/* Status Bar Header */}
@@ -989,7 +1145,7 @@ function ProfileScreen({
         </Text>
       </TouchableOpacity>
 
-      {/* ── USER PLAYLISTS SUMMARY ── */}
+      {/* ── USER PLAYLISTS HEADER ── */}
       {playlists.length > 0 && (
         <View style={{ marginTop: 20 }}>
           <View style={styles.playlistSectionHeaderRow}>
@@ -1005,120 +1161,74 @@ function ProfileScreen({
               </Text>
             </View>
           </View>
-          {playlists.map((pl) => {
-            const plId = String(pl.id || pl._id);
-            const livePl = playlists.find(p => String(p.id) === plId || String(p._id) === plId) || pl;
-            const isPublic = livePl.isPublic !== false;
-            const isToggling = togglingPlaylistId === plId || togglingPlaylistId === String(pl._id) || togglingPlaylistId === String(pl.id);
-
-            return (
-              <View
-                key={plId}
-                style={[styles.playlistRow, !isDark && styles.playlistRowLight]}
-              >
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}
-                  onPress={() => handleOpenPlaylistModal(pl, currentUser?.name || 'Listener')}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.playlistThumb}>
-                    {pl.cover ? (
-                      <Image source={{ uri: normalizeCoverUri(pl.cover) }} style={styles.playlistThumbImg}
-                      fadeDuration={0} />
-                    ) : (
-                      <Disc size={20} color="#17a398" />
-                    )}
-                  </View>
-                  <View style={{ flex: 1, marginHorizontal: 10 }}>
-                    <Text style={[styles.playlistRowTitle, !isDark && styles.playlistRowTitleLight, rtlTextStyle]} numberOfLines={1}>
-                      {pl.name}
-                    </Text>
-                    <Text style={[styles.playlistRowCount, !isDark && styles.playlistRowCountLight, rtlTextStyle]}>
-                      {t('profile.songsCount', { count: (pl.tracks || pl.trackIds || []).length })} • {isPublic ? t('profile.publicTag') : t('profile.privateTag')}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-
-                {/* Eye privacy toggle button */}
-                <TouchableOpacity
-                  style={[styles.playlistEyeBtn, isPublic ? styles.playlistEyeBtnPublic : styles.playlistEyeBtnPrivate]}
-                  onPress={() => handleTogglePlaylistPublic(pl)}
-                  disabled={isToggling}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  activeOpacity={0.7}
-                >
-                  {isToggling ? (
-                    <ActivityIndicator size="small" color={isPublic ? '#17a398' : '#94a3b8'} />
-                  ) : isPublic ? (
-                    <Eye size={15} color="#17a398" strokeWidth={2.4} />
-                  ) : (
-                    <EyeOff size={15} color="#94a3b8" strokeWidth={2.4} />
-                  )}
-                </TouchableOpacity>
-
-                {/* Play button */}
-                <TouchableOpacity
-                  style={styles.playlistPlayBtn}
-                  onPress={() => {
-                    if (playPlaylist) playPlaylist(pl);
-                    else handleOpenPlaylistModal(pl, currentUser?.name || 'Listener');
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  activeOpacity={0.7}
-                >
-                  <Play size={12} color="#0b1110" fill="#0b1110" />
-                </TouchableOpacity>
-              </View>
-            );
-          })}
         </View>
       )}
+    </View>
+  );
 
-      {/* ── SETTINGS & LOG OUT BUTTONS ── */}
-      <View style={{ marginTop: 24, marginBottom: 30, gap: 10 }}>
+  const ownFooterNode = (
+    <View style={{ marginTop: 24, marginBottom: 30, gap: 10 }}>
+      <TouchableOpacity
+        style={[styles.actionCard, !isDark && styles.actionCardLight]}
+        onPress={onOpenSettings}
+        activeOpacity={0.85}
+      >
+        <View style={[styles.actionIconBox, !isDark && styles.actionIconBoxLight, { backgroundColor: isDark ? 'rgba(148,163,184,0.18)' : '#f1f5f9', borderColor: isDark ? '#94a3b8' : '#cbd5e1' }]}>
+          <SettingsIcon size={18} color={isDark ? '#94a3b8' : '#475569'} strokeWidth={2.5} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight, rtlTextStyle]}>{t('profile.settingsCardTitle')}</Text>
+          <Text style={[styles.actionCardSub, !isDark && styles.actionCardSubLight, rtlTextStyle]}>{t('profile.settingsCardSub')}</Text>
+        </View>
+        <ChevronRight size={16} color={isDark ? '#64748b' : '#94a3b8'} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+      </TouchableOpacity>
+
+      {currentUser ? (
         <TouchableOpacity
-          style={[styles.actionCard, !isDark && styles.actionCardLight]}
-          onPress={onOpenSettings}
+          style={[styles.logoutBtn, !isDark && styles.logoutBtnLight]}
+          onPress={logout}
           activeOpacity={0.85}
         >
-          <View style={[styles.actionIconBox, !isDark && styles.actionIconBoxLight, { backgroundColor: isDark ? 'rgba(148,163,184,0.18)' : '#f1f5f9', borderColor: isDark ? '#94a3b8' : '#cbd5e1' }]}>
-            <SettingsIcon size={18} color={isDark ? '#94a3b8' : '#475569'} strokeWidth={2.5} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.actionCardTitle, !isDark && styles.actionCardTitleLight, rtlTextStyle]}>{t('profile.settingsCardTitle')}</Text>
-            <Text style={[styles.actionCardSub, !isDark && styles.actionCardSubLight, rtlTextStyle]}>{t('profile.settingsCardSub')}</Text>
-          </View>
-          <ChevronRight size={16} color={isDark ? '#64748b' : '#94a3b8'} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+          <LogOut size={16} color="#ef4444" strokeWidth={2.5} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+          <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight, rtlTextStyle]}>{t('profile.logout')}</Text>
         </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={styles.signInBtn}
+          onPress={onOpenAuth}
+          activeOpacity={0.85}
+        >
+          <LogIn size={16} color="#0b1110" strokeWidth={2.8} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
+          <Text style={[styles.signInBtnText, rtlTextStyle]}>{t('profile.signInRegisterBtn')}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 
-        {currentUser ? (
-          <TouchableOpacity
-            style={[styles.logoutBtn, !isDark && styles.logoutBtnLight]}
-            onPress={logout}
-            activeOpacity={0.85}
-          >
-            <LogOut size={16} color="#ef4444" strokeWidth={2.5} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
-            <Text style={[styles.logoutBtnText, !isDark && styles.logoutBtnTextLight, rtlTextStyle]}>{t('profile.logout')}</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.signInBtn}
-            onPress={onOpenAuth}
-            activeOpacity={0.85}
-          >
-            <LogIn size={16} color="#0b1110" strokeWidth={2.8} style={isRTL ? { transform: [{ rotate: '180deg' }] } : null} />
-            <Text style={[styles.signInBtnText, rtlTextStyle]}>{t('profile.signInRegisterBtn')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+  return (
+    <View style={[styles.container, !isDark && styles.containerLight]}>
+      <FlatList
+        data={playlists}
+        keyExtractor={playlistKeyExtractor}
+        renderItem={renderOwnPlaylistItem}
+        ListHeaderComponent={ownHeaderNode}
+        ListFooterComponent={ownFooterNode}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        windowSize={5}
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        removeClippedSubviews={Platform.OS === 'android'}
+      />
 
       {/* SOCIAL FOLLOWERS / FOLLOWING MODAL */}
-      {renderSocialModal()}
+      {socialModal.isOpen && renderSocialModal()}
 
       {/* Avatar Change Modal */}
+      {isAvatarModalOpen && (
       <Modal
         visible={isAvatarModalOpen}
-        animationType="fade"
+        animationType={isLiteMode ? 'none' : 'fade'}
         transparent={true}
         onRequestClose={() => setIsAvatarModalOpen(false)}
       >
@@ -1178,12 +1288,13 @@ function ProfileScreen({
           </View>
         </TouchableOpacity>
       </Modal>
+      )}
 
       {/* Playlist Tracks Full View Modal */}
-      {!onSelectAlbum && (
+      {!onSelectAlbum && Boolean(selectedPlaylistModal) && (
         <AlbumDetailModal
           visible={Boolean(selectedPlaylistModal)}
-          album={selectedPlaylistModal ? {
+          album={{
             id: selectedPlaylistModal.id || selectedPlaylistModal._id,
             name: selectedPlaylistModal.name,
             artist: selectedPlaylistModal.ownerName || currentUser?.name || 'Listener',
@@ -1191,13 +1302,13 @@ function ProfileScreen({
             tracks: selectedPlaylistModal.tracks || [],
             trackIds: selectedPlaylistModal.trackIds || [],
             isPlaylist: true,
-          } : null}
+          }}
           onOpenFullPlayer={onOpenFullPlayer}
           onClose={() => setSelectedPlaylistModal(null)}
           allTracks={(userTracks && userTracks.length > 0) ? userTracks : INITIAL_TRACKS}
         />
       )}
-    </ScrollView>
+    </View>
   );
 }
 

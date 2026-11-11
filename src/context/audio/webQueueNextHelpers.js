@@ -9,12 +9,37 @@ import {
   getPrimaryArtistNormalized,
 } from '../../utils/tasteAlgorithm';
 import { getTrackMusicalData, checkHarmonicCompatibility } from '../../utils/musicAnalysis';
+import { getListeningStats } from '../../utils/listeningTracker';
 import {
   getTrackId,
   attachQueueMeta,
   isMatchingContentKind,
 } from './webQueueUtils';
 import { getStoredFollowedArtists } from './webQueueStorage';
+
+export function getStoredAuthToken(explicitToken = '') {
+  if (explicitToken && typeof explicitToken === 'string') return explicitToken;
+  try {
+    return (
+      localStorage.getItem('rivo_token') ||
+      localStorage.getItem('liofy_token') ||
+      localStorage.getItem('token') ||
+      ''
+    );
+  } catch {
+    return '';
+  }
+}
+
+export function getRecentListeningHistory(limit = 10) {
+  try {
+    const history = getListeningStats()?.history;
+    if (!Array.isArray(history)) return [];
+    return history.slice(0, limit).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 export function fetchNextSmartMusicBatch({
   allAvailable,
@@ -64,11 +89,20 @@ export function pickSmartShuffleNext(activeList, cur) {
   const curId = getTrackId(cur);
   const candidates = activeList.filter((t) => getTrackId(t) !== curId);
   const followed = getStoredFollowedArtists();
+  const recentHistory = getRecentListeningHistory(10);
+  const recentArtistSet = new Set(
+    recentHistory.map((h) => getPrimaryArtistNormalized(h.artist)).filter((a) => a && a !== 'unknown')
+  );
+  const veryRecentIds = new Set(recentHistory.slice(0, 3).map((h) => String(h.id || h._id || '')));
   const curMusical = getTrackMusicalData(cur);
   const scored = candidates.map((t) => {
     let score = 0;
+    const tId = getTrackId(t);
     const tArtist = (t.artist || '').toLowerCase();
+    const tPrimary = getPrimaryArtistNormalized(t.artist);
     if (followed.some((fa) => tArtist.includes(fa.toLowerCase()))) score += 50;
+    if (recentArtistSet.has(tPrimary)) score += 18;
+    if (veryRecentIds.has(tId)) score -= 25;
     const tMusical = getTrackMusicalData(t);
     const harm = checkHarmonicCompatibility(curMusical.key, tMusical.key, curMusical.bpm, tMusical.bpm);
     score += (harm.score || 50) * 0.3;
@@ -145,19 +179,28 @@ export async function fetchSmartShuffleTracksApi({
   currentList = [],
   existingQueue = [],
   signal = null,
+  token = '',
 }) {
+  if (!seedTrack || signal?.aborted) return [];
   const followed = getStoredFollowedArtists();
+  const authToken = getStoredAuthToken(token);
+  const recentTracks = getRecentListeningHistory(10);
   const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    },
     body: JSON.stringify({
       currentTrack: seedTrack,
       seedTracks: currentList.slice(0, 5),
+      recentTracks,
       followedArtists: followed,
       limit: 8,
     }),
     signal,
   });
+  if (signal?.aborted || !res.ok) return [];
   const data = await res.json();
   if (signal?.aborted || !data?.success || !Array.isArray(data.tracks) || data.tracks.length === 0) {
     return [];

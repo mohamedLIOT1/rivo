@@ -161,15 +161,17 @@ function MessageReactionsNative({
         </View>
       )}
 
-      {/* Full 100+ Categorized Emojis Modal */}
-      <ChatEmojiPickerModal
-        visible={isCatalogOpen}
-        onClose={handleCloseCatalog}
-        onSelectEmoji={handleEmojiPress}
-        isDark={isDark}
-        title="React with Emoji"
-        multiSelect={false}
-      />
+      {/* Full 100+ Categorized Emojis Modal (mounted only when opened) */}
+      {isCatalogOpen && (
+        <ChatEmojiPickerModal
+          visible={isCatalogOpen}
+          onClose={handleCloseCatalog}
+          onSelectEmoji={handleEmojiPress}
+          isDark={isDark}
+          title="React with Emoji"
+          multiSelect={false}
+        />
+      )}
     </View>
   );
 }
@@ -201,7 +203,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 6,
-    elevation: 6,
+    elevation: Platform.OS === 'android' ? 4 : 6,
     zIndex: 10,
   },
   quickBarLight: {

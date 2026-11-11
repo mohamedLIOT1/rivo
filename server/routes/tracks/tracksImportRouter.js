@@ -12,11 +12,10 @@ const {
   autoAddTrackToUserLinksPlaylist,
 } = require('../../utils/helpers');
 const { invalidateTracksCache } = require('./tracksCache');
-const { classifyGenre, isQuranContent } = require('../../utils/genreClassifier');
+const { classifyGenre, isQuranContent, isPodcastContent } = require('../../utils/genreClassifier');
 
 // Import track from Spotify/YouTube link
 const importTrackHandler = async (req, res) => {
-  invalidateTracksCache();
   try {
     const rawUrl = (req.body.url || '').trim();
     if (!rawUrl) return res.status(400).json({ error: 'Song link / URL is required' });
@@ -195,9 +194,11 @@ const importTrackHandler = async (req, res) => {
       try {
         const cleanT = title.trim();
         const cleanA = artist.trim();
+        const ytMatch = audioUrl && audioUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
         const existingTrack = await Track.findOne({
           $or: [
-            ...(audioUrl ? [{ audioUrl }] : []),
+            ...(audioUrl ? [{ audioUrl }, { legacyAudioUrl: audioUrl }] : []),
+            ...(ytMatch?.[1] ? [{ youtubeId: ytMatch[1] }] : []),
             ...(cleanT && cleanA && cleanT !== 'Imported Track' ? [{
               title: { $regex: new RegExp(`^${escapeRegex(cleanT)}$`, 'i') },
               artist: { $regex: new RegExp(`^${escapeRegex(cleanA)}$`, 'i') }
@@ -231,6 +232,8 @@ const importTrackHandler = async (req, res) => {
     });
     const finalGenre = classification.genre;
     const finalIsQuran = Boolean(classification.isQuran || isQuranContent(title, artist, album, finalGenre));
+    const finalIsPodcast = !finalIsQuran && Boolean(classification.isPodcast || isPodcastContent(title, artist, album, finalGenre));
+    const finalContentType = finalIsQuran ? 'quran' : (finalIsPodcast ? 'podcast' : 'music');
 
     let trackId = `track-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     if (mongoose.connection.readyState === 1) {
@@ -245,9 +248,12 @@ const importTrackHandler = async (req, res) => {
           genre: finalGenre,
           source,
           addedBy: req.user?.id || 'guest',
-          isQuran: finalIsQuran
+          isQuran: finalIsQuran,
+          isPodcast: finalIsPodcast,
+          contentType: finalContentType
         }).save();
         if (newTrack?._id) trackId = String(newTrack._id);
+        invalidateTracksCache();
       } catch (dbErr) {
         console.warn('Track DB save error:', dbErr.message);
       }
@@ -266,6 +272,8 @@ const importTrackHandler = async (req, res) => {
       source,
       addedBy: req.user?.id || 'guest',
       isQuran: finalIsQuran,
+      isPodcast: finalIsPodcast,
+      contentType: finalContentType,
       lyrics: [],
       liked: false
     };

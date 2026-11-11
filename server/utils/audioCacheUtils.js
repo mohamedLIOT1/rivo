@@ -248,36 +248,53 @@ async function downloadYouTubeAudioToCache(videoId, cacheDir, directStreamUrl = 
     }
   } catch {}
 
-  // 2. yt-dlp fallback with robust timeout (45s)
+  // 2. yt-dlp fallback with proxy + bgutil PO Token + robust timeout (120s for long tracks)
   const bin = typeof getYtDlpBinFn === 'function' ? getYtDlpBinFn() : 'yt-dlp';
   const cp = getCookiesPath();
+  const proxyUrl = (process.env.YT_PROXY_URL || '').trim();
   const tempTarget = path.join(cacheDir, `${videoId}_dl_${Date.now()}.%(ext)s`);
 
-  const ytdlpArgs = [
-    '--no-check-certificates',
-    '--no-playlist',
-    '--no-warnings',
-    '--js-runtimes', 'node',
-    '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b',
-    '-x',
-    '--audio-format', 'm4a',
-    '-o', tempTarget
-  ];
-  if (cp) {
-    ytdlpArgs.splice(1, 0, '--cookies', cp);
-  }
-  ytdlpArgs.push(`https://www.youtube.com/watch?v=${videoId}`);
+  const runYtDlpAttempt = async (useCookies, useProxy) => {
+    const args = [
+      '--ignore-config',
+      '--no-check-certificates',
+      '--no-playlist',
+      '--no-warnings',
+      '--js-runtimes', 'node',
+      '--extractor-args', 'youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416',
+      '-f', '140/ba[ext=m4a]/ba/bestaudio/18/b',
+      '-x',
+      '--audio-format', 'm4a',
+      '-o', tempTarget
+    ];
+    if (useProxy && proxyUrl) {
+      args.splice(1, 0, '--proxy', proxyUrl);
+    }
+    if (useCookies && cp) {
+      args.splice(1, 0, '--cookies', cp);
+    }
+    args.push(`https://www.youtube.com/watch?v=${videoId}`);
 
-  await new Promise((resolve) => {
-    execFile(bin, ytdlpArgs, { timeout: 45000, env: execEnv }, async (err, stdout, stderr) => {
-      if (err && isCookiesRequiredError(`${err?.message || ''} ${stderr || ''}`)) {
-        await promptUserForCookies('yt-dlp download blocked by YouTube bot verification');
-      }
-      resolve();
+    await new Promise((resolve) => {
+      execFile(bin, args, { timeout: 120000, env: execEnv }, async (err, stdout, stderr) => {
+        if (err && isCookiesRequiredError(`${err?.message || ''} ${stderr || ''}`)) {
+          await promptUserForCookies('yt-dlp download blocked by YouTube bot verification');
+        }
+        resolve();
+      });
     });
-  });
+  };
 
-  const actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
+  await runYtDlpAttempt(Boolean(cp), Boolean(proxyUrl));
+  let actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
+  if (!fs.existsSync(actualDownloaded) || !isAudioFileValid(actualDownloaded)) {
+    try { if (fs.existsSync(actualDownloaded)) fs.unlinkSync(actualDownloaded); } catch {}
+    if (cp) {
+      // Retry without cookies in case stale cookies triggered 403
+      await runYtDlpAttempt(false, Boolean(proxyUrl));
+      actualDownloaded = tempTarget.replace('.%(ext)s', '.m4a');
+    }
+  }
   if (fs.existsSync(actualDownloaded) && isAudioFileValid(actualDownloaded)) {
     const faststartTarget = tempTarget.replace('.%(ext)s', '_fs.m4a');
     try {

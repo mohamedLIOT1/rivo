@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Play, Pause, Shuffle, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
@@ -17,6 +17,7 @@ import { usePreferences } from '../context/PreferencesContext';
 import { ArtistLinks } from '../utils/artistUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { getListeningStats } from '../utils/listeningTracker';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import { getAlbumArtwork } from './ArtistScreen';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
@@ -237,6 +238,14 @@ export default function PlaylistScreen({
   // AI Smart Recommendations State
   const [aiRecommendations, setAiRecommendations] = useState([]);
   const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const recsAbortRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      recsAbortRef.current?.abort();
+      setIsLoadingRecs(false);
+    };
+  }, [playlist?.id]);
 
   // Edit Name & Description Modal State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -702,6 +711,9 @@ export default function PlaylistScreen({
 
   const handleFetchAiRecommendations = async () => {
     if (isLoadingRecs) return;
+    recsAbortRef.current?.abort();
+    const controller = new AbortController();
+    recsAbortRef.current = controller;
     setIsLoadingRecs(true);
     try {
       const currentTrackIds = (playlist?.trackIds || []).map(String);
@@ -709,21 +721,37 @@ export default function PlaylistScreen({
       const seeds = playlistTracks.length > 6
         ? [...playlistTracks].sort(() => 0.5 - Math.random()).slice(0, 6)
         : playlistTracks.slice(0, 6);
+      const token = currentUser?.token || localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      const isPlQuran = Boolean(isQuran || playlist?.isQuran);
+      let recentHistory = [];
+      try {
+        const rawHist = getListeningStats()?.history?.slice(0, 10) || [];
+        recentHistory = rawHist.filter(item => isPlQuran ? isQuranContent(item) : !isQuranContent(item));
+      } catch {}
+      const hour = new Date().getHours();
+      const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : hour < 22 ? 'evening' : 'night';
 
       const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           playlistName: playlist?.name || 'Playlist',
           seedTracks: seeds,
+          recentTracks: recentHistory,
+          timeOfDay,
           trackIds: currentTrackIds,
           excludeTrackIds: currentRecIds,
-          isQuran: Boolean(isQuran || playlist?.isQuran),
+          isQuran: isPlQuran,
           refresh: true
-        })
+        }),
+        signal: controller.signal
       });
+      if (!res.ok || controller.signal.aborted) return;
       const data = await res.json();
-      if (data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+      if (!controller.signal.aborted && data.success && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
         const markedRecs = data.recommendations.map(t => ({
           ...t,
           isAiSuggestion: true
@@ -731,9 +759,14 @@ export default function PlaylistScreen({
         setAiRecommendations(markedRecs);
       }
     } catch (err) {
-      console.warn('AI recommendations error:', err);
+      if (err?.name !== 'AbortError') {
+        console.warn('AI recommendations error:', err);
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setIsLoadingRecs(false);
+      }
     }
-    setIsLoadingRecs(false);
   };
 
   const handleSaveDetails = async () => {

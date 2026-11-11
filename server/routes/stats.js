@@ -3,6 +3,75 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const { User, Track } = require('../models');
 const { optionalAuth, isVerifiedUser } = require('../middleware/auth');
+const { classifyGenre, GENERIC_GENRES } = require('../utils/genreClassifier');
+
+async function resolveListeningGenre({ trackId, title, artist, genre }) {
+  const rawGenre = String(genre || '').trim();
+  const isGeneric = !rawGenre || GENERIC_GENRES.has(rawGenre.toLowerCase());
+  let dbTrack = null;
+  if (isGeneric && trackId) {
+    try {
+      const cond = mongoose.isValidObjectId(trackId) ? { _id: trackId } : { id: String(trackId) };
+      dbTrack = await Track.findOne(cond).select('title artist album genre').lean();
+    } catch {}
+  }
+  const cls = classifyGenre({
+    title: dbTrack?.title || title || '',
+    artist: dbTrack?.artist || artist || '',
+    album: dbTrack?.album || '',
+    genre: rawGenre || dbTrack?.genre || ''
+  });
+  return cls?.genre || rawGenre || '';
+}
+
+function updateUserHistoryAndGenres(user, { trackId, title, artist, genre, seconds, isCompleted }) {
+  if (seconds > 0 && genre) {
+    const safeKey = String(genre).replace(/[.$]/g, '_').trim();
+    if (safeKey) {
+      const prevMap = user.topGenres && typeof user.topGenres === 'object' ? { ...user.topGenres } : {};
+      prevMap[safeKey] = (Number(prevMap[safeKey]) || 0) + seconds;
+      const entries = Object.entries(prevMap);
+      if (entries.length > 40) {
+        entries.sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0));
+        user.topGenres = Object.fromEntries(entries.slice(0, 40));
+      } else {
+        user.topGenres = prevMap;
+      }
+      if (typeof user.markModified === 'function') user.markModified('topGenres');
+    }
+  }
+
+  if ((title || trackId) && (seconds > 0 || isCompleted)) {
+    const normId = String(trackId || '').trim();
+    const normTitle = String(title || '').trim();
+    const normArtist = String(artist || '').trim();
+    const tLower = normTitle.toLowerCase();
+    const aLower = normArtist.toLowerCase();
+
+    const prevHistory = Array.isArray(user.recentHistory) ? user.recentHistory : [];
+    const deduped = prevHistory.filter((item) => {
+      if (!item) return false;
+      if (normId && item.trackId && String(item.trackId) === normId) return false;
+      if (tLower && String(item.title || '').trim().toLowerCase() === tLower &&
+        String(item.artist || '').trim().toLowerCase() === aLower) {
+        return false;
+      }
+      return true;
+    });
+
+    user.recentHistory = [
+      {
+        trackId: normId,
+        title: normTitle,
+        artist: normArtist,
+        genre: String(genre || '').trim(),
+        playedAt: new Date()
+      },
+      ...deduped
+    ].slice(0, 40);
+    if (typeof user.markModified === 'function') user.markModified('recentHistory');
+  }
+}
 
 function getCurrentISOWeek() {
   const d = new Date();
@@ -21,7 +90,7 @@ if (User && User.schema && !User.schema.path('trackStats')) {
 
 router.post('/listen', optionalAuth, async (req, res) => {
   try {
-    const { trackId, title, artist, cover, seconds = 0, isCompleted = false } = req.body;
+    const { trackId, title, artist, cover, genre, seconds = 0, isCompleted = false } = req.body;
     // Cap single payload at 600 seconds (10 mins) to support background tab flushes
     const sec = Math.max(0, Math.min(600, Number(seconds) || 0));
     const currentWeek = getCurrentISOWeek();
@@ -126,6 +195,18 @@ router.post('/listen', optionalAuth, async (req, res) => {
             };
           }
         }
+
+        const resolvedGenre = (sec > 0 || isCompleted)
+          ? await resolveListeningGenre({ trackId, title, artist, genre })
+          : '';
+        updateUserHistoryAndGenres(user, {
+          trackId,
+          title,
+          artist,
+          genre: resolvedGenre,
+          seconds: sec,
+          isCompleted
+        });
 
         user.lastActiveAt = new Date();
         await user.save();

@@ -2,25 +2,69 @@ import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   FlatList,
   TouchableOpacity,
-  TextInput,
   Image,
   Platform,
 } from 'react-native';
-import { BookOpen, Search, Play, Pause, Disc, User, Volume2, Radio, ArrowLeft } from 'lucide-react-native';
+import { BookOpen, Play } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
-import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import QuranRadioModal from '../components/QuranRadioModal';
 import QuranHeroBanner from '../components/quran/QuranHeroBanner';
 import { styles } from './QuranScreen.styles';
+
+const ReciterPill = React.memo(function ReciterPill({ reciter, active, isRTL, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[styles.reciterPill, active && styles.reciterPillActive]}
+      onPress={() => onPress(reciter.name, active)}
+    >
+      <Text
+        style={[
+          styles.reciterPillText,
+          active && styles.reciterPillTextActive,
+          isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
+        ]}
+      >
+        {reciter.name} ({reciter.count})
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+const ReciterGridCard = React.memo(function ReciterGridCard({ reciter, isDark, isRTL, labelText, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[styles.reciterCard, !isDark && styles.reciterCardLight]}
+      onPress={() => onPress(reciter.name)}
+      activeOpacity={0.8}
+    >
+      {reciter.cover ? (
+        <Image source={{ uri: reciter.cover }} style={styles.reciterCardCover} fadeDuration={0} />
+      ) : (
+        <View style={styles.reciterCardCover}>
+          <Text style={styles.reciterCardCoverFallbackText}>{reciter.name?.slice(0, 2) || 'ق'}</Text>
+        </View>
+      )}
+      <View style={styles.reciterCardInfo}>
+        <Text style={[styles.reciterCardName, !isDark && { color: colors.ink }]} numberOfLines={1}>
+          {reciter.name}
+        </Text>
+        <View style={styles.reciterCardBadge}>
+          <Text style={[styles.reciterCardBadgeText, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
+            {labelText}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+});
 import {
   isQuranContent,
   getQuranReciterName,
@@ -46,6 +90,7 @@ function QuranScreen({ onTrackAction }) {
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
+  const { isLiteMode } = useLiteMode();
   const [selectedReciter, setSelectedReciter] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleLimit, setVisibleLimit] = useState(40);
@@ -166,6 +211,57 @@ function QuranScreen({ onTrackAction }) {
     );
   }, [curTrackId, isPlaying, isLoading, likedSet, downloadedSet, isDark, isRTL, handlePlayTrack, handleMorePress]);
 
+  const isRecitersGridMode = !selectedReciter && !searchQuery.trim();
+
+  const handleToggleReciterPill = useCallback((name, active) => {
+    setSelectedReciter(active ? null : name);
+  }, []);
+
+  const handleSelectReciterCard = useCallback((name) => {
+    setSelectedReciter(name);
+  }, []);
+
+  const reciterKeyExtractor = useCallback((item, idx) => String(item?.name || `reciter-${idx}`), []);
+
+  const renderReciterPillItem = useCallback(({ item }) => (
+    <ReciterPill
+      reciter={item}
+      active={selectedReciter === item.name}
+      isRTL={isRTL}
+      onPress={handleToggleReciterPill}
+    />
+  ), [selectedReciter, isRTL, handleToggleReciterPill]);
+
+  const renderReciterGridItem = useCallback(({ item }) => (
+    <ReciterGridCard
+      reciter={item}
+      isDark={isDark}
+      isRTL={isRTL}
+      labelText={t('quran.surahsCount', { count: item.count })}
+      onPress={handleSelectReciterCard}
+    />
+  ), [isDark, isRTL, t, handleSelectReciterCard]);
+
+  const allRecitersPillHeader = useMemo(() => (
+    <TouchableOpacity
+      style={[
+        styles.reciterPill,
+        selectedReciter === null && styles.reciterPillActive,
+      ]}
+      onPress={() => setSelectedReciter(null)}
+    >
+      <Text
+        style={[
+          styles.reciterPillText,
+          selectedReciter === null && styles.reciterPillTextActive,
+          isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
+        ]}
+      >
+        {t('quran.tabReciters', { count: recitersList.length })}
+      </Text>
+    </TouchableOpacity>
+  ), [selectedReciter, isRTL, t, recitersList.length]);
+
   const renderHeader = useMemo(() => {
     return (
       <View>
@@ -178,59 +274,28 @@ function QuranScreen({ onTrackAction }) {
           setSearchQuery={setSearchQuery}
         />
 
-        {/* Reciters Horizontal Carousel */}
+        {/* Reciters Horizontal Carousel (Virtualized FlatList) */}
         <View style={styles.recitersSection}>
           <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
             {t('quran.reciters')}
           </Text>
-          <ScrollView
+          <FlatList
             horizontal
+            data={recitersList}
+            keyExtractor={reciterKeyExtractor}
+            renderItem={renderReciterPillItem}
+            ListHeaderComponent={allRecitersPillHeader}
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.reciterScroll}
-          >
-            <TouchableOpacity
-              style={[
-                styles.reciterPill,
-                selectedReciter === null && styles.reciterPillActive,
-              ]}
-              onPress={() => setSelectedReciter(null)}
-            >
-              <Text
-                style={[
-                  styles.reciterPillText,
-                  selectedReciter === null && styles.reciterPillTextActive,
-                  isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
-                ]}
-              >
-                {t('quran.tabReciters', { count: recitersList.length })}
-              </Text>
-            </TouchableOpacity>
-
-            {recitersList.map((r) => {
-              const active = selectedReciter === r.name;
-              return (
-                <TouchableOpacity
-                  key={r.name}
-                  style={[styles.reciterPill, active && styles.reciterPillActive]}
-                  onPress={() => setSelectedReciter(active ? null : r.name)}
-                >
-                  <Text
-                    style={[
-                      styles.reciterPillText,
-                      active && styles.reciterPillTextActive,
-                      isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }
-                    ]}
-                  >
-                    {r.name} ({r.count})
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+            windowSize={5}
+            initialNumToRender={8}
+            maxToRenderPerBatch={6}
+            removeClippedSubviews={Platform.OS === 'android'}
+          />
         </View>
 
         {/* Subheader / Grid Area */}
-        {!selectedReciter && !searchQuery.trim() ? (
+        {isRecitersGridMode ? (
           <View style={styles.reciterGridSection}>
             <View style={styles.reciterGridHeader}>
               <Text style={[styles.reciterGridTitle, !isDark && { color: colors.ink }]}>
@@ -240,53 +305,6 @@ function QuranScreen({ onTrackAction }) {
                 {t('quran.browseSurahs')}
               </Text>
             </View>
-
-            <View style={styles.reciterCardsGrid}>
-              {recitersList.map((reciter) => (
-                <TouchableOpacity
-                  key={reciter.name}
-                  style={[styles.reciterCard, !isDark && styles.reciterCardLight]}
-                  onPress={() => setSelectedReciter(reciter.name)}
-                  activeOpacity={0.8}
-                >
-                  {reciter.cover ? (
-                    <Image source={{ uri: reciter.cover }} style={styles.reciterCardCover} />
-                  ) : (
-                    <View style={styles.reciterCardCover}>
-                      <Text style={styles.reciterCardCoverFallbackText}>{reciter.name?.slice(0, 2) || 'ق'}</Text>
-                    </View>
-                  )}
-                  <View style={styles.reciterCardInfo}>
-                    <Text style={[styles.reciterCardName, !isDark && { color: colors.ink }]} numberOfLines={1}>
-                      {reciter.name}
-                    </Text>
-                    <View style={styles.reciterCardBadge}>
-                      <Text style={[styles.reciterCardBadgeText, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif' }]}>
-                        {t('quran.surahsCount', { count: reciter.count })}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {displayedTracks.length > 0 && (
-              <View style={{ marginTop: 20, marginBottom: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
-                <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
-                  {t('quran.allTracksTitle') || (isRTL ? 'جميع التلاوات والآيات المسجلة' : 'All Recitations & Saved Ayahs')} ({displayedTracks.length})
-                </Text>
-                <TouchableOpacity
-                  style={[styles.playAllBtn, { marginTop: 0 }]}
-                  onPress={handlePlayAll}
-                  activeOpacity={0.8}
-                >
-                  <Play size={12} color={colors.ink} fill={colors.ink} />
-                  <Text style={[styles.playAllBtnText, isRTL && { letterSpacing: 0 }]}>
-                    {t('quran.playAllRecitations', { count: displayedTracks.length }) || (isRTL ? 'تشغيل الكل' : 'Play All')}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         ) : (
           <>
@@ -344,16 +362,43 @@ function QuranScreen({ onTrackAction }) {
     );
   }, [
     isDark,
+    isRTL,
+    t,
     searchQuery,
     selectedReciter,
+    isRecitersGridMode,
     recitersList,
+    reciterKeyExtractor,
+    renderReciterPillItem,
+    allRecitersPillHeader,
     displayedTracks,
     handlePlayAll,
     handleClearFilter,
   ]);
 
+  const renderFooter = useCallback(() => {
+    if (!isRecitersGridMode || displayedTracks.length === 0) return null;
+    return (
+      <View style={{ marginTop: 14, marginBottom: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
+        <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
+          {t('quran.allTracksTitle') || (isRTL ? 'جميع التلاوات والآيات المسجلة' : 'All Recitations & Saved Ayahs')} ({displayedTracks.length})
+        </Text>
+        <TouchableOpacity
+          style={[styles.playAllBtn, { marginTop: 0 }]}
+          onPress={handlePlayAll}
+          activeOpacity={0.8}
+        >
+          <Play size={12} color={colors.ink} fill={colors.ink} />
+          <Text style={[styles.playAllBtnText, isRTL && { letterSpacing: 0 }]}>
+            {t('quran.playAllRecitations', { count: displayedTracks.length }) || (isRTL ? 'تشغيل الكل' : 'Play All')}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }, [isRecitersGridMode, displayedTracks.length, isRTL, isDark, t, handlePlayAll]);
+
   const renderEmpty = useCallback(() => {
-    if (!selectedReciter && !searchQuery.trim()) return null;
+    if (isRecitersGridMode) return null;
     return (
       <View style={styles.emptyCard}>
         <BookOpen size={36} color={colors.mint} />
@@ -365,25 +410,31 @@ function QuranScreen({ onTrackAction }) {
         </Text>
       </View>
     );
-  }, [selectedReciter, searchQuery, isOffline, t, isRTL]);
+  }, [isRecitersGridMode, isOffline, t, isRTL]);
 
   return (
     <View style={[styles.container, !isDark && { backgroundColor: '#fdfbf7' }]}>
       <FlatList
-        data={selectedReciter || searchQuery.trim() ? displayedTracks : []}
-        keyExtractor={keyExtractor}
-        renderItem={renderSongItem}
+        key={isRecitersGridMode ? 'quran_reciters_grid' : 'quran_tracks_list'}
+        data={isRecitersGridMode ? recitersList : displayedTracks}
+        numColumns={isRecitersGridMode ? 2 : 1}
+        columnWrapperStyle={isRecitersGridMode ? { justifyContent: 'space-between' } : undefined}
+        keyExtractor={isRecitersGridMode ? reciterKeyExtractor : keyExtractor}
+        renderItem={isRecitersGridMode ? renderReciterGridItem : renderSongItem}
         ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        windowSize={Platform.OS === 'android' ? 3 : 5}
-        initialNumToRender={Platform.OS === 'android' ? 6 : 8}
-        maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 6}
+        windowSize={5}
+        initialNumToRender={isLiteMode ? 6 : 8}
+        maxToRenderPerBatch={isLiteMode ? 4 : 6}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
       />
-      <QuranRadioModal isOpen={isRadioModalOpen} visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
+      {isRadioModalOpen && (
+        <QuranRadioModal isOpen={isRadioModalOpen} visible={isRadioModalOpen} onClose={() => setIsRadioModalOpen(false)} />
+      )}
     </View>
   );
 }

@@ -29,8 +29,10 @@ const invalidateAudioCache = (videoIdOrUrl, deleteDiskFile = false) => {
 };
 
 // Periodic cache cleanup
-setTimeout(audioCacheUtils.cleanupAudioCache, 5000);
-setInterval(audioCacheUtils.cleanupAudioCache, 6 * 3600 * 1000);
+const startupCleanupTimer = setTimeout(audioCacheUtils.cleanupAudioCache, 5000);
+if (typeof startupCleanupTimer.unref === 'function') startupCleanupTimer.unref();
+const periodicCleanupTimer = setInterval(audioCacheUtils.cleanupAudioCache, 6 * 3600 * 1000);
+if (typeof periodicCleanupTimer.unref === 'function') periodicCleanupTimer.unref();
 
 module.exports = {
   // Quran Utils

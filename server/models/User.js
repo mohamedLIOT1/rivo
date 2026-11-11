@@ -43,6 +43,14 @@ const UserSchema = new mongoose.Schema({
     plays: { type: Number, default: 0 },
     seconds: { type: Number, default: 0 }
   },
+  recentHistory: [{
+    trackId: { type: String, default: '' },
+    title: { type: String, default: '' },
+    artist: { type: String, default: '' },
+    genre: { type: String, default: '' },
+    playedAt: { type: Date, default: Date.now }
+  }],
+  topGenres: { type: Object, default: {} },
   preferences: {
     language: { type: String, enum: ['ar', 'en'], default: 'ar' },
     contentModes: {
@@ -79,5 +87,7 @@ UserSchema.index({ following: 1 });
 UserSchema.index({ likedTrackIds: 1 });
 UserSchema.index({ createdAt: -1 });
 UserSchema.index({ 'discord.id': 1 });
+UserSchema.index({ 'recentHistory.trackId': 1 });
+UserSchema.index({ 'recentHistory.playedAt': -1 });
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

@@ -14,6 +14,7 @@ const {
   downloadYouTubeAudioToCache,
   searchYouTubeId,
 } = require('../../utils/helpers');
+const { ensureCloudFileCached } = require('../../utils/cloudMediaServer');
 
 async function resolveTrackStemInfo(req) {
   let { id, trackId, url, title, artist, duration } = req.query;
@@ -37,7 +38,9 @@ async function resolveTrackStemInfo(req) {
   }
   if (dbTrack) {
     trackId = trackId || String(dbTrack._id);
-    url = url || dbTrack.audioUrl;
+    if (dbTrack.cloudStorage?.provider || !url) {
+      url = dbTrack.audioUrl || url;
+    }
     title = title || dbTrack.title;
     artist = artist || dbTrack.artist;
     duration = duration || dbTrack.duration;
@@ -45,13 +48,19 @@ async function resolveTrackStemInfo(req) {
 
   const aliases = [];
   if (trackId) aliases.push(String(trackId));
-  if (url) {
-    const vidMatch = url.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  const legacyUrl = dbTrack?.legacyAudioUrl || '';
+  for (const candidateUrl of [url, legacyUrl]) {
+    if (!candidateUrl) continue;
+    const vidMatch = candidateUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
     if (vidMatch && vidMatch[1]) {
       aliases.push(`yt_${vidMatch[1]}`);
       aliases.push(vidMatch[1]);
     }
-    aliases.push(crypto.createHash('md5').update(url).digest('hex'));
+    aliases.push(crypto.createHash('md5').update(candidateUrl).digest('hex'));
+  }
+  if (dbTrack?.youtubeId) {
+    aliases.push(`yt_${dbTrack.youtubeId}`);
+    aliases.push(dbTrack.youtubeId);
   }
   if (title) {
     const cleanT = String(title).toLowerCase().trim().replace(/[^a-z0-9]/g, '');
@@ -62,9 +71,10 @@ async function resolveTrackStemInfo(req) {
     }
   }
 
-  const primaryKey = aliases[0] || (title ? `ta_${crypto.createHash('md5').update(title).digest('hex')}` : 'unknown_' + Date.now());
+  const uniqueAliases = [...new Set(aliases)];
+  const primaryKey = uniqueAliases[0] || (title ? `ta_${crypto.createHash('md5').update(title).digest('hex')}` : 'unknown_' + Date.now());
 
-  return { trackId, url, title, artist, duration, primaryKey, aliases };
+  return { trackId, url, title, artist, duration, primaryKey, aliases: uniqueAliases, dbTrack };
 }
 
 // Check real-time status of vocal isolation
@@ -84,7 +94,7 @@ router.get('/vocal-stream', async (req, res) => {
   try {
     let { json, priority, prefetch } = req.query;
     const isPriority = priority === '1' || priority === 'true' || (!prefetch && req.headers['x-rivo-priority']);
-    const { trackId, url, title, artist, duration, primaryKey, aliases } = await resolveTrackStemInfo(req);
+    const { trackId, url, title, artist, duration, primaryKey, aliases, dbTrack } = await resolveTrackStemInfo(req);
     const { getVocalStemPath, getVocalIsolationStatus, startVocalIsolation } = require('../../utils/vocalSeparator');
 
     const status = getVocalIsolationStatus(primaryKey, aliases);
@@ -97,6 +107,22 @@ router.get('/vocal-stream', async (req, res) => {
     }
 
     let sourceAudioPath = url || '';
+    if (dbTrack?.cloudStorage?.provider || sourceAudioPath.includes('/uploads/cloud/')) {
+      let cloudTrack = dbTrack;
+      if (!cloudTrack && sourceAudioPath) {
+        const m = sourceAudioPath.match(/\/uploads\/cloud\/([a-fA-F0-9]{24})/);
+        if (m?.[1] && mongoose.isValidObjectId(m[1])) {
+          try { cloudTrack = await Track.findById(m[1]).lean(); } catch {}
+        }
+      }
+      if (cloudTrack?.cloudStorage?.provider) {
+        const localCloud = await ensureCloudFileCached(cloudTrack).catch(() => null);
+        if (localCloud && fs.existsSync(localCloud)) {
+          sourceAudioPath = localCloud;
+        }
+      }
+    }
+
     if (sourceAudioPath.startsWith('/uploads/') || sourceAudioPath.startsWith('uploads/')) {
       const resolvedUpload = safeResolveUpload(sourceAudioPath, uploadsDir);
       if (resolvedUpload && fs.existsSync(resolvedUpload)) {

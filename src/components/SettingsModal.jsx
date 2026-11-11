@@ -6,6 +6,7 @@ import { isTauriDesktop, openDesktopDownloadsDir } from '../utils/offlineStorage
 import LanguageSettingCard from './settings/LanguageSettingCard';
 import ContentPreferencesCard from './settings/ContentPreferencesCard';
 import DiscordSettingCard from './settings/DiscordSettingCard';
+import AutoDownloadSettingCard from './settings/AutoDownloadSettingCard';
 
 export default function SettingsModal({
   isOpen,
@@ -125,6 +126,9 @@ export default function SettingsModal({
             {vocalOnlyMode ? t('settings.active') : t('settings.disabled')}
           </button>
         </div>
+
+        {/* ── 5b. Auto-Download on Full Listen ── */}
+        <AutoDownloadSettingCard isDark={isDark} />
 
         {/* ── 6. Desktop Downloads Folder (Tauri Only) ── */}
         {isTauriDesktop && (

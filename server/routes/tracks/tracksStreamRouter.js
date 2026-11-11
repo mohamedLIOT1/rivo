@@ -44,6 +44,31 @@ const handleTrackStream = async (req, res) => {
       } catch (err) {}
     }
 
+    // Cloud-migrated track priority (overrides stale client YouTube query url)
+    if (track?.cloudStorage?.provider || (track?.audioUrl && track.audioUrl.startsWith('/uploads/cloud/'))) {
+      const cloudPath = track.audioUrl?.startsWith('/') ? track.audioUrl : `/uploads/cloud/${track._id}.${track.cloudStorage?.ext || 'm4a'}`;
+      return res.json({
+        success: true,
+        url: cloudPath,
+        directUrl: cloudPath,
+        duration: track.duration || 210,
+        cover: track.cover || '',
+        track: {
+          id: String(track._id),
+          _id: String(track._id),
+          title: track.title,
+          artist: track.artist,
+          album: track.album,
+          cover: track.cover,
+          audioUrl: cloudPath,
+          duration: track.duration || 210,
+          source: track.source || 'Rivo',
+          isQuran: Boolean(track.isQuran),
+          lyrics: track.lyrics || []
+        }
+      });
+    }
+
     // Direct local upload stream check
     if (rawUrl && (rawUrl.startsWith('/uploads/') || rawUrl.includes('/uploads/')) || track?.source === 'Upload' || (track?.audioUrl && (track.audioUrl.startsWith('/uploads/') || track.audioUrl.includes('/uploads/')))) {
       const uPath = (rawUrl && rawUrl.includes('/uploads/')) ? rawUrl : (track?.audioUrl || rawUrl);

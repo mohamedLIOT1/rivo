@@ -35,21 +35,15 @@ export const useAudioDownloads = ({
   const [autoDownloadFinished, setAutoDownloadFinishedState] = useState(true);
   const autoDownloadFinishedRef = useRef(true);
 
-  useEffect(() => {
-    AsyncStorage.getItem('@rivo_auto_download_finished').then((val) => {
-      if (val !== null) {
-        const b = val === 'true';
-        autoDownloadFinishedRef.current = b;
-        setAutoDownloadFinishedState(b);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const toggleAutoDownloadFinished = useCallback(() => {
+  const toggleAutoDownloadFinished = useCallback((explicitVal) => {
     setAutoDownloadFinishedState((prev) => {
-      const next = !prev;
+      const next = typeof explicitVal === 'boolean' ? explicitVal : !prev;
       autoDownloadFinishedRef.current = next;
       AsyncStorage.setItem('@rivo_auto_download_finished', String(next)).catch(() => {});
+      if (!next) {
+        autoDownloadQueueRef.current = [];
+        AsyncStorage.removeItem(AUTO_DOWNLOAD_QUEUE_KEY).catch(() => {});
+      }
       return next;
     });
   }, []);
@@ -129,6 +123,7 @@ export const useAudioDownloads = ({
 
   const handleDownloadTrack = useCallback(async (t, isSilent = false) => {
     if (!t) return false;
+    if (isSilent && !autoDownloadFinishedRef.current) return false;
     const cleanTitle = (t.title || 'Track').replace(/[/\\?%*:|"<>]/g, '').trim();
     const cleanArtist = (t.artist || 'Artist').replace(/[/\\?%*:|"<>]/g, '').trim();
     const id = String(t._id || t.id || t.youtubeId || `tr_${cleanTitle}_${cleanArtist}`.replace(/\s+/g, '_'));
@@ -187,12 +182,13 @@ export const useAudioDownloads = ({
   }, []);
 
   const drainAutoDownloadQueue = useCallback(async () => {
-    if (autoDownloadDrainingRef.current) return;
+    if (autoDownloadDrainingRef.current || !autoDownloadFinishedRef.current) return;
     autoDownloadDrainingRef.current = true;
     try {
-      while (autoDownloadQueueRef.current.length > 0) {
+      while (autoDownloadQueueRef.current.length > 0 && autoDownloadFinishedRef.current) {
         const item = autoDownloadQueueRef.current[0];
         const success = await handleDownloadTrack(item.track, true);
+        if (!autoDownloadFinishedRef.current) break;
         if (success) {
           autoDownloadQueueRef.current.shift();
         } else {
@@ -212,7 +208,7 @@ export const useAudioDownloads = ({
   }, [handleDownloadTrack, persistAutoDownloadQueue]);
 
   const queueAutoDownloadTrack = useCallback((track) => {
-    if (!track || isTrackDownloaded(track)) return;
+    if (!autoDownloadFinishedRef.current || !track || isTrackDownloaded(track)) return;
     const key = getTrackDedupeKey(track) || String(track._id || track.id || track.youtubeId || '');
     const exists = autoDownloadQueueRef.current.some((item) => {
       const queuedKey = getTrackDedupeKey(item.track) || String(item.track?._id || item.track?.id || item.track?.youtubeId || '');
@@ -226,8 +222,17 @@ export const useAudioDownloads = ({
 
   useEffect(() => {
     let mounted = true;
-    AsyncStorage.getItem(AUTO_DOWNLOAD_QUEUE_KEY).then((raw) => {
-      if (!mounted || !raw) return;
+    Promise.all([
+      AsyncStorage.getItem('@rivo_auto_download_finished').catch(() => null),
+      AsyncStorage.getItem(AUTO_DOWNLOAD_QUEUE_KEY).catch(() => null),
+    ]).then(([prefVal, raw]) => {
+      if (!mounted) return;
+      if (prefVal !== null) {
+        const b = prefVal === 'true';
+        autoDownloadFinishedRef.current = b;
+        setAutoDownloadFinishedState(b);
+      }
+      if (!raw || !autoDownloadFinishedRef.current) return;
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
@@ -241,7 +246,7 @@ export const useAudioDownloads = ({
       console.warn('[AutoDownload] Failed to load queue:', err?.message || err);
     });
     const sub = AppState?.addEventListener?.('change', (state) => {
-      if (state === 'active') drainAutoDownloadQueue();
+      if (state === 'active' && autoDownloadFinishedRef.current) drainAutoDownloadQueue();
     });
     return () => {
       mounted = false;

@@ -30,7 +30,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
-import { useTranslation } from '../context/LocalizationContext';
+import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import CassetteTag from '../ui/CassetteTag';
@@ -42,6 +42,108 @@ import SongRadarModal from '../components/SongRadarModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { splitArtists } from '../../utils/artistUtils.jsx';
 import { normalizeCoverUri } from '../utils/coverUtils';
+
+const SearchPersonCard = React.memo(function SearchPersonCard({ user, isHorizontal, isDark, rtlTextStyle, onPress }) {
+  const initial = (user.name || 'U').charAt(0).toUpperCase();
+  return (
+    <TouchableOpacity
+      style={[
+        isHorizontal ? styles.personCardHorizontal : styles.personCardVertical,
+        !isDark && styles.personCardLight,
+        !isHorizontal && { marginBottom: 8 },
+      ]}
+      onPress={() => onPress(user)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.personAvatarWrap}>
+        {user.avatar ? (
+          <Image source={{ uri: normalizeCoverUri(user.avatar) }} style={styles.personAvatar} fadeDuration={0} />
+        ) : (
+          <View style={styles.personAvatarFallback}>
+            <Text style={styles.personAvatarInitial}>{initial}</Text>
+          </View>
+        )}
+        {user.isVerified && (
+          <View style={styles.personVerifiedBadge}>
+            <ShieldCheck size={10} color="#082621" />
+          </View>
+        )}
+      </View>
+
+      <View style={styles.personInfo}>
+        <Text style={[styles.personName, !isDark && styles.personNameLight, rtlTextStyle]} numberOfLines={1}>
+          {user.name}
+        </Text>
+        <Text style={styles.personSub} numberOfLines={1}>
+          {user.followersCount || 0} followers • {(user.publicPlaylists || []).length} crates
+        </Text>
+      </View>
+
+      <View style={styles.personActionBtn}>
+        <Text style={[styles.personActionText, rtlTextStyle]}>View</Text>
+        <ArrowRight size={11} color="#06b6d4" />
+      </View>
+    </TouchableOpacity>
+  );
+});
+
+const SearchArtistCard = React.memo(function SearchArtistCard({ artist, isDark, rtlTextStyle, cardWidth, onPress }) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.artistCard,
+        !isDark && styles.artistCardLight,
+        cardWidth ? { width: cardWidth, marginBottom: 10 } : null,
+      ]}
+      onPress={() => onPress(artist)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.artistAvatarWrap}>
+        <Image
+          source={{ uri: normalizeCoverUri(artist.cover) }}
+          style={styles.artistAvatar}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      </View>
+      <Text style={[styles.artistName, !isDark && styles.artistNameLight, rtlTextStyle]} numberOfLines={1}>
+        {artist.name}
+      </Text>
+      <Text style={styles.artistCountPill}>
+        {artist.count} {artist.count === 1 ? 'Song' : 'Songs'}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+
+const SearchAlbumCard = React.memo(function SearchAlbumCard({ album, albumCardWidth, isDark, rtlTextStyle, onPress }) {
+  const coverUri = album.cover || album.coverUrl || album.tracks?.[0]?.cover || album.tracks?.[0]?.coverUrl;
+  return (
+    <TouchableOpacity
+      style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
+      onPress={() => onPress(album)}
+      activeOpacity={0.85}
+    >
+      <View style={styles.albumCoverWrap}>
+        <View style={styles.albumCoverPlaceholder}>
+          <Disc size={36} color="#1f3630" strokeWidth={1.5} />
+        </View>
+        <Image
+          source={{ uri: normalizeCoverUri(coverUri) }}
+          style={styles.albumCover}
+          resizeMode="cover"
+          fadeDuration={0}
+        />
+      </View>
+      <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight, rtlTextStyle]} numberOfLines={1}>
+        {album.name}
+      </Text>
+      <Text style={styles.albumArtist} numberOfLines={1}>
+        {album.artist || 'Various Artists'}
+      </Text>
+    </TouchableOpacity>
+  );
+});
 
 const DISPENSARY_GENRES = [
   { id: 'rap', label: 'EGYPTIAN RAP', labelAr: 'راب مصري', color: '#17a398', tag: 'TRAP / DRILL', tagAr: 'تراب / دريل' },
@@ -84,7 +186,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
-  const rtlTextStyle = isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null;
+  const { isLiteMode } = useLiteMode();
+  const rtlTextStyle = useMemo(() => (
+    isRTL ? { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' } : null
+  ), [isRTL]);
 
   const [query, setQuery] = useState(initialQuery || '');
 
@@ -382,10 +487,81 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     return isShowingSongs ? filteredTracks.slice(0, visibleSongLimit) : [];
   }, [isShowingSongs, filteredTracks, visibleSongLimit]);
 
+  const handlePressPerson = useCallback((u) => setSelectedUser(u), []);
+  const handlePressArtist = useCallback((artist) => {
+    if (onSelectArtist) onSelectArtist(artist);
+    else setSelectedArtist(artist);
+  }, [onSelectArtist]);
+  const handlePressAlbum = useCallback((alb) => {
+    if (onSelectAlbum) onSelectAlbum(alb);
+    else setSelectedAlbum(alb);
+  }, [onSelectAlbum]);
+
+  const renderHorizontalPersonItem = useCallback(({ item }) => (
+    <SearchPersonCard
+      user={item}
+      isHorizontal={true}
+      isDark={isDark}
+      rtlTextStyle={rtlTextStyle}
+      onPress={handlePressPerson}
+    />
+  ), [isDark, rtlTextStyle, handlePressPerson]);
+
+  const renderVerticalPersonItem = useCallback(({ item }) => (
+    <SearchPersonCard
+      user={item}
+      isHorizontal={false}
+      isDark={isDark}
+      rtlTextStyle={rtlTextStyle}
+      onPress={handlePressPerson}
+    />
+  ), [isDark, rtlTextStyle, handlePressPerson]);
+
+  const renderHorizontalArtistItem = useCallback(({ item }) => (
+    <SearchArtistCard
+      artist={item}
+      isDark={isDark}
+      rtlTextStyle={rtlTextStyle}
+      onPress={handlePressArtist}
+    />
+  ), [isDark, rtlTextStyle, handlePressArtist]);
+
+  const artistGridCardWidth = useMemo(() => {
+    const cols = width >= 768 ? 4 : 3;
+    return Math.floor((width - 28 - (cols - 1) * 10) / cols);
+  }, [width]);
+
+  const artistNumColumns = width >= 768 ? 4 : 3;
+
+  const renderGridArtistItem = useCallback(({ item }) => (
+    <SearchArtistCard
+      artist={item}
+      isDark={isDark}
+      rtlTextStyle={rtlTextStyle}
+      cardWidth={artistGridCardWidth}
+      onPress={handlePressArtist}
+    />
+  ), [isDark, rtlTextStyle, artistGridCardWidth, handlePressArtist]);
+
+  const renderAlbumGridItem = useCallback(({ item }) => (
+    <SearchAlbumCard
+      album={item}
+      albumCardWidth={albumCardWidth}
+      isDark={isDark}
+      rtlTextStyle={rtlTextStyle}
+      onPress={handlePressAlbum}
+    />
+  ), [albumCardWidth, isDark, rtlTextStyle, handlePressAlbum]);
+
+  const personKeyExtractor = useCallback((u, i) => String(u?.id || u?._id || i), []);
+  const artistKeyExtractor = useCallback((a, i) => String(a?.name || i), []);
+  const albumKeyExtractor = useCallback((a, i) => String(a?.id || a?._id || a?.name || i), []);
+  const songKeyExtractor = useCallback((item, i) => String(item?._id || item?.id || i), []);
+
   const renderHeader = useCallback(() => (
     <View>
-      {/* If no query and no selected genre: Show 12 Genre Blister Packs */}
-      {!hasSearch && (
+      {/* If no query and no selected genre: Show Genre Blister Packs */}
+      {!hasSearch && activeFilter !== 'people' && (
         <View style={styles.genresSection}>
           <View style={styles.sectionTitleRow}>
             <Disc size={16} color={colors.mint} />
@@ -413,7 +589,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         </View>
       )}
 
-      {/* ── PEOPLE & LISTENERS SECTION (Top priority for people queries) ── */}
+      {/* ── PEOPLE & LISTENERS SECTION ── */}
       {(activeFilter === 'people' || (hasSearch && activeFilter === 'all' && (userResults.length > 0 || isSearchingUsers))) && (
         <View style={styles.peopleSection}>
           <View style={styles.sectionTitleRow}>
@@ -429,73 +605,32 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             )}
           </View>
 
-          {userResults.length === 0 && !isSearchingUsers ? (
-            activeFilter === 'people' && (
-              <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
-                <Users size={36} color="#06b6d4" />
-                <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }, rtlTextStyle]}>{t('search.noListenersFound')}</Text>
-                <Text style={styles.emptySub}>{t('search.noListenersSub')}</Text>
-              </View>
-            )
-          ) : (
-            <ScrollView
-              horizontal={activeFilter === 'all'}
+          {userResults.length === 0 && !isSearchingUsers && activeFilter === 'people' && (
+            <View style={[styles.emptyContainer, !isDark && { backgroundColor: '#f6f2e8', borderColor: '#0b1110' }]}>
+              <Users size={36} color="#06b6d4" />
+              <Text style={[styles.emptyText, !isDark && { color: '#0b1110' }, rtlTextStyle]}>{t('search.noListenersFound')}</Text>
+              <Text style={styles.emptySub}>{t('search.noListenersSub')}</Text>
+            </View>
+          )}
+
+          {activeFilter === 'all' && userResults.length > 0 && (
+            <FlatList
+              horizontal
+              data={userResults}
+              keyExtractor={personKeyExtractor}
+              renderItem={renderHorizontalPersonItem}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={activeFilter === 'all' ? styles.peopleScrollRow : styles.peopleVerticalList}
-            >
-              {userResults.map((u) => {
-                const initial = (u.name || 'U').charAt(0).toUpperCase();
-                return (
-                  <TouchableOpacity
-                    key={u.id}
-                    style={[
-                      activeFilter === 'all' ? styles.personCardHorizontal : styles.personCardVertical,
-                      !isDark && styles.personCardLight,
-                    ]}
-                    onPress={() => setSelectedUser(u)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.personAvatarWrap}>
-                      {u.avatar ? (
-                        <Image
-                          source={{ uri: normalizeCoverUri(u.avatar) }}
-                          style={styles.personAvatar}
-                          fadeDuration={0}
-                        />
-                      ) : (
-                        <View style={styles.personAvatarFallback}>
-                          <Text style={styles.personAvatarInitial}>{initial}</Text>
-                        </View>
-                      )}
-                      {u.isVerified && (
-                        <View style={styles.personVerifiedBadge}>
-                          <ShieldCheck size={10} color="#082621" />
-                        </View>
-                      )}
-                    </View>
-
-                    <View style={styles.personInfo}>
-                      <Text style={[styles.personName, !isDark && styles.personNameLight, rtlTextStyle]} numberOfLines={1}>
-                        {u.name}
-                      </Text>
-                      <Text style={styles.personSub} numberOfLines={1}>
-                        {u.followersCount || 0} followers • {(u.publicPlaylists || []).length} crates
-                      </Text>
-                    </View>
-
-                    <View style={styles.personActionBtn}>
-                      <Text style={[styles.personActionText, rtlTextStyle]}>View</Text>
-                      <ArrowRight size={11} color="#06b6d4" />
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+              contentContainerStyle={styles.peopleScrollRow}
+              windowSize={5}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              removeClippedSubviews={Platform.OS === 'android'}
+            />
           )}
         </View>
       )}
 
-      {/* ── ARTISTS SECTION (Matching Images) ── */}
+      {/* ── ARTISTS SECTION ── */}
       {hasSearch && (activeFilter === 'all' || activeFilter === 'artists') && matchingArtists.length > 0 && (
         <View style={styles.artistsSection}>
           <View style={styles.sectionTitleRow}>
@@ -508,38 +643,24 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.artistsScrollRow}>
-            {matchingArtists.slice(0, 10).map((artist, idx) => {
-              const coverUri = artist.cover;
-              return (
-                <TouchableOpacity
-                  key={artist.name || idx}
-                  style={[styles.artistCard, !isDark && styles.artistCardLight]}
-                  onPress={() => onSelectArtist ? onSelectArtist(artist) : setSelectedArtist(artist)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.artistAvatarWrap}>
-                    <Image
-                      source={{ uri: normalizeCoverUri(coverUri) }}
-                      style={styles.artistAvatar}
-                      resizeMode="cover"
-                      fadeDuration={0}
-                    />
-                  </View>
-                  <Text style={[styles.artistName, !isDark && styles.artistNameLight, rtlTextStyle]} numberOfLines={1}>
-                    {artist.name}
-                  </Text>
-                  <Text style={styles.artistCountPill}>
-                    {artist.count} {artist.count === 1 ? 'Song' : 'Songs'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
+          {activeFilter === 'all' && (
+            <FlatList
+              horizontal
+              data={matchingArtists.slice(0, isLiteMode ? 8 : 15)}
+              keyExtractor={artistKeyExtractor}
+              renderItem={renderHorizontalArtistItem}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.artistsScrollRow}
+              windowSize={5}
+              initialNumToRender={6}
+              maxToRenderPerBatch={6}
+              removeClippedSubviews={Platform.OS === 'android'}
+            />
+          )}
         </View>
       )}
 
-      {/* ── ALBUMS SECTION (Matching Images) ── */}
+      {/* ── ALBUMS SECTION ── */}
       {hasSearch && (activeFilter === 'all' || activeFilter === 'albums') && matchingAlbums.length > 0 && (
         <View style={styles.albumsSection}>
           <View style={styles.sectionTitleRow}>
@@ -552,37 +673,20 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             </View>
           </View>
 
-          <View style={styles.albumsGrid}>
-            {matchingAlbums.slice(0, 8).map((alb, index) => {
-              const coverUri = alb.cover || alb.coverUrl || alb.tracks?.[0]?.cover || alb.tracks?.[0]?.coverUrl;
-              return (
-                <TouchableOpacity
+          {activeFilter === 'all' && (
+            <View style={styles.albumsGrid}>
+              {matchingAlbums.slice(0, isLiteMode ? 4 : 8).map((alb, index) => (
+                <SearchAlbumCard
                   key={alb.id || alb.name || String(index)}
-                  style={[styles.albumCard, !isDark && styles.albumCardLight, { width: albumCardWidth }]}
-                  onPress={() => onSelectAlbum ? onSelectAlbum(alb) : setSelectedAlbum(alb)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.albumCoverWrap}>
-                    <View style={styles.albumCoverPlaceholder}>
-                      <Disc size={36} color="#1f3630" strokeWidth={1.5} />
-                    </View>
-                    <Image
-                      source={{ uri: normalizeCoverUri(coverUri) }}
-                      style={styles.albumCover}
-                      resizeMode="cover"
-                      fadeDuration={0}
-                    />
-                  </View>
-                  <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight, rtlTextStyle]} numberOfLines={1}>
-                    {alb.name}
-                  </Text>
-                  <Text style={styles.albumArtist} numberOfLines={1}>
-                    {alb.artist || 'Various Artists'}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+                  album={alb}
+                  albumCardWidth={albumCardWidth}
+                  isDark={isDark}
+                  rtlTextStyle={rtlTextStyle}
+                  onPress={handlePressAlbum}
+                />
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -602,15 +706,20 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     userResults,
     isSearchingUsers,
     isDark,
+    isRTL,
+    isLiteMode,
     matchingArtists,
     matchingAlbums,
     albumCardWidth,
     isShowingSongs,
     filteredTracks.length,
-    onSelectArtist,
-    onSelectAlbum,
-    colors.mint,
     rtlTextStyle,
+    t,
+    personKeyExtractor,
+    artistKeyExtractor,
+    renderHorizontalPersonItem,
+    renderHorizontalArtistItem,
+    handlePressAlbum,
   ]);
 
   const renderFooter = useCallback(() => {
@@ -755,17 +864,64 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       </View>
 
       <FlatList
-        data={songData}
-        keyExtractor={(item, index) => item._id || item.id || String(index)}
-        renderItem={renderSongItem}
+        key={
+          activeFilter === 'albums'
+            ? `search_albums_${numColumns}`
+            : activeFilter === 'artists'
+              ? `search_artists_${artistNumColumns}`
+              : activeFilter === 'people'
+                ? 'search_people'
+                : 'search_songs'
+        }
+        data={
+          activeFilter === 'people'
+            ? userResults
+            : activeFilter === 'artists'
+              ? (hasSearch ? matchingArtists : [])
+              : activeFilter === 'albums'
+                ? (hasSearch ? matchingAlbums : [])
+                : songData
+        }
+        numColumns={
+          activeFilter === 'albums'
+            ? numColumns
+            : activeFilter === 'artists'
+              ? artistNumColumns
+              : 1
+        }
+        columnWrapperStyle={
+          activeFilter === 'albums' && numColumns > 1
+            ? { gap: 10, marginBottom: 10 }
+            : activeFilter === 'artists' && artistNumColumns > 1
+              ? { gap: 10 }
+              : undefined
+        }
+        keyExtractor={
+          activeFilter === 'people'
+            ? personKeyExtractor
+            : activeFilter === 'artists'
+              ? artistKeyExtractor
+              : activeFilter === 'albums'
+                ? albumKeyExtractor
+                : songKeyExtractor
+        }
+        renderItem={
+          activeFilter === 'people'
+            ? renderVerticalPersonItem
+            : activeFilter === 'artists'
+              ? renderGridArtistItem
+              : activeFilter === 'albums'
+                ? renderAlbumGridItem
+                : renderSongItem
+        }
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-        maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
-        windowSize={Platform.OS === 'android' ? 3 : 5}
+        initialNumToRender={isLiteMode ? 6 : 8}
+        maxToRenderPerBatch={isLiteMode ? 4 : 6}
+        windowSize={5}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
@@ -779,7 +935,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       />
 
       {/* Album Details Modal */}
-      {!onSelectAlbum && (
+      {!onSelectAlbum && Boolean(selectedAlbum) && (
         <AlbumDetailModal
           visible={Boolean(selectedAlbum)}
           album={selectedAlbum}
@@ -799,7 +955,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       )}
 
       {/* Artist Details Modal */}
-      {!onSelectArtist && (
+      {!onSelectArtist && Boolean(selectedArtist) && (
         <ArtistDetailModal
           visible={Boolean(selectedArtist)}
           artist={selectedArtist}
@@ -816,21 +972,25 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       )}
 
       {/* User Details Modal */}
-      <UserDetailModal
-        visible={Boolean(selectedUser)}
-        user={selectedUser}
-        userId={selectedUser?.id}
-        onClose={() => setSelectedUser(null)}
-        onOpenChat={onOpenChat}
-        onOpenFullPlayer={onOpenFullPlayer}
-      />
+      {Boolean(selectedUser) && (
+        <UserDetailModal
+          visible={Boolean(selectedUser)}
+          user={selectedUser}
+          userId={selectedUser?.id}
+          onClose={() => setSelectedUser(null)}
+          onOpenChat={onOpenChat}
+          onOpenFullPlayer={onOpenFullPlayer}
+        />
+      )}
 
       {/* Song Radar Modal — Acoustic Audio & Humming Recognition */}
-      <SongRadarModal
-        visible={isRadarOpen}
-        onClose={() => setIsRadarOpen(false)}
-        onOpenAddToPlaylist={onTrackAction}
-      />
+      {isRadarOpen && (
+        <SongRadarModal
+          visible={isRadarOpen}
+          onClose={() => setIsRadarOpen(false)}
+          onOpenAddToPlaylist={onTrackAction}
+        />
+      )}
     </View>
   );
 }

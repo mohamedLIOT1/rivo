@@ -275,9 +275,7 @@ export const handlePlaybackStatusUpdate = ({
     if (trackCompletionHandledRef && curActiveId) {
       trackCompletionHandledRef.current = curActiveId;
     }
-    if (isMixTransitioningRef?.current) {
-      return;
-    }
+
     const finishedTrack = curTrack ? {
       ...curTrack,
       resolvedAudioUrl: curTrack.resolvedAudioUrl || soundRef?.current?._uri || null,
@@ -286,10 +284,14 @@ export const handlePlaybackStatusUpdate = ({
     if (finishedTrack) {
       autoPersistFinishedTrack?.(finishedTrack);
       flushListeningStats(null, true);
-      const isAutoDownload = autoDownloadFinishedRef?.current ?? true;
-      if (isAutoDownload && handleDownloadTrack) {
+      const isAutoDownload = autoDownloadFinishedRef ? autoDownloadFinishedRef.current === true : false;
+      if (!isLiveStream && isAutoDownload && handleDownloadTrack) {
         handleDownloadTrack(finishedTrack, true);
       }
+    }
+
+    if (isMixTransitioningRef?.current) {
+      return;
     }
 
     if (repeatModeRef?.current === 'one') {

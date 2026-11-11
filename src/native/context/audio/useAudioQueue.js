@@ -1,11 +1,15 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../config';
 import { getSmartTasteAndMoodTracks } from '../../utils/tasteAlgorithm';
 import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
-import { QURAN_LIVE_STATIONS } from '../../data/quranLiveStations';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { getTrackDedupeKey } from '../../services/downloadManager';
 import { isPodcastContent, buildPodcastSeedQueue } from '../../utils/podcastUtils';
 import { PODCAST_SHOWS_EPISODES } from '../../data/podcastsData';
+import { getListeningStats } from './audioApiHelpers';
+import { useUser } from '../UserContext';
+import { useConnectivity } from '../ConnectivityContext';
 import {
   isMatchingContentType,
   handleQuranRadioNext,
@@ -42,6 +46,23 @@ export const useAudioQueue = ({
   const playedInQueueCycleRef = useRef(new Set());
   const isSmartMoodQueueRef = useRef(false);
   const playedSmartSongIdsRef = useRef(new Set());
+  const smartShuffleAbortRef = useRef(null);
+
+  let userToken = null;
+  try {
+    userToken = useUser()?.token || null;
+  } catch {}
+
+  let isOfflineMode = false;
+  try {
+    isOfflineMode = useConnectivity()?.appMode === 'offline';
+  } catch {}
+
+  useEffect(() => {
+    return () => {
+      try { smartShuffleAbortRef.current?.abort(); } catch {}
+    };
+  }, []);
 
   const setQueue = useCallback((newQueue) => {
     queueRef.current = Array.isArray(newQueue) ? newQueue : [];
@@ -210,6 +231,20 @@ export const useAudioQueue = ({
         const pool = ((userTracks && userTracks.length > 0) ? userTracks : (INITIAL_TRACKS || []))
           .filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
 
+        const localStats = getListeningStats?.() || {};
+        const statTracks = Object.values(localStats.trackStats || {}).slice(0, 10);
+        const recentHistory = [
+          ...historyStackRef.current.slice(-8).reverse(),
+          ...statTracks,
+          ...(Array.isArray(currentUser?.recentTracks) ? currentUser.recentTracks.slice(0, 8) : []),
+        ].filter(Boolean).slice(0, 15).map(t => ({
+          id: String(t._id || t.id || ''),
+          title: t.title || '',
+          artist: t.artist || '',
+          genre: t.genre || '',
+        }));
+        const listeningStats = { ...localStats, history: recentHistory };
+
         let nextBatch = getSmartTasteAndMoodTracks({
           allTracks: pool,
           currentUser,
@@ -217,6 +252,7 @@ export const useAudioQueue = ({
           likedTrackIds,
           excludeTrackIds: playedSmartSongIdsRef.current,
           limit: 25,
+          listeningStats,
           currentTrack: cur || currentTrackRef.current,
           maxPerArtist: 2,
         });
@@ -233,9 +269,67 @@ export const useAudioQueue = ({
             likedTrackIds,
             excludeTrackIds: playedSmartSongIdsRef.current,
             limit: 25,
+            listeningStats,
             currentTrack: cur || currentTrackRef.current,
             maxPerArtist: 2,
           });
+        }
+
+        // Personalize via server AI smart-shuffle when online (attaching user token + recentTracks + likedTrackIds)
+        if (!isOfflineMode && API_BASE_URL) {
+          try { smartShuffleAbortRef.current?.abort(); } catch {}
+          const controller = new AbortController();
+          smartShuffleAbortRef.current = controller;
+          const timeoutId = setTimeout(() => {
+            try { controller.abort(); } catch {}
+          }, 3500);
+          try {
+            const authToken = userToken || (await AsyncStorage.getItem('@rivo_auth_token_v2').catch(() => null));
+            if (!controller.signal.aborted) {
+              const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+                },
+                body: JSON.stringify({
+                  currentTrack: cur || currentTrackRef.current,
+                  seedTracks: (queueRef.current || []).slice(-5),
+                  recentTracks: recentHistory,
+                  likedTrackIds: Array.isArray(likedTrackIds) ? likedTrackIds.slice(0, 50) : [],
+                  followedArtists: currentUser?.following || [],
+                  limit: 12,
+                }),
+                signal: controller.signal,
+              });
+              if (res.ok && !controller.signal.aborted) {
+                const data = await res.json();
+                if (data?.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+                  const seen = new Set(playedSmartSongIdsRef.current);
+                  const aiTracks = [];
+                  for (const t of data.tracks) {
+                    if (!t || isQuranContent(t) || isRadioTrack(t) || isPodcastContent(t)) continue;
+                    const tid = String(t._id || t.id || '');
+                    const tkey = getTrackDedupeKey(t);
+                    if ((tid && seen.has(tid)) || (tkey && seen.has(tkey))) continue;
+                    if (tid) seen.add(tid);
+                    if (tkey) seen.add(tkey);
+                    aiTracks.push({ ...t, isAiSuggestion: true, isSmartShuffle: true });
+                  }
+                  if (aiTracks.length > 0) {
+                    const remainingLocal = (nextBatch || []).filter(lt => {
+                      const lId = String(lt._id || lt.id || '');
+                      const lKey = getTrackDedupeKey(lt);
+                      return (!lId || !seen.has(lId)) && (!lKey || !seen.has(lKey));
+                    });
+                    nextBatch = [...aiTracks, ...remainingLocal].slice(0, 25);
+                  }
+                }
+              }
+            }
+          } catch {} finally {
+            clearTimeout(timeoutId);
+          }
         }
 
         if (nextBatch && nextBatch.length > 0) {
@@ -282,7 +376,8 @@ export const useAudioQueue = ({
     }
   }, [
     jamSyncRef, canControlJam, isJamHost, downloadedTracks, setQueue, currentTrackRef,
-    userTracks, currentUser, likedTrackIds, playTrackCallbackRef, repeatModeRef, isMixModeRef
+    userTracks, currentUser, likedTrackIds, playTrackCallbackRef, repeatModeRef, isMixModeRef,
+    isOfflineMode, userToken
   ]);
 
   const playPrevTrack = useCallback((isFromRemoteJam = false) => {

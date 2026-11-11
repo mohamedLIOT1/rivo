@@ -17,6 +17,7 @@ import {
   Info
 } from 'lucide-react';
 import { APP_VERSION } from '../version';
+import { API_BASE_URL } from '../config';
 import { usePreferences } from '../context/PreferencesContext';
 
 export default function DownloadScreen({ globalTheme = 'dark' }) {
@@ -28,16 +29,27 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
   const isAr = language === 'ar';
 
   useEffect(() => {
-    let active = true;
-    fetch('/api/app/version')
-      .then(res => res.json())
+    const controller = new AbortController();
+    const token = (() => {
+      try {
+        return localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+      } catch {
+        return '';
+      }
+    })();
+
+    fetch(`${API_BASE_URL}/api/app/version`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      signal: controller.signal,
+    })
+      .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (active && data?.platforms) {
+        if (!controller.signal.aborted && data?.platforms) {
           setPlatformVersions(data.platforms);
         }
       })
       .catch(() => {});
-    return () => { active = false; };
+    return () => controller.abort();
   }, []);
 
   useEffect(() => {
@@ -55,6 +67,8 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
     }
   }, []);
 
+  const webVer = platformVersions?.web?.version || APP_VERSION;
+  const webSize = platformVersions?.web?.fileSize || null;
   const winVer = platformVersions?.windows?.displayVersion || platformVersions?.windows?.version || APP_VERSION;
   const androidVer = platformVersions?.android?.version || APP_VERSION;
   const iosVer = platformVersions?.ios?.version || APP_VERSION;
@@ -69,7 +83,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileType: '.EXE',
       fileSize: platformVersions?.windows?.fileSize || '112.7 MB',
       icon: Monitor,
-      downloadUrl: '/downloads/Rivo.exe',
+      downloadUrl: platformVersions?.windows?.downloadUrl || '/downloads/Rivo.exe',
       directFile: platformVersions?.windows?.directFile || `Rivo-v${winVer}.exe`,
       fallbackUrl: `/downloads/${platformVersions?.windows?.directFile || `Rivo-v${winVer}.exe`}`,
       directName: 'Rivo.exe',
@@ -98,7 +112,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileSize: platformVersions?.android?.fileSize || '64.6 MB',
       icon: Smartphone,
       downloadUrl: platformVersions?.android?.downloadUrl || '/downloads/Rivo.apk',
-      directName: `Rivo-v${androidVer}.apk`,
+      directName: platformVersions?.android?.directFile || `Rivo-v${androidVer}.apk`,
       highlights: isAr ? [
         'واجهة ريفو الكاملة: جميع القوائم والملف الشخصي ونشاط الأصدقاء',
         'محادثات فورية، غرف بث مباشر Jam، ومزامنة ديسكورد',
@@ -122,7 +136,7 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
       fileSize: platformVersions?.ios?.fileSize || '7.78 MB',
       icon: Apple,
       downloadUrl: platformVersions?.ios?.downloadUrl || '/downloads/Rivo.ipa',
-      directName: `Rivo-v${iosVer}.ipa`,
+      directName: platformVersions?.ios?.directFile || `Rivo-v${iosVer}.ipa`,
       highlights: isAr ? [
         'واجهة ريفو الكاملة بتصميم فائق الخفة والسرعة',
         'ملف شخصي، دردشة لحظية، وبث Jam مباشر',
@@ -153,9 +167,12 @@ export default function DownloadScreen({ globalTheme = 'dark' }) {
         }}
       >
         <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-sm border mb-4 bg-teal-500/10 border-teal-500/30 text-teal-400 font-mono text-xs font-bold tracking-wider uppercase">
+          <div className="inline-flex flex-wrap items-center gap-2 px-3 py-1 rounded-sm border mb-4 bg-teal-500/10 border-teal-500/30 text-teal-400 font-mono text-xs font-bold tracking-wider uppercase">
             <Sparkles className="w-3.5 h-3.5 text-teal-400" />
-            {isAr ? 'الإصدارات الرسمية لجميع الأجهزة' : 'Official Multi-Platform Releases'}
+            <span>{isAr ? 'الإصدارات الرسمية لجميع الأجهزة' : 'Official Multi-Platform Releases'}</span>
+            <span className="px-1.5 py-0.5 rounded bg-black/40 border border-teal-500/30 text-[10px] text-white">
+              {`WEB v${webVer}${webSize ? ` • ${webSize}` : ''}`}
+            </span>
           </div>
 
           <h1 className={`text-3xl md:text-5xl font-black tracking-tight mb-4 uppercase ${isDark ? 'text-white' : 'text-[#0f2824]'}`}>

@@ -46,6 +46,39 @@ export function PreferencesProvider({ children, currentUser }) {
     return false;
   });
 
+  const [autoDownloadFinished, setAutoDownloadFinishedState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rivo_auto_download_finished');
+      if (saved === 'false') return false;
+      if (saved === 'true') return true;
+    } catch {}
+    return true;
+  });
+
+  const setAutoDownloadFinished = useCallback((val) => {
+    const next = Boolean(val);
+    setAutoDownloadFinishedState(next);
+    try {
+      localStorage.setItem('rivo_auto_download_finished', next ? 'true' : 'false');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('rivo-auto-download-changed', { detail: { enabled: next } }));
+      }
+    } catch {}
+  }, []);
+
+  const toggleAutoDownloadFinished = useCallback((overrideVal) => {
+    setAutoDownloadFinishedState((prev) => {
+      const next = typeof overrideVal === 'boolean' ? overrideVal : !prev;
+      try {
+        localStorage.setItem('rivo_auto_download_finished', next ? 'true' : 'false');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('rivo-auto-download-changed', { detail: { enabled: next } }));
+        }
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const toggleVocalOnlyMode = useCallback((overrideVal) => {
     setVocalOnlyModeState(prev => {
       const next = typeof overrideVal === 'boolean' ? overrideVal : !prev;
@@ -79,11 +112,14 @@ export function PreferencesProvider({ children, currentUser }) {
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
     if (!token) return;
 
+    const controller = new AbortController();
     fetch(`${API_BASE_URL}/api/users/preferences`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal
     })
-      .then(res => res.json())
+      .then(res => (res.ok ? res.json() : null))
       .then(data => {
+        if (controller.signal.aborted) return;
         if (data?.success && data?.preferences) {
           if (data.preferences.contentModes) {
             setContentModesState(prev => ({
@@ -105,6 +141,8 @@ export function PreferencesProvider({ children, currentUser }) {
         }
       })
       .catch(() => {});
+
+    return () => controller.abort();
   }, [currentUser?.id, currentUser?._id]);
 
   const setLanguage = useCallback((newLang) => {
@@ -175,7 +213,10 @@ export function PreferencesProvider({ children, currentUser }) {
     showAudiobooks: false,
     isPureIslamicMode: !showMusic,
     vocalOnlyMode,
-    toggleVocalOnlyMode
+    toggleVocalOnlyMode,
+    autoDownloadFinished,
+    setAutoDownloadFinished,
+    toggleAutoDownloadFinished
   }), [
     language,
     isRTL,
@@ -188,7 +229,10 @@ export function PreferencesProvider({ children, currentUser }) {
     showQuran,
     showPodcasts,
     vocalOnlyMode,
-    toggleVocalOnlyMode
+    toggleVocalOnlyMode,
+    autoDownloadFinished,
+    setAutoDownloadFinished,
+    toggleAutoDownloadFinished
   ]);
 
   return (
@@ -216,7 +260,10 @@ export function usePreferences() {
       showAudiobooks: false,
       isPureIslamicMode: false,
       vocalOnlyMode: false,
-      toggleVocalOnlyMode: () => {}
+      toggleVocalOnlyMode: () => {},
+      autoDownloadFinished: true,
+      setAutoDownloadFinished: () => {},
+      toggleAutoDownloadFinished: () => {}
     };
   }
   return ctx;

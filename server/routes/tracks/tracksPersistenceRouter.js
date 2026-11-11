@@ -5,7 +5,7 @@ const { Track } = require('../../models');
 const { optionalAuth } = require('../../middleware/auth');
 const { escapeRegex, searchYouTubeId, fetchTrackCover } = require('../../utils/helpers');
 const { invalidateTracksCache } = require('./tracksCache');
-const { classifyGenre, isQuranContent } = require('../../utils/genreClassifier');
+const { classifyGenre, isQuranContent, isPodcastContent } = require('../../utils/genreClassifier');
 const { resolveAndSaveYouTubeTrack } = require('../../utils/likedTracksSync');
 
 // Batch lookup tracks by IDs
@@ -44,14 +44,19 @@ router.post('/by-ids', async (req, res) => {
     });
 
     const missingIds = stringIds.filter(id => !foundIds.has(id));
+    let resolvedAny = false;
     for (const mId of missingIds) {
       if (mId.startsWith('yt-') || mId.startsWith('yt_') || (mId.length === 11 && !mongoose.isValidObjectId(mId))) {
         try {
           const resolved = await resolveAndSaveYouTubeTrack(mId);
-          if (resolved) tracks.push(resolved);
+          if (resolved) {
+            tracks.push(resolved);
+            resolvedAny = true;
+          }
         } catch {}
       }
     }
+    if (resolvedAny) invalidateTracksCache();
 
     setImmediate(async () => {
       try {
@@ -130,7 +135,13 @@ const autoPersistTrackHandler = async (req, res) => {
     if (!existing && targetUrl && (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be'))) {
       const vidMatch = targetUrl.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
       if (vidMatch) {
-        existing = await Track.findOne({ audioUrl: new RegExp(vidMatch[1], 'i') });
+        existing = await Track.findOne({
+          $or: [
+            { youtubeId: vidMatch[1] },
+            { legacyAudioUrl: new RegExp(vidMatch[1], 'i') },
+            { audioUrl: new RegExp(vidMatch[1], 'i') }
+          ]
+        });
       }
     }
 
@@ -174,6 +185,8 @@ const autoPersistTrackHandler = async (req, res) => {
     });
     const finalGenre = classification.genre;
     const finalIsQuran = Boolean(classification.isQuran || isQuranContent(cleanTitle, cleanArtist, cleanAlbum, finalGenre));
+    const finalIsPodcast = !finalIsQuran && Boolean(classification.isPodcast || isPodcastContent(cleanTitle, cleanArtist, cleanAlbum, finalGenre));
+    const finalContentType = finalIsQuran ? 'quran' : (finalIsPodcast ? 'podcast' : 'music');
 
     const newTrack = await Track.create({
       title: cleanTitle,
@@ -184,6 +197,8 @@ const autoPersistTrackHandler = async (req, res) => {
       duration: Math.round(Number(duration)) || 210,
       genre: finalGenre,
       isQuran: finalIsQuran,
+      isPodcast: finalIsPodcast,
+      contentType: finalContentType,
       source: source || 'Rivo',
       addedBy: 'auto-listened'
     });
@@ -191,8 +206,12 @@ const autoPersistTrackHandler = async (req, res) => {
     invalidateTracksCache();
 
     // Broadcast track:created to all live clients
-    if (req.io) {
-      req.io.emit('track:created', newTrack);
+    const io = req.app?.get('io') || req.io;
+    if (io) {
+      const payload = typeof newTrack.toObject === 'function'
+        ? { ...newTrack.toObject(), id: String(newTrack._id) }
+        : newTrack;
+      io.emit('track:created', payload);
     }
 
     return res.status(201).json({ success: true, track: newTrack, created: true });
