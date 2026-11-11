@@ -10,9 +10,14 @@ export const colors = {
 };
 
 export const styles = StyleSheet.create({
+  fullScreenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 1500,
+    elevation: Platform.OS === 'android' ? 20 : 0,
+  },
   container: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingTop: Platform.OS === 'ios' ? 8 : 10,
     paddingHorizontal: 16,
     paddingBottom: 20,
   },
@@ -28,7 +33,7 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
+    paddingTop: Platform.OS === 'ios' ? 8 : 8,
     paddingHorizontal: 16,
     paddingBottom: 10,
     zIndex: 10,

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, Modal, ScrollView, Animated, Platform,
+  View, Text, TouchableOpacity, ScrollView, Animated, Platform, BackHandler,
 } from 'react-native';
 import { ChevronDown, MoreVertical } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -73,6 +73,15 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const [activeTab, setActiveTab] = useState('player'); // 'player' | 'lyrics' | 'queue'
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
 
+  useEffect(() => {
+    if (!visible) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, onClose]);
+
   const trackId = String(currentTrack?._id || currentTrack?.id || '');
   const isLiked = likedTrackIds.some(id => String(id) === trackId);
   const isCurQuran = useMemo(() => isQuranContent(currentTrack), [currentTrack]);
@@ -142,13 +151,10 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
   const textTitle = isDark ? '#ffffff' : colors.ink;
   const textSub = isDark ? '#9ca3af' : '#64748b';
 
+  if (!visible) return null;
+
   return (
-    <Modal
-      visible={visible}
-      animationType={Platform.OS === 'android' ? 'none' : 'slide'}
-      presentationStyle="fullScreen"
-      onRequestClose={onClose}
-    >
+    <View style={[styles.fullScreenOverlay, { backgroundColor: isDark ? '#07100e' : '#f9f6f0' }]}>
       <View style={[styles.container, { backgroundColor: isDark ? '#07100e' : '#f9f6f0' }]}>
         {/* Header */}
         <View style={styles.header}>
@@ -176,8 +182,13 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
           </View>
 
           <TouchableOpacity
-            onPress={() => onTrackAction?.(currentTrack)}
+            onPress={() => {
+              if (currentTrack && onTrackAction) {
+                onTrackAction(currentTrack);
+              }
+            }}
             style={styles.topWhiteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.8}
           >
             <MoreVertical size={20} color="#000000" strokeWidth={2.5} />
@@ -325,7 +336,7 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
         <SleepTimerModal visible={isSleepTimerOpen} onClose={() => setIsSleepTimerOpen(false)} />
       </View>
-    </Modal>
+    </View>
   );
 }
 

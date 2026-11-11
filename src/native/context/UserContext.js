@@ -32,6 +32,13 @@ export const UserProvider = ({ children }) => {
   const [albums, setAlbums] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
 
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const likedTrackIdsRef = useRef(likedTrackIds);
+  likedTrackIdsRef.current = likedTrackIds;
+  const tracksRef = useRef(tracks);
+  tracksRef.current = tracks;
+
   const playlistSaveTimerRef = useRef(null);
 
   const savePlaylistsDebounced = useCallback((playlistsToSave) => {
@@ -162,7 +169,7 @@ export const UserProvider = ({ children }) => {
     }
   };
 
-  const fetchPublicTracks = async () => {
+  const fetchPublicTracks = useCallback(async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
     try {
@@ -218,10 +225,10 @@ export const UserProvider = ({ children }) => {
         }
       }
     } catch {}
-  };
+  }, []);
 
-  const syncUserData = async (activeToken) => {
-    const t = activeToken || token;
+  const syncUserData = useCallback(async (activeToken) => {
+    const t = activeToken || tokenRef.current;
     if (!t) return;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
@@ -243,9 +250,9 @@ export const UserProvider = ({ children }) => {
         }
       }
     } catch {}
-  };
+  }, [savePlaylistsDebounced]);
 
-  const login = async (email, password) => {
+  const login = useCallback(async (email, password) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 9000);
     try {
@@ -274,9 +281,9 @@ export const UserProvider = ({ children }) => {
       if (e.name === 'AbortError') throw new Error('Connection timed out. Please check your network.');
       throw e;
     }
-  };
+  }, []);
 
-  const register = async (name, email, password) => {
+  const register = useCallback(async (name, email, password) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 9000);
     try {
@@ -295,9 +302,9 @@ export const UserProvider = ({ children }) => {
       if (e.name === 'AbortError') throw new Error('Connection timed out. Please check your network.');
       throw e;
     }
-  };
+  }, [login]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     setCurrentUser(null);
     setToken(null);
     setLikedTrackIds([]);
@@ -305,15 +312,16 @@ export const UserProvider = ({ children }) => {
     await AsyncStorage.removeItem(TOKEN_KEY);
     await AsyncStorage.removeItem('rivo_token').catch(() => {});
     await AsyncStorage.removeItem(USER_KEY);
-  };
+  }, []);
 
-  const updateProfile = async (updates) => {
-    if (!token) return;
+  const updateProfile = useCallback(async (updates) => {
+    const t = tokenRef.current;
+    if (!t) return;
     const res = await fetch(`${API_BASE_URL}/api/auth/update-profile`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${t}`,
       },
       body: JSON.stringify(updates),
     });
@@ -324,34 +332,36 @@ export const UserProvider = ({ children }) => {
       return data.user;
     }
     throw new Error(data.error || 'Failed to update profile');
-  };
+  }, []);
 
-  const toggleLikeTrack = async (trackId) => {
+  const toggleLikeTrack = useCallback(async (trackId) => {
     const idStr = String(trackId);
-    const safeLiked = Array.isArray(likedTrackIds) ? likedTrackIds : [];
+    const safeLiked = Array.isArray(likedTrackIdsRef.current) ? likedTrackIdsRef.current : [];
     const isLiked = safeLiked.includes(idStr);
     const updated = isLiked ? safeLiked.filter(id => id !== idStr) : [...safeLiked, idStr];
     setLikedTrackIds(updated);
 
-    if (token) {
+    const t = tokenRef.current;
+    if (t) {
       fetch(`${API_BASE_URL}/api/tracks/${idStr}/like`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${t}` },
       }).then(() => syncUserData()).catch(() => {});
     }
-  };
+  }, [syncUserData]);
 
-  const createPlaylist = async (name) => {
-    if (!token) return;
+  const createPlaylist = useCallback(async (name) => {
+    const t = tokenRef.current;
+    if (!t) return;
     const res = await fetch(`${API_BASE_URL}/api/playlists/create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
       body: JSON.stringify({ name }),
     });
     if (res.ok) await syncUserData();
-  };
+  }, [syncUserData]);
 
-  const addToPlaylist = async (playlistId, trackId, trackObj = null) => {
+  const addToPlaylist = useCallback(async (playlistId, trackId, trackObj = null) => {
     const plIdStr = String(playlistId);
     const tIdStr = String(trackId);
 
@@ -373,7 +383,7 @@ export const UserProvider = ({ children }) => {
           let nextTracks = Array.isArray(p.tracks) ? [...p.tracks] : [];
           const foundTrack = (trackObj && typeof trackObj === 'object' && trackObj.title)
             ? trackObj
-            : (tracks || []).find(t => String(t._id || t.id) === tIdStr);
+            : (tracksRef.current || []).find(t => String(t._id || t.id) === tIdStr);
           if (foundTrack) {
             nextTracks.push(foundTrack);
           } else {
@@ -391,13 +401,14 @@ export const UserProvider = ({ children }) => {
       return next;
     });
 
-    if (!token) return { success: true };
+    const t = tokenRef.current;
+    if (!t) return { success: true };
 
     // 2. Run POST in background without blocking syncUserData() waterfall
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/add-track`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
         body: JSON.stringify({ trackId: tIdStr }),
       });
       const data = await res.json().catch(() => ({}));
@@ -414,9 +425,9 @@ export const UserProvider = ({ children }) => {
       console.warn('[addToPlaylist background error]', e.message);
       return { success: false, error: e.message };
     }
-  };
+  }, [savePlaylistsDebounced]);
 
-  const removeTrackFromPlaylist = async (playlistId, trackId) => {
+  const removeTrackFromPlaylist = useCallback(async (playlistId, trackId) => {
     const plIdStr = String(playlistId);
     const tIdStr = String(trackId);
     setPlaylists(prev => {
@@ -434,18 +445,19 @@ export const UserProvider = ({ children }) => {
       return next;
     });
 
-    if (!token) return;
+    const t = tokenRef.current;
+    if (!t) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/remove-track`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
         body: JSON.stringify({ trackId }),
       });
       if (res.ok) await syncUserData();
     } catch {}
-  };
+  }, [savePlaylistsDebounced, syncUserData]);
 
-  const updatePlaylist = async (playlistId, { name, description, cover, trackIds }) => {
+  const updatePlaylist = useCallback(async (playlistId, { name, description, cover, trackIds }) => {
     const plIdStr = String(playlistId);
     setPlaylists(prev => {
       const next = prev.map(p => {
@@ -464,11 +476,12 @@ export const UserProvider = ({ children }) => {
       return next;
     });
 
-    if (!token) return { success: true };
+    const t = tokenRef.current;
+    if (!t) return { success: true };
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/update`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
         body: JSON.stringify({ name, description, cover, trackIds }),
       });
       const data = await res.json().catch(() => ({ success: false }));
@@ -479,9 +492,9 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  };
+  }, [savePlaylistsDebounced, syncUserData]);
 
-  const updatePlaylistTransitions = async (playlistId, { isMix, transitions }) => {
+  const updatePlaylistTransitions = useCallback(async (playlistId, { isMix, transitions }) => {
     const plIdStr = String(playlistId);
     setPlaylists(prev => {
       const next = prev.map(p => {
@@ -498,13 +511,14 @@ export const UserProvider = ({ children }) => {
       return next;
     });
 
-    if (!token) return { success: true };
+    const t = tokenRef.current;
+    if (!t) return { success: true };
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/transitions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${t}`
         },
         body: JSON.stringify({ isMix, transitions }),
       });
@@ -512,10 +526,11 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  };
+  }, [savePlaylistsDebounced]);
 
-  const uploadPlaylistCover = async (playlistId, fileUri) => {
-    if (!token) return { success: false, error: 'Not authenticated' };
+  const uploadPlaylistCover = useCallback(async (playlistId, fileUri) => {
+    const t = tokenRef.current;
+    if (!t) return { success: false, error: 'Not authenticated' };
     try {
       const formData = new FormData();
       const filename = fileUri.split('/').pop() || 'cover.jpg';
@@ -526,7 +541,7 @@ export const UserProvider = ({ children }) => {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/upload-cover`, {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${t}`,
         },
         body: formData,
       });
@@ -544,10 +559,11 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  };
+  }, [syncUserData]);
 
-  const togglePlaylistVisibility = async (playlistId) => {
-    if (!token) return { success: false, error: 'Not authenticated' };
+  const togglePlaylistVisibility = useCallback(async (playlistId) => {
+    const t = tokenRef.current;
+    if (!t) return { success: false, error: 'Not authenticated' };
     const pIdStr = String(playlistId);
     let nextState = true;
 
@@ -576,7 +592,7 @@ export const UserProvider = ({ children }) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}/toggle-visibility`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` },
       });
       const data = await res.json().catch(() => ({ success: false }));
       if (res.ok && data.success) {
@@ -605,16 +621,17 @@ export const UserProvider = ({ children }) => {
     } catch (err) {
       return { success: false, error: err.message };
     }
-  };
+  }, [syncUserData]);
 
-  const deletePlaylist = async (playlistId) => {
-    if (!token) return;
+  const deletePlaylist = useCallback(async (playlistId) => {
+    const t = tokenRef.current;
+    if (!t) return;
     const res = await fetch(`${API_BASE_URL}/api/playlists/${playlistId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${t}` },
     });
     if (res.ok) await syncUserData();
-  };
+  }, [syncUserData]);
 
   const value = useMemo(() => ({
     currentUser,

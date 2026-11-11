@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Platform } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { X, Plus, FolderPlus, Music, Check } from 'lucide-react-native';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
@@ -55,6 +55,15 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [addingId, setAddingId] = useState(null);
+
+  useEffect(() => {
+    if (!visible || !track) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, track, onClose]);
 
   if (!visible || !track) return null;
 
@@ -118,8 +127,13 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
   }, [addingId, handleSelectPlaylist, isRTL]);
 
   return (
-    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'fade'} transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+    <View style={styles.modalBackdrop}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.cardOuter}>
           <View style={styles.hardShadow} />
           <View style={styles.modalBox}>
@@ -196,14 +210,19 @@ export default function PlaylistPickerModal({ visible, track, onClose }) {
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    zIndex: 2600,
+    elevation: Platform.OS === 'android' ? 36 : 0,
+  },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,

@@ -64,11 +64,11 @@ export function PodcastScreen({ onTrackAction }) {
     });
   }, []);
 
-  // Filter shows based on category & search query
+  // Filter shows based on category & search query (fast O(1) bypass when unfiltered)
   const filteredShows = useMemo(() => {
     const query = normalizePodcastSearchText(searchQuery);
+    if (selectedCategory === 'all' && !query) return PODCAST_SHOWS;
     return PODCAST_SHOWS.filter((show) => {
-      // Category filter
       if (selectedCategory !== 'all') {
         const catMatch =
           show.category === selectedCategory ||
@@ -76,7 +76,6 @@ export function PodcastScreen({ onTrackAction }) {
           (selectedCategory === 'stories' && show.category === 'crime');
         if (!catMatch) return false;
       }
-      // Search query filter
       if (!query) return true;
       const combined = normalizePodcastSearchText(
         `${show.title} ${show.creator} ${show.description} ${show.episodes?.map(e => e.title).join(' ')}`
@@ -85,11 +84,11 @@ export function PodcastScreen({ onTrackAction }) {
     });
   }, [selectedCategory, searchQuery]);
 
-  // Filter all episodes based on category & search query
+  // Filter all episodes based on category & search query (fast O(1) bypass when unfiltered)
   const filteredEpisodes = useMemo(() => {
     const query = normalizePodcastSearchText(searchQuery);
+    if (selectedCategory === 'all' && !query) return ALL_DEFAULT_PODCAST_EPISODES;
     return ALL_DEFAULT_PODCAST_EPISODES.filter((ep) => {
-      // Category filter
       if (selectedCategory !== 'all') {
         const catMatch =
           ep.category === selectedCategory ||
@@ -97,7 +96,6 @@ export function PodcastScreen({ onTrackAction }) {
           (selectedCategory === 'stories' && ep.category === 'crime');
         if (!catMatch) return false;
       }
-      // Search query filter
       if (!query) return true;
       const combined = normalizePodcastSearchText(
         `${ep.title} ${ep.artist} ${ep.album} ${ep.description || ''}`
@@ -111,6 +109,10 @@ export function PodcastScreen({ onTrackAction }) {
   const handlePlayEpisode = useCallback((episode, queueList) => {
     const targetQueue = (queueList && queueList.length > 0) ? queueList : filteredEpisodes;
     playTrack(episode, targetQueue);
+  }, [playTrack, filteredEpisodes]);
+
+  const handlePlayFeedEpisode = useCallback((episode) => {
+    playTrack(episode, filteredEpisodes);
   }, [playTrack, filteredEpisodes]);
 
   const handlePlayAll = useCallback((episodesList) => {
@@ -139,20 +141,20 @@ export function PodcastScreen({ onTrackAction }) {
 
   const showKeyExtractor = useCallback((item) => item.id, []);
 
-  // Render Episode in Main Feed
+  // Render Episode in Main Feed (pass stable handlePlayFeedEpisode so React.memo stays intact)
   const renderMainEpisodeItem = useCallback(({ item }) => (
     <View style={styles.episodesInnerContainer}>
       <PodcastEpisodeItem
         episode={item}
         isCurrentTrack={currentTrackId === String(item.id || item._id)}
         isPlaying={isPlaying}
-        onPlay={() => handlePlayEpisode(item, filteredEpisodes)}
+        onPlay={handlePlayFeedEpisode}
         onTrackAction={onTrackAction}
         isDark={isDark}
         isRTL={isRTL}
       />
     </View>
-  ), [currentTrackId, isPlaying, handlePlayEpisode, filteredEpisodes, onTrackAction, isDark, isRTL]);
+  ), [currentTrackId, isPlaying, handlePlayFeedEpisode, onTrackAction, isDark, isRTL]);
 
   const episodeKeyExtractor = useCallback((item) => String(item.id || item._id), []);
 
@@ -256,9 +258,9 @@ export function PodcastScreen({ onTrackAction }) {
             data={filteredShows}
             keyExtractor={showKeyExtractor}
             renderItem={renderShowCardItem}
-            initialNumToRender={5}
-            maxToRenderPerBatch={8}
-            windowSize={5}
+            initialNumToRender={4}
+            maxToRenderPerBatch={4}
+            windowSize={3}
           />
         </View>
       )}
@@ -336,9 +338,10 @@ export function PodcastScreen({ onTrackAction }) {
         ListEmptyComponent={emptyComponent}
         contentContainerStyle={styles.episodesListContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={8}
-        maxToRenderPerBatch={10}
-        windowSize={9}
+        initialNumToRender={5}
+        maxToRenderPerBatch={4}
+        windowSize={3}
+        updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
       />
     </View>

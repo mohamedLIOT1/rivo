@@ -96,6 +96,7 @@ export const SongItemPure = React.memo(function SongItemPure({
           style={styles.cover}
           fadeDuration={0}
           resizeMode="cover"
+          resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
           onError={() => setImageError(true)}
         />
       </View>

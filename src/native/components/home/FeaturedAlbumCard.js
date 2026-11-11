@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Platform } from 'react-native';
 import { Play, Disc } from 'lucide-react-native';
 import { normalizeCoverUri } from '../../utils/coverUtils';
 
@@ -44,6 +44,7 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
             style={styles.albumCover}
             resizeMode="cover"
             fadeDuration={0}
+            resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
           />
         </TouchableOpacity>
 
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     right: 6,
     bottom: 6,
     zIndex: 10,
-    elevation: 6,
+    elevation: Platform.OS === 'android' ? 0 : 6,
   },
   albumPlayPill: {
     width: 30,

@@ -264,11 +264,14 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
   };
 
   const handleItemPress = (screen) => {
-    closeMenu(() => {
-      if (onTabPress) {
-        onTabPress(screen);
-      }
-    });
+    // Switch screen immediately without waiting 180ms for exit animation
+    setIsOpen(false);
+    menuAnim.setValue(0);
+    rotateAnim.setValue(0);
+    itemAnims.forEach((a) => a.setValue(0));
+    if (onTabPress) {
+      onTabPress(screen);
+    }
   };
 
   // Interpolations

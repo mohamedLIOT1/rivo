@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import { Radio, Users } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 
@@ -22,7 +22,13 @@ export const PodcastShowCard = React.memo(function PodcastShowCard({
     >
       <View style={styles.imageContainer}>
         {show.cover ? (
-          <Image source={{ uri: show.cover }} style={styles.coverImage} resizeMode="cover" />
+          <Image
+            source={{ uri: show.cover }}
+            style={styles.coverImage}
+            resizeMode="cover"
+            fadeDuration={0}
+            resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
+          />
         ) : (
           <View style={styles.placeholderImage}>
             <Radio size={32} color={colors.mint} />
@@ -82,11 +88,7 @@ const styles = StyleSheet.create({
   cardLight: {
     backgroundColor: '#ffffff',
     borderColor: 'rgba(0, 0, 0, 0.08)',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
+    elevation: 0,
   },
   imageContainer: {
     width: 136,

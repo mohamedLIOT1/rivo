@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Platform } from 'react-native';
 import { Play, Pause, MoreVertical, Clock, Calendar, Radio } from 'lucide-react-native';
 import { colors } from '../../theme/colors';
 import { formatPodcastDuration, formatPodcastReleaseDate } from '../../utils/podcastUtils';
@@ -37,6 +37,8 @@ export const PodcastEpisodeItem = React.memo(function PodcastEpisodeItem({
             source={{ uri: episode.cover || episode.coverUrl }}
             style={styles.thumbnail}
             resizeMode="cover"
+            fadeDuration={0}
+            resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
           />
         ) : (
           <View style={styles.thumbnailPlaceholder}>

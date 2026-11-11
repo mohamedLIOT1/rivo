@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Image,
   Platform,
+  InteractionManager,
 } from 'react-native';
 import { BookOpen, Play } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -17,6 +18,7 @@ import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import QuranRadioModal from '../components/QuranRadioModal';
 import QuranHeroBanner from '../components/quran/QuranHeroBanner';
+import { getCachedQuranTracks, getCachedQuranRecitersList } from '../utils/catalogCache';
 import { styles } from './QuranScreen.styles';
 
 const ReciterPill = React.memo(function ReciterPill({ reciter, active, isRTL, onPress }) {
@@ -46,7 +48,12 @@ const ReciterGridCard = React.memo(function ReciterGridCard({ reciter, isDark, i
       activeOpacity={0.8}
     >
       {reciter.cover ? (
-        <Image source={{ uri: reciter.cover }} style={styles.reciterCardCover} fadeDuration={0} />
+        <Image
+          source={{ uri: reciter.cover }}
+          style={styles.reciterCardCover}
+          fadeDuration={0}
+          resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
+        />
       ) : (
         <View style={styles.reciterCardCover}>
           <Text style={styles.reciterCardCoverFallbackText}>{reciter.name?.slice(0, 2) || 'ق'}</Text>
@@ -108,62 +115,43 @@ function QuranScreen({ onTrackAction }) {
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
     : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (audioTracks || []));
 
-  // Filter strictly Quranic tracks with robust deduplication
+  // Filter strictly Quranic tracks using shared WeakMap cache (0ms on revisit)
   const quranTracks = useMemo(() => {
-    const raw = (allTracks || []).filter(t => isQuranContent(t) && !isRadioTrack(t));
-    const seenAudio = new Set();
-    const seenMeta = new Set();
-    const deduped = [];
-    for (const t of raw) {
-      const reciter = getQuranReciterName(t);
-      const cleanTitle = cleanQuranTrackTitle(t.title || '');
-      const metaKey = `${normalizeArabicText(reciter)}:::${normalizeArabicText(cleanTitle)}`;
-      
-      let audioKey = null;
-      if (t.audioUrl && typeof t.audioUrl === 'string' && t.audioUrl.length > 10) {
-        const ytMatch = t.audioUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/) || t.audioUrl.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-        audioKey = ytMatch ? `yt:${ytMatch[1]}` : `url:${t.audioUrl.trim().toLowerCase()}`;
-      }
-
-      if (audioKey && seenAudio.has(audioKey)) {
-        continue;
-      }
-      if (metaKey && seenMeta.has(metaKey)) {
-        continue;
-      }
-
-      if (audioKey) seenAudio.add(audioKey);
-      if (metaKey) seenMeta.add(metaKey);
-      deduped.push(t);
-    }
-    return deduped;
+    return getCachedQuranTracks(allTracks);
   }, [allTracks]);
 
   const [apiReciters, setApiReciters] = useState([]);
 
-  // Fetch full mp3quran reciters catalog asynchronously in background with cancellation support
+  // Defer remote mp3quran reciters fetch until navigation animation completes
   React.useEffect(() => {
     if (isOffline) return;
     const controller = new AbortController();
-    fetchMp3QuranReciters(controller.signal)
-      .then((list) => {
-        if (!controller.signal.aborted && Array.isArray(list) && list.length > 0) {
-          setApiReciters(list);
-        }
-      })
-      .catch(() => {});
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (controller.signal.aborted) return;
+      fetchMp3QuranReciters(controller.signal)
+        .then((list) => {
+          if (!controller.signal.aborted && Array.isArray(list) && list.length > 0) {
+            setApiReciters(list);
+          }
+        })
+        .catch(() => {});
+    });
     return () => {
+      try { task?.cancel?.(); } catch {}
       try { controller.abort(); } catch {}
     };
   }, [isOffline]);
 
-  // Reciters catalog combining canonical famous reciters (114 surahs each), custom DB reciters, and mp3quran
+  // Cached reciters catalog combining canonical reciters, DB reciters, and mp3quran
   const recitersList = useMemo(() => {
-    return getQuranRecitersList({ quranTracks, downloadedTracks, isOffline, apiReciters });
+    return getCachedQuranRecitersList({ quranTracks, downloadedTracks, isOffline, apiReciters });
   }, [quranTracks, downloadedTracks, isOffline, apiReciters]);
 
-  // Full Surahs Catalog (1 to 114) for selected reciter or full library sorted
+  const isRecitersGridMode = !selectedReciter && !searchQuery.trim();
+
+  // Only sort/filter all Surahs when actually viewing a reciter or searching (skip 488-track sort on grid view)
   const displayedTracks = useMemo(() => {
+    if (isRecitersGridMode) return [];
     let result = [];
     if (selectedReciter) {
       result = getSurahsForReciter(selectedReciter, { quranTracks, downloadedTracks, isOffline, apiReciters });
@@ -174,14 +162,15 @@ function QuranScreen({ onTrackAction }) {
       result = filterQuranSurahs(result, searchQuery);
     }
     return result;
-  }, [selectedReciter, searchQuery, quranTracks, downloadedTracks, isOffline, apiReciters]);
+  }, [isRecitersGridMode, selectedReciter, searchQuery, quranTracks, downloadedTracks, isOffline, apiReciters]);
 
   const handlePlayTrack = useCallback((track) => playTrack(track, displayedTracks), [playTrack, displayedTracks]);
   const handleMorePress = useCallback((track) => { if (onTrackAction) onTrackAction(track); }, [onTrackAction]);
   const keyExtractor = useCallback((track, idx) => String(track?._id || track?.id || `quran-${idx}`), []);
   const handlePlayAll = useCallback(() => {
-    if (displayedTracks.length > 0) playTrack(displayedTracks[0], displayedTracks);
-  }, [displayedTracks, playTrack]);
+    const queueList = displayedTracks.length > 0 ? displayedTracks : sortQuranTracks(quranTracks);
+    if (queueList.length > 0) playTrack(queueList[0], queueList);
+  }, [displayedTracks, quranTracks, playTrack]);
   const handleClearFilter = useCallback(() => {
     setSelectedReciter(null);
     setSearchQuery('');
@@ -210,8 +199,6 @@ function QuranScreen({ onTrackAction }) {
       />
     );
   }, [curTrackId, isPlaying, isLoading, likedSet, downloadedSet, isDark, isRTL, handlePlayTrack, handleMorePress]);
-
-  const isRecitersGridMode = !selectedReciter && !searchQuery.trim();
 
   const handleToggleReciterPill = useCallback((name, active) => {
     setSelectedReciter(active ? null : name);
@@ -377,11 +364,11 @@ function QuranScreen({ onTrackAction }) {
   ]);
 
   const renderFooter = useCallback(() => {
-    if (!isRecitersGridMode || displayedTracks.length === 0) return null;
+    if (!isRecitersGridMode || quranTracks.length === 0) return null;
     return (
       <View style={{ marginTop: 14, marginBottom: 8, flexDirection: isRTL ? 'row-reverse' : 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4 }}>
         <Text style={[styles.sectionHeading, !isDark && { color: colors.ink }, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'Geeza Pro' : 'sans-serif', textAlign: 'right' }]}>
-          {t('quran.allTracksTitle') || (isRTL ? 'جميع التلاوات والآيات المسجلة' : 'All Recitations & Saved Ayahs')} ({displayedTracks.length})
+          {t('quran.allTracksTitle') || (isRTL ? 'جميع التلاوات والآيات المسجلة' : 'All Recitations & Saved Ayahs')} ({quranTracks.length})
         </Text>
         <TouchableOpacity
           style={[styles.playAllBtn, { marginTop: 0 }]}
@@ -390,12 +377,12 @@ function QuranScreen({ onTrackAction }) {
         >
           <Play size={12} color={colors.ink} fill={colors.ink} />
           <Text style={[styles.playAllBtnText, isRTL && { letterSpacing: 0 }]}>
-            {t('quran.playAllRecitations', { count: displayedTracks.length }) || (isRTL ? 'تشغيل الكل' : 'Play All')}
+            {t('quran.playAllRecitations', { count: quranTracks.length }) || (isRTL ? 'تشغيل الكل' : 'Play All')}
           </Text>
         </TouchableOpacity>
       </View>
     );
-  }, [isRecitersGridMode, displayedTracks.length, isRTL, isDark, t, handlePlayAll]);
+  }, [isRecitersGridMode, quranTracks.length, isRTL, isDark, t, handlePlayAll]);
 
   const renderEmpty = useCallback(() => {
     if (isRecitersGridMode) return null;
@@ -426,9 +413,9 @@ function QuranScreen({ onTrackAction }) {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        windowSize={5}
-        initialNumToRender={isLiteMode ? 6 : 8}
-        maxToRenderPerBatch={isLiteMode ? 4 : 6}
+        windowSize={3}
+        initialNumToRender={4}
+        maxToRenderPerBatch={4}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
       />

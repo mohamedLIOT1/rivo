@@ -26,6 +26,7 @@ import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { resolveAlbumTracks } from '../utils/resolveAlbumTracks';
 import { sortTracksByPopularity } from '../utils/trackPopularity';
+import { getCachedMusicTracks, getCachedHomeAlbums } from '../utils/catalogCache';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { getListeningStats } from '../context/audio/audioApiHelpers';
 import { deduplicateTrackList } from '../services/downloadManager';
@@ -78,42 +79,14 @@ function HomeScreen({
     };
   }, []);
 
-  // Filter music only (strictly exclude Quran from main music home) & apply smart popularity sorting
+  // Filter music only (strictly exclude Quran from main music home) & apply cached popularity sorting
   const displayTracks = useMemo(() => {
-    if (isOffline || activeFilter === 'downloaded') {
-      const safeDownloaded = deduplicateTrackList((Array.isArray(downloadedTracks) ? downloadedTracks : []).filter((t) => !isQuranContent(t)));
-      return sortTracksByPopularity(safeDownloaded);
-    }
-    const list = deduplicateTrackList((userTracks || []).filter((t) => !isQuranContent(t)));
-    return sortTracksByPopularity(list);
+    return getCachedMusicTracks({ userTracks, downloadedTracks, isOffline, activeFilter });
   }, [userTracks, activeFilter, downloadedTracks, isOffline]);
 
-  // Discography Featured Albums (Matching Web UI & Image 3)
+  // Discography Featured Albums (cached per tracks/albums identity)
   const displayAlbums = useMemo(() => {
-    const dbAlbums = (albums || []).filter((alb) => !isQuranContent(alb));
-    if (dbAlbums.length > 0) return dbAlbums;
-
-    // Fallback: Group from userTracks
-    const map = new Map();
-    (userTracks || []).forEach((t) => {
-      if (t.album && t.album.trim() && !isQuranContent(t)) {
-        const key = t.album.trim().toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, {
-            id: `derived-${key}`,
-            name: t.album.trim(),
-            artist: t.artist || 'Various Artists',
-            cover: t.cover,
-            tracks: [t],
-          });
-        } else {
-          map.get(key).tracks.push(t);
-        }
-      }
-    });
-    return Array.from(map.values())
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 16);
+    return getCachedHomeAlbums(albums, userTracks);
   }, [albums, userTracks]);
 
   const handleSelectAlbumCard = useCallback((album) => {
@@ -497,9 +470,9 @@ function HomeScreen({
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={isLiteMode ? 5 : 8}
-        maxToRenderPerBatch={isLiteMode ? 4 : 6}
-        windowSize={5}
+        initialNumToRender={5}
+        maxToRenderPerBatch={4}
+        windowSize={3}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}

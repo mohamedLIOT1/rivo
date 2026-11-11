@@ -47,11 +47,6 @@ export default function MobileModals({
   currentUser,
   setActiveTab,
 }) {
-  const hasMountedFullPlayerRef = React.useRef(false);
-  if (isFullPlayerOpen) {
-    hasMountedFullPlayerRef.current = true;
-  }
-
   return (
     <>
       {Boolean(selectedAlbum) && (
@@ -85,11 +80,11 @@ export default function MobileModals({
           onTrackAction={(track) => setActionTrack && setActionTrack(track)}
         />
       )}
-      {hasMountedFullPlayerRef.current && (
+      {isFullPlayerOpen && (
         <FullPlayerModal
-          visible={isFullPlayerOpen}
+          visible={true}
           onClose={() => setIsFullPlayerOpen(false)}
-          onTrackAction={(track) => setActionTrack(track)}
+          onTrackAction={(track) => track && setActionTrack(track)}
         />
       )}
 

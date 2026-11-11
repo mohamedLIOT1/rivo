@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, Share, ActivityIndicator, Platform } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Share, ActivityIndicator, Platform, BackHandler } from 'react-native';
 import { X, Play, ListPlus, Heart, Download, Share2, CheckCircle2, Trash2, FolderDown } from 'lucide-react-native';
 import { useToast } from '../context/ToastContext';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -15,6 +15,15 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
   const { likedTrackIds = [], toggleLikeTrack, removeTrackFromPlaylist } = useUser();
   const { showToast } = useToast();
   const { t, isRTL } = useTranslation();
+
+  useEffect(() => {
+    if (!visible || !track) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onClose?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, [visible, track, onClose]);
 
   if (!visible || !track) return null;
 
@@ -34,8 +43,13 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
   };
 
   return (
-    <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
-      <View style={styles.overlay}>
+    <View style={styles.modalBackdrop}>
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        activeOpacity={1}
+        onPress={onClose}
+      />
+      <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.sheetOuter}>
           <View style={styles.hardShadow} />
           <View style={styles.sheet}>
@@ -187,14 +201,19 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
           </View>
         </View>
       </View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 38, 33, 0.85)',
+    zIndex: 2500,
+    elevation: Platform.OS === 'android' ? 32 : 0,
+  },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(8, 38, 33, 0.85)',
     justifyContent: 'flex-end',
     padding: 12,
   },

@@ -425,6 +425,15 @@ function NativeAppShell() {
     return valid.includes(activeTab) ? activeTab : 'home';
   }, [activeTab]);
 
+  // Track primary content modes (Music, Podcasts, Quran) visited so far: lazy-mount on first visit, then keep warm
+  // while secondary tabs (search, library, offline, profile, stats, admin) unmount cleanly when inactive.
+  const [visitedPrimaryTabs, setVisitedPrimaryTabs] = useState({ home: true, podcasts: false, quran: false });
+  useEffect(() => {
+    if (normalizedTab === 'podcasts' || normalizedTab === 'quran' || normalizedTab === 'home') {
+      setVisitedPrimaryTabs((prev) => (prev[normalizedTab] ? prev : { ...prev, [normalizedTab]: true }));
+    }
+  }, [normalizedTab]);
+
   return (
     <View style={[styles.offlineShell, !isDark && styles.offlineShellLight]}>
       <View style={[styles.topHeader, !isDark && styles.topHeaderLight]}>
@@ -516,10 +525,10 @@ function NativeAppShell() {
       </View>
 
       {/* ─────────────────────────────────────────
-          ACTIVE SCREEN (Low-RAM Tab Mounting: Unmounts inactive screens)
+          ACTIVE SCREEN (Lazy Keep-Alive for Music/Podcasts/Quran + Unmount Secondary Tabs)
           ───────────────────────────────────────── */}
       <View style={[styles.screenContainer, !isDark && styles.screenContainerLight]}>
-        {(normalizedTab === 'home' || !isLiteMode) && (
+        {visitedPrimaryTabs.home && (
           <View style={[{ flex: 1 }, normalizedTab === 'home' ? { display: 'flex' } : { display: 'none' }]}>
             <HomeScreen
               initialFilter="all"
@@ -556,14 +565,14 @@ function NativeAppShell() {
           </View>
         )}
 
-        {normalizedTab === 'podcasts' && (
-          <View style={{ flex: 1 }}>
+        {visitedPrimaryTabs.podcasts && (
+          <View style={[{ flex: 1 }, normalizedTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
             <PodcastScreen onTrackAction={handleTrackAction} />
           </View>
         )}
 
-        {normalizedTab === 'quran' && (
-          <View style={{ flex: 1 }}>
+        {visitedPrimaryTabs.quran && (
+          <View style={[{ flex: 1 }, normalizedTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
             <QuranScreen onTrackAction={handleTrackAction} />
           </View>
         )}

@@ -44,17 +44,21 @@ export const PodcastShowDetail = React.memo(function PodcastShowDetail({
     }
   }, [episodes, onPlayAll]);
 
+  const handlePlayEpisodeRow = useCallback((item) => {
+    onPlayEpisode(item, episodes);
+  }, [onPlayEpisode, episodes]);
+
   const renderEpisodeItem = useCallback(({ item }) => (
     <PodcastEpisodeItem
       episode={item}
       isCurrentTrack={currentTrackId === String(item.id || item._id)}
       isPlaying={isPlaying}
-      onPlay={() => onPlayEpisode(item, episodes)}
+      onPlay={handlePlayEpisodeRow}
       onTrackAction={onTrackAction}
       isDark={isDark}
       isRTL={isRTL}
     />
-  ), [currentTrackId, isPlaying, onPlayEpisode, episodes, onTrackAction, isDark, isRTL]);
+  ), [currentTrackId, isPlaying, handlePlayEpisodeRow, onTrackAction, isDark, isRTL]);
 
   const keyExtractor = useCallback((item) => String(item.id || item._id), []);
 

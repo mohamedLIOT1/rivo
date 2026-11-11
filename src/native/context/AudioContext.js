@@ -247,6 +247,10 @@ export const AudioProvider = ({ children }) => {
     // Cancel sleep timer
   }, []);
 
+  const previewDjTransitionCallback = useCallback((tA, tB, cfg) => {
+    return dj.previewDjTransition(tA, tB, cfg, playback.seekTo, playback.playTrack);
+  }, [dj, playback.seekTo, playback.playTrack]);
+
   // Memoized Context value
   const controls = useMemo(() => {
     const curTime = playback.playbackStatusRef.current?.currentTime || 0;
@@ -288,7 +292,7 @@ export const AudioProvider = ({ children }) => {
       mixStyle: dj.mixStyle,
       setMixStyle: dj.setMixStyle,
       triggerManualMix: dj.triggerManualMix,
-      previewDjTransition: (tA, tB, cfg) => dj.previewDjTransition(tA, tB, cfg, playback.seekTo, playback.playTrack),
+      previewDjTransition: previewDjTransitionCallback,
       activeTransitions: dj.activeTransitions,
       setActiveTransitions: dj.updateActiveTransitions,
 
@@ -348,6 +352,7 @@ export const AudioProvider = ({ children }) => {
     dj,
     startSleepTimer,
     cancelSleepTimer,
+    previewDjTransitionCallback,
     registerFullPlayerHandler,
     openFullPlayer,
     jamSync,

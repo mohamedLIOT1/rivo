@@ -124,55 +124,73 @@ export function getGlobalTrackScore(t) {
   return score;
 }
 
+const popularitySortCache = new WeakMap();
+
 /**
- * Sorts tracks by popularity score and applies smart artist interleaving.
+ * Sorts tracks by popularity score and applies smart artist interleaving in O(N log N).
  * Prevents more than 2 consecutive tracks from the same artist in the top charts.
  */
 export function sortTracksByPopularity(trackList = []) {
   if (!Array.isArray(trackList) || trackList.length === 0) return [];
 
+  const cached = popularitySortCache.get(trackList);
+  if (cached && cached.length === trackList.length) {
+    return cached.result;
+  }
+
   // 1. Calculate and attach score
-  const scored = trackList.map(t => ({
-    track: t,
-    score: getGlobalTrackScore(t),
-    normArtist: normalizeArabicText(t.artist || 'unknown')
-  }));
+  const n = trackList.length;
+  const scored = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = trackList[i];
+    scored[i] = {
+      track: t,
+      score: getGlobalTrackScore(t),
+      normArtist: normalizeArabicText(t?.artist || 'unknown'),
+    };
+  }
 
   // 2. Sort by score descending (with title tie-break)
   scored.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
-    return (a.track.title || '').localeCompare(b.track.title || '');
+    return (a.track?.title || '').localeCompare(b.track?.title || '');
   });
 
-  // 3. Artist Interleaving: Prevent back-to-back clustering of the same artist
-  const result = [];
-  const remaining = [...scored];
+  // 3. O(N) Artist Interleaving without Array.splice shifts
+  const result = new Array(n);
+  const picked = new Uint8Array(n);
+  let writeIdx = 0;
+  let head = 0;
   let lastArtist = '';
   let secondLastArtist = '';
 
-  while (remaining.length > 0) {
-    let pickIndex = -1;
+  while (writeIdx < n) {
+    while (head < n && picked[head]) head++;
+    if (head >= n) break;
 
-    // Try finding the best track whose artist isn't repeating twice in a row
-    for (let i = 0; i < remaining.length; i++) {
-      const art = remaining[i].normArtist;
+    let pickIndex = -1;
+    // Only scan forward while blocked by consecutive artist rule
+    for (let i = head; i < n; i++) {
+      if (picked[i]) continue;
+      const art = scored[i].normArtist;
       if (art && art === lastArtist && art === secondLastArtist) {
-        continue; // Too many from this artist consecutively, skip
+        continue;
       }
       pickIndex = i;
       break;
     }
 
-    // Fallback: If all remaining belong to the same artist, take the next one
     if (pickIndex === -1) {
-      pickIndex = 0;
+      pickIndex = head;
     }
 
-    const [chosen] = remaining.splice(pickIndex, 1);
-    result.push(chosen.track);
+    picked[pickIndex] = 1;
+    const chosen = scored[pickIndex];
+    result[writeIdx++] = chosen.track;
     secondLastArtist = lastArtist;
     lastArtist = chosen.normArtist;
   }
 
+  popularitySortCache.set(trackList, { length: n, result });
   return result;
 }

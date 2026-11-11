@@ -22,7 +22,6 @@ import {
 } from '../services/mediaControls';
 import LockscreenSettingCard from './settings/LockscreenSettingCard';
 import LanguageSettingCard from './settings/LanguageSettingCard';
-import LiteModeSettingCard from './settings/LiteModeSettingCard';
 import { useTranslation, useLiteMode } from '../context/LocalizationContext';
 
 export default function SettingsModal({ visible, onClose }) {
@@ -314,15 +313,6 @@ export default function SettingsModal({ visible, onClose }) {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
               {/* ── Language Selector ── */}
               <LanguageSettingCard
-                cardBg={cardBg}
-                borderColor={borderColor}
-                textTitle={textTitle}
-                textMuted={textMuted}
-                isDark={isDark}
-              />
-
-              {/* ── Performance & Lite Mode ── */}
-              <LiteModeSettingCard
                 cardBg={cardBg}
                 borderColor={borderColor}
                 textTitle={textTitle}

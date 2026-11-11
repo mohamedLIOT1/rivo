@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.12',
+      version: '2.4.13',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.12 • توصيات وكيو ذكي شخصي مثل سبوتيفاي، تنزيل تلقائي بعد الاستماع، وتحسينات الأداء والسحابة.'
+      notes: 'تحديث v2.4.13 • تسريع التنقل الفوري وتحسينات الأداء والسحابة والتوصيات الشخصية.'
     },
     windows: {
-      version: '2.4.12',
-      displayVersion: '2.4.12',
+      version: '2.4.13',
+      displayVersion: '2.4.13',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.12.exe',
+      directFile: 'Rivo-v2.4.13.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي بالذكاء الاصطناعي، تنزيل تلقائي بعد إكمال الأغنية، واستقرار التشغيل السحابي.'
+      notes: 'تحديث v2.4.13 • تسريع التنقل واستقرار التشغيل السحابي والتوصيات الشخصية.'
     },
     android: {
-      version: '2.4.12',
-      build: 142,
+      version: '2.4.13',
+      build: 143,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.12.apk',
+      directFile: 'Rivo-v2.4.13.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • وضع الأداء الخفيف لتابلت سامسونج ٢٠١٦، إصلاح التنزيل التلقائي بعد نهاية الأغنية، وكيو شخصي بالذكاء الاصطناعي.',
-      notesEn: 'Update v2.4.12 • Low-RAM Tablet Lite Mode (Galaxy Tab A 2016), full-listen auto-download fix, and Spotify-style AI queue.',
+      notes: 'تحديث v2.4.13 • تسريع فوري للتنقل بين الأغاني والبودكاست والقرآن على الأجهزة الضعيفة، وإصلاح قائمة الثلاث نقاط داخل المشغل.',
+      notesEn: 'Update v2.4.13 • Instant Music/Podcast/Quran tab switching on low-RAM devices and fixed 3-dots menu inside Full Player.',
       ota: {
         enabled: true,
-        version: '2.4.22',
+        version: '2.4.23',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.22 • وضع الأداء الخفيف وإصلاح التنزيل التلقائي والكيو الشخصي',
-        notesEn: 'Instant OTA update v2.4.22 • Tablet Lite Mode performance overhaul, full-listen auto-download fix, and personalized AI queue.',
+        notes: 'تحديث هوائي فوري v2.4.23 • تسريع التنقل بين الأغاني والبودكاست والقرآن وإصلاح قائمة الثلاث نقاط داخل المشغل',
+        notesEn: 'Instant OTA update v2.4.23 • Instant tab switching across Music/Podcast/Quran and fixed 3-dots menu inside Full Player.',
         bundleSize: 5205050,
         sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.12',
-      build: 142,
+      version: '2.4.13',
+      build: 143,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.12.ipa',
+      directFile: 'Rivo-v2.4.13.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • إصلاح التنزيل التلقائي، كيو وتوصيات شخصية بالذكاء الاصطناعي، وتشغيل مباشر من السحابة.'
+      notes: 'تحديث v2.4.13 • إصلاح قائمة الثلاث نقاط داخل المشغل، وتسريع فوري للتنقل بين الأغاني والبودكاست والقرآن.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.12',
+      version: '2.4.13',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي وتنزيل تلقائي بعد الاستماع.'
+      notes: 'تحديث v2.4.13 • تسريع التنقل الفوري وتحسينات الأداء والسحابة.'
     },
     windows: {
-      version: '2.4.12',
-      displayVersion: '2.4.12',
+      version: '2.4.13',
+      displayVersion: '2.4.13',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.12.exe',
+      directFile: 'Rivo-v2.4.13.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • توصيات وكيو شخصي وتنزيل تلقائي بعد الاستماع.'
+      notes: 'تحديث v2.4.13 • تسريع التنقل واستقرار التشغيل السحابي.'
     },
     android: {
-      version: '2.4.12',
-      build: 142,
+      version: '2.4.13',
+      build: 143,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.12.apk',
+      directFile: 'Rivo-v2.4.13.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • وضع الأداء الخفيف لتابلت ٢٠١٦ وإصلاح التنزيل التلقائي والكيو الشخصي.',
-      notesEn: 'Update v2.4.12 • Tablet Lite Mode, full-listen auto-download fix, and personalized AI queue.',
+      notes: 'تحديث v2.4.13 • تسريع التنقل وإصلاح قائمة الثلاث نقاط.',
+      notesEn: 'Update v2.4.13 • Instant Music/Podcast/Quran tab switching and fixed 3-dots menu inside Full Player.',
       ota: {
         enabled: true,
-        version: '2.4.22',
+        version: '2.4.23',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.22 • وضع الأداء الخفيف وإصلاح التنزيل التلقائي والكيو الشخصي',
-        notesEn: 'Instant OTA update v2.4.22 • Tablet Lite Mode, full-listen auto-download fix, and personalized AI queue.',
+        notes: 'تحديث هوائي فوري v2.4.23 • تسريع التنقل وإصلاح قائمة الثلاث نقاط داخل المشغل',
+        notesEn: 'Instant OTA update v2.4.23 • Instant Music/Podcast/Quran tab switching and fixed 3-dots menu inside Full Player.',
         bundleSize: 5205050,
         sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.12',
-      build: 142,
+      version: '2.4.13',
+      build: 143,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.12.ipa',
+      directFile: 'Rivo-v2.4.13.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.12 • إصلاح التنزيل التلقائي، كيو وتوصيات شخصية، وتشغيل سحابي فوري.'
+      notes: 'تحديث v2.4.13 • إصلاح قائمة الثلاث نقاط داخل المشغل وتسريع التنقل الفوري.'
     }
   }
 };
