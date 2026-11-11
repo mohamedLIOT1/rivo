@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.10',
+      version: '2.4.11',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.10 • كيو ويب ذكي بنظام Spotify، عزل تحديثات التشغيل لإزالة اللاج، وإصلاح عدم تغيّر الكيو عند الإيقاف والتشغيل.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي واستقرار الأداء.'
     },
     windows: {
-      version: '2.4.10',
-      displayVersion: '2.4.10',
+      version: '2.4.11',
+      displayVersion: '2.4.11',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.10.exe',
+      directFile: 'Rivo-v2.4.11.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • كيو بنظام Spotify، إزالة اللاج بالكامل، واستقرار تشغيل البث والقرآن.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي واستقرار الأداء.'
     },
     android: {
-      version: '2.4.10',
-      build: 140,
+      version: '2.4.11',
+      build: 141,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.10.apk',
+      directFile: 'Rivo-v2.4.11.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • استقرار القرآن في الخلفية ليلاً، إيقاف التراك القديم فوراً، توقيت الساعات H:MM:SS، ومزامنة إشعار شاشة القفل.',
-      notesEn: 'Update v2.4.10 • Overnight Quran background stability, instant track handoff, H:MM:SS duration, and lock screen sync.',
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي.',
+      notesEn: 'Update v2.4.11 • Lock-screen playback recovery, reliable background downloads queue, and performance fixes.',
       ota: {
         enabled: true,
-        version: '2.4.20',
+        version: '2.4.21',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.20 • استقرار القرآن ليلاً، إصلاح التوقيت، ومزامنة الإشعار والكاش',
-        notesEn: 'Instant OTA update v2.4.20 • Overnight background Quran stability, H:MM:SS timing, and stream cache fixes.',
-        bundleSize: 5164580,
-        sizeMb: '4.93 MB'
+        notes: 'تحديث هوائي فوري v2.4.21 • إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي',
+        notesEn: 'Instant OTA update v2.4.21 • Fix lock-screen playback recovery and reliable auto-downloads.',
+        bundleSize: 5205050,
+        sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.10',
-      build: 140,
+      version: '2.4.11',
+      build: 141,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.10.ipa',
+      directFile: 'Rivo-v2.4.11.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • إصلاح مدة القرآن فوق ساعتين في شاشة القفل، استقرار التشغيل بالخلفية ليلاً، وإيقاف التراك القديم فوراً.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي واستقرار النظام.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.10',
+      version: '2.4.11',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.10 • كيو بنظام Spotify، عزل التحديثات وإزالة اللاج.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي.'
     },
     windows: {
-      version: '2.4.10',
-      displayVersion: '2.4.10',
+      version: '2.4.11',
+      displayVersion: '2.4.11',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.10.exe',
+      directFile: 'Rivo-v2.4.11.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • كيو بنظام Spotify وإزالة اللاج واستقرار البث.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل بعد قفل الشاشة والتنزيل التلقائي.'
     },
     android: {
-      version: '2.4.10',
-      build: 140,
+      version: '2.4.11',
+      build: 141,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.10.apk',
+      directFile: 'Rivo-v2.4.11.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • استقرار القرآن في الخلفية ليلاً، توقيت الساعات ومزامنة الإشعار.',
-      notesEn: 'Update v2.4.10 • Overnight Quran stability, H:MM:SS timing, and lock screen sync.',
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي.',
+      notesEn: 'Update v2.4.11 • Lock-screen playback recovery, reliable background downloads queue, and sync fixes.',
       ota: {
         enabled: true,
-        version: '2.4.20',
+        version: '2.4.21',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.20 • استقرار القرآن ليلاً وإصلاحات البث',
-        notesEn: 'Instant OTA update v2.4.20 • Overnight Quran stability and stream fixes.',
-        bundleSize: 5164580,
-        sizeMb: '4.93 MB'
+        notes: 'تحديث هوائي فوري v2.4.21 • إصلاح التشغيل بعد قفل الشاشة والتنزيل التلقائي',
+        notesEn: 'Instant OTA update v2.4.21 • Fix lock-screen playback recovery and reliable auto-downloads.',
+        bundleSize: 5205050,
+        sizeMb: '4.96 MB'
       }
     },
     ios: {
-      version: '2.4.10',
-      build: 140,
+      version: '2.4.11',
+      build: 141,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.10.ipa',
+      directFile: 'Rivo-v2.4.11.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.10 • إصلاح مدة شاشة القفل واستقرار القرآن بالخلفية ليلاً.'
+      notes: 'تحديث v2.4.11 • استرجاع التشغيل عند العودة من قفل الشاشة وتحسين طابور التنزيل التلقائي واستقرار النظام.'
     }
   }
 };

@@ -63,7 +63,11 @@ const UpdateBanner = React.memo(function UpdateBanner() {
               </Text>
               <View style={[styles.typeBadge, isOta ? styles.typeBadgeOta : styles.typeBadgeApk]}>
                 <Text style={[styles.typeBadgeText, isOta ? styles.typeBadgeTextOta : styles.typeBadgeTextApk]}>
-                  {isOta ? (isRTL ? '⚡ فوري (OTA)' : '⚡ Fast OTA') : (isRTL ? '📦 تثبيت APK' : '📦 Full APK')}
+                  {isOta
+                    ? (isRTL ? '⚡ فوري (OTA)' : '⚡ Fast OTA')
+                    : Platform.OS === 'ios'
+                      ? (isRTL ? '📦 حزمة IPA' : '📦 Full IPA')
+                      : (isRTL ? '📦 تثبيت APK' : '📦 Full APK')}
                 </Text>
               </View>
             </View>
@@ -144,7 +148,11 @@ const UpdateBanner = React.memo(function UpdateBanner() {
               <Download size={14} color="#0b1110" strokeWidth={2.5} />
             )}
             <Text style={[styles.updateNowBtnText, rtlTextStyle]}>
-              {isOta ? (isRTL ? 'تحديث فوري الآن' : 'Fast Update Now') : (isRTL ? 'تنزيل وتثبيت' : 'Download & Install')}
+              {isOta
+                ? (isRTL ? 'تحديث فوري الآن' : 'Fast Update Now')
+                : Platform.OS === 'ios'
+                  ? (isRTL ? 'تحميل ملف IPA' : 'Download IPA')
+                  : (isRTL ? 'تنزيل وتثبيت' : 'Download & Install')}
             </Text>
           </TouchableOpacity>
 

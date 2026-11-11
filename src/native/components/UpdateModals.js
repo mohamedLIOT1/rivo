@@ -76,7 +76,9 @@ const UpdateModals = React.memo(function UpdateModals() {
                   <Text style={styles.installingNoteText}>
                     {downloadProgress >= 1
                       ? 'Launching package installer...'
-                      : 'Downloading APK update directly in app...'}
+                      : Platform.OS === 'ios'
+                        ? 'Preparing IPA download...'
+                        : 'Downloading APK update directly in app...'}
                   </Text>
                 </View>
               ) : (
