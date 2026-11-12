@@ -10,7 +10,7 @@ export default function ArtistBioSection({
   if (!bio) return null;
 
   return (
-    <div className={`brutal-border-thick brutal-shadow-lg p-6 max-w-3xl rounded-xl transition-colors ${
+    <div className={`brutal-border-thick brutal-shadow-lg p-6 max-w-4xl w-full mx-auto rounded-xl transition-colors ${
       isDark ? 'bg-[#082621] text-[#fdfbf7] border-zinc-700' : 'bg-[#082621] text-[#fdfbf7] border-black'
     }`}>
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-[#26c4b7]/30">

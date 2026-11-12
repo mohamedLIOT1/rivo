@@ -166,4 +166,15 @@ router.get('/albums', adminAuth, async (req, res) => {
   }
 });
 
+// Run Discography Organizer & Deduplication Bot
+router.post('/organize-albums', adminAuth, async (req, res) => {
+  try {
+    const { organizeArtistAlbumsBot } = require('../workers/artistAlbumOrganizerBot');
+    const report = await organizeArtistAlbumsBot();
+    res.json({ success: true, report });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 module.exports = router;

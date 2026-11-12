@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.21',
+      version: '2.4.22',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية، كتم الصوت لغرف Jam، عداد الرسائل النظيف وسلاسة فائقة.'
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي (اللحن فقط / الكلمات فقط)، تنظيم ألبومات الفنانين الرسمية، وسرعة فائقة.'
     },
     windows: {
-      version: '2.4.21',
-      displayVersion: '2.4.21',
+      version: '2.4.22',
+      displayVersion: '2.4.22',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.21.exe',
+      directFile: 'Rivo-v2.4.22.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • تحسينات الاستجابة وغرف Jam وسلاسة فائقة.'
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي، تنظيم الألبومات وسرعة التشغيل الفورية.'
     },
     android: {
-      version: '2.4.21',
-      build: 151,
+      version: '2.4.22',
+      build: 152,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.21.apk',
+      directFile: 'Rivo-v2.4.22.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية لجميع التطبيقات، كتم صوت Jam للأعضاء، إعادة ترتيب القوائم بسلاسة، وحل مشكلة أزرار الخزنة.',
-      notesEn: 'Update v2.4.21 • Global audio focus interruption, Jam member local mute, silky smooth drag-reorder, and Vault selection bar fix.',
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، ترتيب القوائم اليدوي، وسرعة الاستجابة الفورية.',
+      notesEn: 'Update v2.4.22 • 3-way stem isolation, official artist album organizer, staged playlist reorder, instant playback response.',
       ota: {
         enabled: true,
-        version: '2.4.31',
+        version: '2.4.32',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.31 • مقاطعة الصوت العالمية، كتم صوت Jam، حل مشكلة أزرار الخزنة وترتيب القوائم',
-        notesEn: 'Instant OTA v2.4.31 • Global audio focus interruption, Jam member local mute, Vault bar fix, and silky smooth reorder',
+        notes: 'تحديث هوائي فوري v2.4.32 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.32 • 3-way stem isolation, artist album organizer, and staged reordering',
         bundleSize: 5298755,
         sizeMb: '5.05 MB'
       }
     },
     ios: {
-      version: '2.4.21',
-      build: 151,
+      version: '2.4.22',
+      build: 152,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.21.ipa',
+      directFile: 'Rivo-v2.4.22.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • حل تداخل النصوص على الآيفون، مقاطعة الصوت العالمية وكتم صوت Jam للأعضاء.'
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي، حل تداخل أسماء القوائم على الآيفون وسرعة التشغيل الفورية.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.21',
+      version: '2.4.22',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية، كتم الصوت لغرف Jam وسلاسة فائقة.'
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي وتنظيم ألبومات الفنانين.'
     },
     windows: {
-      version: '2.4.21',
-      displayVersion: '2.4.21',
+      version: '2.4.22',
+      displayVersion: '2.4.22',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.21.exe',
+      directFile: 'Rivo-v2.4.22.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • تحسينات الاستجابة وسلاسة فائقة.'
+      notes: 'تحديث v2.4.22 • تحسينات الاستجابة وسلاسة فائقة.'
     },
     android: {
-      version: '2.4.21',
-      build: 151,
+      version: '2.4.22',
+      build: 152,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.21.apk',
+      directFile: 'Rivo-v2.4.22.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية لجميع التطبيقات، كتم صوت Jam للأعضاء، إعادة ترتيب القوائم بسلاسة، وحل مشكلة أزرار الخزنة.',
-      notesEn: 'Update v2.4.21 • Global audio focus interruption, Jam member local mute, silky smooth drag-reorder, and Vault selection bar fix.',
+      notes: 'تحديث v2.4.22 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم اليدوي.',
+      notesEn: 'Update v2.4.22 • 3-way stem isolation, artist album organizer, and staged reordering.',
       ota: {
         enabled: true,
-        version: '2.4.31',
+        version: '2.4.32',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.31 • مقاطعة الصوت العالمية، كتم صوت Jam، حل مشكلة أزرار الخزنة وترتيب القوائم',
-        notesEn: 'Instant OTA v2.4.31 • Global audio focus interruption, Jam member local mute, Vault bar fix, and silky smooth reorder',
+        notes: 'تحديث هوائي فوري v2.4.32 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.32 • 3-way stem isolation, artist album organizer, and staged reordering',
         bundleSize: 5298755,
         sizeMb: '5.05 MB'
       }
     },
     ios: {
-      version: '2.4.21',
-      build: 151,
+      version: '2.4.22',
+      build: 152,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.21.ipa',
+      directFile: 'Rivo-v2.4.22.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.21 • حل تداخل النصوص على الآيفون، مقاطعة الصوت العالمية وكتم صوت Jam للأعضاء.'
+      notes: 'تحديث v2.4.22 • حل تداخل النصوص على الآيفون وعزل الأصوات وسرعة التشغيل الفورية.'
     }
   }
 };

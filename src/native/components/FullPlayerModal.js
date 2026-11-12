@@ -53,6 +53,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
     volume = 0.8,
     setVolume,
     vocalIsolationStatus,
+    stemMode,
+    setStemMode,
     isMixMode = false,
     jumpBy,
     playbackRate,
@@ -260,6 +262,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
                 isLiked={isLiked}
                 toggleLikeTrack={toggleLikeTrack}
                 vocalIsolationStatus={vocalIsolationStatus}
+                stemMode={stemMode}
+                setStemMode={setStemMode}
                 isMixMode={!isCurQuran && Boolean(isMixMode && (currentTrack?.isMix || currentTrack?._isMix || queue?.isMix || queue?._isMix || (queue?.name && String(queue.name).toUpperCase().includes('MIX')) || (queue?._playlistName && String(queue._playlistName).toUpperCase().includes('MIX'))))}
                 mixName={queue?._playlistName || queue?.name || currentTrack?.mixName}
               />

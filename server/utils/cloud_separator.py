@@ -84,7 +84,7 @@ def main():
                     batch_size=1,
                     norm_thresh=0.9,
                     amp_thresh=0.7,
-                    single_stem='Vocals',
+                    single_stem='',
                     api_name='/mdxnet_separator'
                 )
             else:
@@ -94,13 +94,20 @@ def main():
                 )
 
             result = job.result(timeout=space_timeout)
-            vocal_stem = result[0] if isinstance(result, (list, tuple)) else result
+            vocal_stem = None
+            inst_stem = None
+            if isinstance(result, (list, tuple)):
+                vocal_stem = result[0]
+                if len(result) > 1:
+                    inst_stem = result[1]
+            else:
+                vocal_stem = result
 
             if vocal_stem and os.path.exists(vocal_stem) and os.path.getsize(vocal_stem) > 10000:
-                print_progress(92, "Mastering 320kbps Studio Acapella...")
+                print_progress(92, "Mastering 320kbps Studio Acapella & Instrumental Stems...")
                 os.makedirs(os.path.dirname(os.path.abspath(output_mp3)), exist_ok=True)
 
-                # Convert to high-bitrate clean MP3
+                # Convert vocals to high-bitrate clean MP3
                 conv_cmd = [
                     "ffmpeg", "-y", "-i", vocal_stem,
                     "-c:a", "libmp3lame", "-b:a", "320k",
@@ -108,8 +115,27 @@ def main():
                 ]
                 subprocess.run(conv_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
 
-                print_progress(100, f"Studio Acapella ready ({model_name})!")
-                print(f"[CloudSeparator] Success with {model_name} via {space_id} in {time.time()-t0:.1f}s -> {output_mp3}")
+                # Convert/save instrumental stem
+                output_inst = output_mp3.replace("vocal_", "inst_")
+                if inst_stem and os.path.exists(inst_stem) and os.path.getsize(inst_stem) > 10000:
+                    conv_inst_cmd = [
+                        "ffmpeg", "-y", "-i", inst_stem,
+                        "-c:a", "libmp3lame", "-b:a", "320k",
+                        output_inst
+                    ]
+                    subprocess.run(conv_inst_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                else:
+                    # Invert phase with input audio to produce clean instrumental
+                    sub_inst_cmd = [
+                        "ffmpeg", "-y", "-i", input_audio, "-i", output_mp3,
+                        "-filter_complex", "[0:a][1:a]amerge=inputs=2,pan=stereo|c0<c0-c2|c1<c1-c3[out]",
+                        "-map", "[out]", "-c:a", "libmp3lame", "-b:a", "320k",
+                        output_inst
+                    ]
+                    subprocess.run(sub_inst_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+                print_progress(100, f"Studio Stems ready ({model_name})!")
+                print(f"[CloudSeparator] Success with {model_name} via {space_id} in {time.time()-t0:.1f}s -> {output_mp3} & {output_inst}")
                 success = True
                 break
             else:

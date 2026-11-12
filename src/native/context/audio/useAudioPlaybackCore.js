@@ -83,10 +83,35 @@ export const useAudioPlaybackCore = ({
     }
   }, [jamSyncRef?.current?.jamSession, setIsJamMuted]);
 
+  // When Jam host unlocks controls, automatically unmute member audio!
+  const hasJamControl = canControlJam();
+  useEffect(() => {
+    if (hasJamControl && isJamMutedRef.current) {
+      setIsJamMuted(false);
+    }
+  }, [hasJamControl, setIsJamMuted]);
+
   const [isVocalOnly, setIsVocalOnlyState] = useState(false);
+  const [stemMode, setStemModeState] = useState('mix');
+  const stemModeRef = useRef('mix');
   const [vocalIsolationStatus, setVocalIsolationStatus] = useState(null);
   const internalVocalOnlyRef = useRef(false);
   const isVocalOnlyRef = externalVocalOnlyRef || internalVocalOnlyRef;
+
+  const setStemMode = useCallback(async (mode) => {
+    if (mode !== 'mix' && mode !== 'vocal' && mode !== 'inst') return;
+    setStemModeState(mode);
+    stemModeRef.current = mode;
+    isVocalOnlyRef.current = mode === 'vocal';
+    setIsVocalOnlyState(mode === 'vocal');
+
+    const cur = currentTrackRef.current;
+    if (!cur) return;
+    const curPos = playbackStatusRef.current?.currentTime || 0;
+    if (playTrackRef.current) {
+      await playTrackRef.current(cur, queueRef.current, true, curPos, false, false, shouldBePlayingRef.current);
+    }
+  }, [queueRef]);
 
   const playNextTrackRef = useRef(null);
   const playTrackRef = useRef(null);
@@ -649,6 +674,13 @@ export const useAudioPlaybackCore = ({
       return;
     }
 
+    // If audio is currently muted from Jam lock, unmuting takes immediate precedence!
+    if (isJamMutedRef.current) {
+      setIsJamMuted(false);
+      showToast('Audio Unmuted 🔊', 'info');
+      return;
+    }
+
     const nextPlaying = !isPlayingRef.current;
     if (isLoadingRef.current && nextPlaying) return;
 
@@ -842,6 +874,8 @@ export const useAudioPlaybackCore = ({
     isVocalOnly,
     setIsVocalOnly,
     toggleVocalOnly,
+    stemMode,
+    setStemMode,
     vocalIsolationStatus,
     playbackStatusRef,
     progressRef,

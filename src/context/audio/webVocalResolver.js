@@ -115,7 +115,7 @@ export async function resolveVocalOnlyStream(track, targetUrl, signal = null, is
       );
       if (checkRes.ok) {
         const curData = await checkRes.json();
-        if (curData.status === 'ready' && curData.url) {
+        if (curData.status === 'ready' && (curData.url || curData.vocalUrl)) {
           dispatchVocalStatus(
             {
               isProcessing: true,
@@ -126,7 +126,16 @@ export async function resolveVocalOnlyStream(track, targetUrl, signal = null, is
             isPrefetch
           );
           setTimeout(() => dispatchVocalStatus(null, isPrefetch), 1200);
-          const fullVocalUrl = curData.url.startsWith('/') ? `${API_BASE_URL}${curData.url}` : curData.url;
+          const rawUrl = curData.vocalUrl || curData.url;
+          const fullVocalUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : rawUrl;
+          const fullInstUrl = curData.instUrl ? (curData.instUrl.startsWith('/') ? `${API_BASE_URL}${curData.instUrl}` : curData.instUrl) : null;
+
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rivo-stem-ready', {
+              detail: { trackId, vocalUrl: fullVocalUrl, instUrl: fullInstUrl, title: track.title }
+            }));
+          }
+
           return {
             url: fullVocalUrl,
             duration: sanitizeDuration(track.duration, 210),
@@ -195,5 +204,43 @@ export async function resolveVocalOnlyStream(track, targetUrl, signal = null, is
   }
 
   dispatchVocalStatus(null, isPrefetch);
+  if (!isPrefetch && trackId) {
+    startBackgroundStemPoller({ trackId, qUrl, qTitle, qArtist, trackTitle: track.title });
+  }
   return null;
+}
+
+function startBackgroundStemPoller({ trackId, qUrl, qTitle, qArtist, trackTitle }) {
+  let attempts = 0;
+  const maxAttempts = 20;
+  const interval = setInterval(async () => {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(interval);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/tracks/vocal-status?id=${encodeURIComponent(trackId)}&url=${qUrl}&title=${qTitle}&artist=${qArtist}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'ready' && (data.url || data.vocalUrl)) {
+          clearInterval(interval);
+          const rawUrl = data.vocalUrl || data.url;
+          const fullVocalUrl = rawUrl.startsWith('/') ? `${API_BASE_URL}${rawUrl}` : rawUrl;
+          const fullInstUrl = data.instUrl ? (data.instUrl.startsWith('/') ? `${API_BASE_URL}${data.instUrl}` : data.instUrl) : null;
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rivo-stem-ready', {
+              detail: { trackId, vocalUrl: fullVocalUrl, instUrl: fullInstUrl, title: trackTitle }
+            }));
+          }
+        } else if (data.status === 'failed') {
+          clearInterval(interval);
+        }
+      }
+    } catch {
+      clearInterval(interval);
+    }
+  }, 3500);
 }

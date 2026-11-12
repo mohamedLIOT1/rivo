@@ -472,7 +472,7 @@ export default function JamRoomModal({ visible, onClose }) {
     const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
 
     const handleTogglePlay = () => {
-      if (!canControl) {
+      if (!canControl || isJamMuted) {
         togglePlay();
         return;
       }

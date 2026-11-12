@@ -340,9 +340,13 @@ export const useAudioQueue = ({
         }
 
         if (nextBatch && nextBatch.length > 0) {
-          const newQueue = cur ? [cur, ...nextBatch] : nextBatch;
+          const prevQ = queueRef.current || [];
+          const existingIds = new Set(prevQ.map(t => String(t._id || t.id)));
+          const freshBatch = nextBatch.filter(t => !existingIds.has(String(t._id || t.id)));
+          const newQueue = freshBatch.length > 0 ? [...prevQ, ...freshBatch] : (cur ? [cur, ...nextBatch] : nextBatch);
           setQueue(newQueue);
-          if (playTrackCallbackRef.current) playTrackCallbackRef.current(nextBatch[0], newQueue);
+          const nextTrackToPlay = freshBatch.length > 0 ? freshBatch[0] : nextBatch[0];
+          if (playTrackCallbackRef.current && nextTrackToPlay) playTrackCallbackRef.current(nextTrackToPlay, newQueue);
           return;
         }
 
@@ -371,6 +375,10 @@ export const useAudioQueue = ({
     }
 
     if (i >= 0 && i < q.length - 1) {
+      if (i >= q.length - 4 && !isMixQueueLocked && !isOfflineMode) {
+        // Pre-fetch next smart batch in background before queue starvation
+        triggerAutoQueue();
+      }
       if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[i + 1], q);
     } else if (q.length > 0) {
       const isExplicitPlaylist = isMixQueueLocked || !q.some(t => t.isSmartMoodQueue || t.isAiSuggestion);

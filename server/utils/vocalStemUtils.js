@@ -55,16 +55,36 @@ function isVocalStemReady(stemKey) {
   return fs.existsSync(filePath) && fs.statSync(filePath).size > 10000;
 }
 
+function getInstrumentalStemPath(stemKey) {
+  const safe = getSafeStemKey(stemKey);
+  return path.join(stemsDir, `inst_${safe}.mp3`);
+}
+
+function isInstrumentalStemReady(stemKey) {
+  const filePath = getInstrumentalStemPath(stemKey);
+  return fs.existsSync(filePath) && fs.statSync(filePath).size > 10000;
+}
+
 function createStemAlias(primaryKey, aliasKey) {
   if (!primaryKey || !aliasKey || primaryKey === aliasKey) return;
-  const primaryFile = getVocalStemPath(primaryKey);
-  const aliasFile = getVocalStemPath(aliasKey);
-  if (!fs.existsSync(primaryFile)) return;
-  if (fs.existsSync(aliasFile)) return;
-  try {
-    fs.linkSync(primaryFile, aliasFile);
-  } catch {
-    try { fs.copyFileSync(primaryFile, aliasFile); } catch {}
+  const primaryVocal = getVocalStemPath(primaryKey);
+  const aliasVocal = getVocalStemPath(aliasKey);
+  if (fs.existsSync(primaryVocal) && !fs.existsSync(aliasVocal)) {
+    try {
+      fs.linkSync(primaryVocal, aliasVocal);
+    } catch {
+      try { fs.copyFileSync(primaryVocal, aliasVocal); } catch {}
+    }
+  }
+
+  const primaryInst = getInstrumentalStemPath(primaryKey);
+  const aliasInst = getInstrumentalStemPath(aliasKey);
+  if (fs.existsSync(primaryInst) && !fs.existsSync(aliasInst)) {
+    try {
+      fs.linkSync(primaryInst, aliasInst);
+    } catch {
+      try { fs.copyFileSync(primaryInst, aliasInst); } catch {}
+    }
   }
 }
 
@@ -74,5 +94,7 @@ module.exports = {
   resolveCanonicalStemKey,
   getVocalStemPath,
   isVocalStemReady,
+  getInstrumentalStemPath,
+  isInstrumentalStemReady,
   createStemAlias
 };

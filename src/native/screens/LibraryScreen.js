@@ -581,23 +581,45 @@ function LibraryScreen({
   const [draggingIdx, setDraggingIdx] = useState(null);
   const [hoverIdx, setHoverIdx] = useState(null);
   const panY = useRef(new Animated.Value(0)).current;
+  const originalTracksOrderRef = useRef(null);
 
-  const handleReorderPlaylistTracks = useCallback(async (fromIndex, toIndex) => {
+  const startReordering = useCallback(() => {
+    originalTracksOrderRef.current = [...activePlaylistTracks];
+    setIsReordering(true);
+  }, [activePlaylistTracks]);
+
+  const cancelReordering = useCallback(() => {
+    if (originalTracksOrderRef.current) {
+      setActivePlaylistTracks(originalTracksOrderRef.current);
+    }
+    setIsReordering(false);
+    showToast(isRTL ? 'تم إلغاء تعديل الترتيب' : 'Reorder cancelled', 'info');
+  }, [isRTL, showToast]);
+
+  const saveReordering = useCallback(async () => {
+    if (!selectedView || selectedView === 'liked') {
+      setIsReordering(false);
+      return;
+    }
+    const plId = String(selectedView.id || selectedView._id);
+    const newTrackIds = (activePlaylistTracks || []).map(t => String(t._id || t.id));
+    if (updatePlaylist) {
+      await updatePlaylist(plId, { trackIds: newTrackIds });
+    }
+    setIsReordering(false);
+    showToast(isRTL ? 'تم حفظ ترتيب القائمة ✨' : 'Playlist order saved ✨', 'success');
+  }, [selectedView, activePlaylistTracks, updatePlaylist, showToast, isRTL]);
+
+  const handleReorderPlaylistTracks = useCallback((fromIndex, toIndex) => {
     if (!selectedView || selectedView === 'liked') return;
     if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
-    const plId = String(selectedView.id || selectedView._id);
     const updated = [...activePlaylistTracks];
     const [moved] = updated.splice(fromIndex, 1);
     updated.splice(toIndex, 0, moved);
     setActivePlaylistTracks(updated);
-    const newTrackIds = updated.map(t => String(t._id || t.id));
-    if (updatePlaylist) {
-      await updatePlaylist(plId, { trackIds: newTrackIds });
-    }
-    showToast(isRTL ? 'تم تحديث ترتيب القائمة' : 'Playlist reordered ✨', 'success');
-  }, [selectedView, activePlaylistTracks, updatePlaylist, showToast, isRTL]);
+  }, [selectedView, activePlaylistTracks]);
 
-  const handleMoveTrack = useCallback(async (index, direction) => {
+  const handleMoveTrack = useCallback((index, direction) => {
     handleReorderPlaylistTracks(index, index + direction);
   }, [handleReorderPlaylistTracks]);
 
@@ -1584,18 +1606,37 @@ function LibraryScreen({
                           </View>
                         )}
 
-                        {/* Reordering Done Button */}
+                        {/* Reordering Staged Action Bar (Cancel & Done) */}
                         {isReordering && (
-                          <TouchableOpacity
-                            style={styles.reorderDoneBtn}
-                            onPress={() => setIsReordering(false)}
-                            activeOpacity={0.7}
-                          >
-                            <Check size={12} color="#000000" strokeWidth={3} />
-                            <Text style={styles.reorderDoneBtnText}>
-                              {isRTL ? 'تم' : 'DONE'}
-                            </Text>
-                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                              style={[
+                                styles.reorderDoneBtn,
+                                {
+                                  backgroundColor: isDark ? '#27272a' : '#ded2bb',
+                                  borderColor: isDark ? '#3f3f46' : '#b8a990',
+                                }
+                              ]}
+                              onPress={cancelReordering}
+                              activeOpacity={0.7}
+                            >
+                              <X size={12} color={isDark ? '#e4e4e7' : '#0b1110'} strokeWidth={2.5} />
+                              <Text style={[styles.reorderDoneBtnText, { color: isDark ? '#e4e4e7' : '#0b1110' }]}>
+                                {isRTL ? 'إلغاء' : 'CANCEL'}
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.reorderDoneBtn}
+                              onPress={saveReordering}
+                              activeOpacity={0.7}
+                            >
+                              <Check size={12} color="#000000" strokeWidth={3} />
+                              <Text style={styles.reorderDoneBtnText}>
+                                {isRTL ? 'حفظ الترتيب' : 'DONE'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         )}
                       </View>
                     </View>
@@ -1626,10 +1667,10 @@ function LibraryScreen({
           ListFooterComponent={
             selectedView !== 'liked' ? (
               <View style={[styles.playlistAddSection, { marginBottom: 30 }]}>
-                <View style={styles.playlistAddHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                    <Sparkles size={14} color="#17a398" strokeWidth={2.5} />
-                    <Text style={[styles.playlistAddTitle, rtlTextStyle]} numberOfLines={1} ellipsizeMode="tail">
+                <View style={[styles.playlistAddHeader, { gap: 8 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexShrink: 1, minWidth: 0, marginRight: 8 }}>
+                    <Sparkles size={14} color="#17a398" strokeWidth={2.5} style={{ flexShrink: 0 }} />
+                    <Text style={[styles.playlistAddTitle, { flex: 1, flexShrink: 1 }, rtlTextStyle]} numberOfLines={1} ellipsizeMode="tail">
                       {songSearchQuery.trim()
                         ? (isRTL ? `نتائج البحث (${searchResultsForAdd.length})` : `SEARCH RESULTS (${searchResultsForAdd.length})`)
                         : ((selectedView?.isMix || isMixMode || (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) || isOffline)
@@ -1639,7 +1680,7 @@ function LibraryScreen({
                   </View>
                   {!songSearchQuery.trim() && (
                     <TouchableOpacity
-                      style={styles.refreshAiBtn}
+                      style={[styles.refreshAiBtn, { flexShrink: 0 }]}
                       onPress={fetchAiRecommendations}
                       disabled={isLoadingAi}
                       activeOpacity={0.7}
@@ -1699,12 +1740,15 @@ function LibraryScreen({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.mint}
-              colors={[colors.mint]}
-            />
+            isReordering ? undefined : (
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.mint}
+                colors={[colors.mint]}
+                enabled={!isReordering}
+              />
+            )
           }
         />
       ) : (
@@ -1725,12 +1769,15 @@ function LibraryScreen({
           updateCellsBatchingPeriod={30}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.mint}
-              colors={[colors.mint]}
-            />
+            isReordering ? undefined : (
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={colors.mint}
+                colors={[colors.mint]}
+                enabled={!isReordering}
+              />
+            )
           }
         />
       )}
@@ -2017,7 +2064,11 @@ function LibraryScreen({
         isReordering={isReordering}
         onToggleReorder={() => {
           setIsActionMenuOpen(false);
-          setIsReordering(prev => !prev);
+          if (isReordering) {
+            cancelReordering();
+          } else {
+            startReordering();
+          }
         }}
       />
       {/* Rivo MiniMixer Sheet Modal */}

@@ -294,6 +294,8 @@ export const AudioProvider = ({ children }) => {
       isVocalOnly: playback.isVocalOnly,
       setIsVocalOnly: playback.setIsVocalOnly,
       toggleVocalOnly: playback.toggleVocalOnly,
+      stemMode: playback.stemMode,
+      setStemMode: playback.setStemMode,
       vocalIsolationStatus: playback.vocalIsolationStatus,
       isMixMode: dj.isMixMode,
       setIsMixMode: dj.setIsMixMode,

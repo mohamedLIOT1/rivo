@@ -78,11 +78,73 @@ export function fetchNextSmartMusicBatch({
     });
   }
 
+  // Fallback recycling if local pool was exhausted
+  if (!nextBatch || nextBatch.length === 0) {
+    nextBatch = (allAvailable || []).slice(0, limit);
+  }
+
   return (nextBatch || []).map((t) => ({
     ...t,
     isSmartMoodQueue: true,
     isAiSuggestion: true,
   }));
+}
+
+export async function fetchNextSmartMusicBatchAsync({
+  allAvailable = [],
+  currentUser = null,
+  likedTrackIds = [],
+  playedSmartSongIdsRef,
+  currentTrack = null,
+  limit = 20,
+}) {
+  const localBatch = fetchNextSmartMusicBatch({
+    allAvailable,
+    currentUser,
+    likedTrackIds,
+    playedSmartSongIdsRef,
+    currentTrack,
+    limit,
+  });
+
+  if (localBatch && localBatch.length >= 8) {
+    return localBatch;
+  }
+
+  // Fetch dynamically from server smart shuffle API to guarantee non-stop playback
+  try {
+    const token = typeof localStorage !== 'undefined'
+      ? (localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '')
+      : '';
+    const res = await fetch(`${API_BASE_URL}/api/ai/smart-shuffle`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        currentTrack,
+        limit,
+        followedArtists: currentUser?.following || [],
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.tracks) && data.tracks.length > 0) {
+        const seen = playedSmartSongIdsRef?.current || new Set();
+        const fresh = data.tracks
+          .filter(t => t && !seen.has(String(t._id || t.id)) && !isQuranContent(t) && !isRadioTrack(t))
+          .map(t => ({ ...t, isSmartMoodQueue: true, isAiSuggestion: true }));
+        if (fresh.length > 0) {
+          return [...(localBatch || []), ...fresh].slice(0, limit);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[webQueueNextHelpers] Dynamic smart shuffle fetch notice:', err.message);
+  }
+
+  return localBatch;
 }
 
 export function pickSmartShuffleNext(activeList, cur) {

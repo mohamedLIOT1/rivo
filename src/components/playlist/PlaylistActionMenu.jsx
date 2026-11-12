@@ -81,7 +81,7 @@ export default function PlaylistActionMenu({
       {isOpen && (
         <div
           className={`absolute top-full mt-2 z-50 w-56 sm:w-64 rounded-xl brutal-border brutal-shadow-lg p-1.5 flex flex-col gap-1 transition-all ${
-            isRTL ? 'left-0' : 'right-0'
+            isRTL ? 'right-0' : 'left-0'
           } ${
             isDark
               ? 'bg-[#141d1b] border-zinc-700 text-zinc-100 shadow-2xl shadow-black/80'

@@ -77,33 +77,75 @@ async function resolveTrackStemInfo(req) {
   return { trackId, url, title, artist, duration, primaryKey, aliases: uniqueAliases, dbTrack };
 }
 
-// Check real-time status of vocal isolation
+// Check real-time status of vocal and instrumental isolation
 router.get('/vocal-status', async (req, res) => {
   try {
     const { primaryKey, aliases } = await resolveTrackStemInfo(req);
     const { getVocalIsolationStatus } = require('../../utils/vocalSeparator');
+    const { isInstrumentalStemReady, isVocalStemReady, getInstrumentalStemPath, getVocalStemPath } = require('../../utils/vocalStemUtils');
     const status = getVocalIsolationStatus(primaryKey, aliases);
-    res.json({ success: true, stemKey: primaryKey, ...status });
+    const hasVocal = isVocalStemReady(primaryKey);
+    const hasInst = isInstrumentalStemReady(primaryKey);
+    res.json({
+      success: true,
+      stemKey: primaryKey,
+      ...status,
+      hasVocal,
+      hasInst,
+      vocalUrl: hasVocal ? `/uploads/stems/vocal_${primaryKey}.mp3` : status.url,
+      instUrl: hasInst ? `/uploads/stems/inst_${primaryKey}.mp3` : null
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+// Instrumental-Only Stream (Vocals-Free / Karaoke)
+router.get('/instrumental-stream', async (req, res) => {
+  req.query.stem = 'inst';
+  return handleStemStream(req, res);
+});
+
 // Vocal-Only Stream (Music-Free) with Stems Caching
 router.get('/vocal-stream', async (req, res) => {
+  return handleStemStream(req, res);
+});
+
+async function handleStemStream(req, res) {
   try {
-    let { json, priority, prefetch } = req.query;
+    let { json, priority, prefetch, stem = 'vocal' } = req.query;
     const isPriority = priority === '1' || priority === 'true' || (!prefetch && req.headers['x-rivo-priority']);
     const { trackId, url, title, artist, duration, primaryKey, aliases, dbTrack } = await resolveTrackStemInfo(req);
     const { getVocalStemPath, getVocalIsolationStatus, startVocalIsolation } = require('../../utils/vocalSeparator');
+    const { getInstrumentalStemPath, isInstrumentalStemReady, isVocalStemReady } = require('../../utils/vocalStemUtils');
+
+    if (stem === 'inst' && isInstrumentalStemReady(primaryKey)) {
+      const instPath = getInstrumentalStemPath(primaryKey);
+      if (json === 'true' || json === '1') {
+        return res.json({ success: true, status: 'ready', url: `/uploads/stems/inst_${primaryKey}.mp3`, cached: true, stem: 'inst' });
+      }
+      return res.sendFile(instPath);
+    }
 
     const status = getVocalIsolationStatus(primaryKey, aliases);
     if (status.status === 'ready') {
-      const stemFilePath = getVocalStemPath(primaryKey);
-      if (json === 'true' || json === '1') {
-        return res.json({ success: true, status: 'ready', url: status.url, cached: true });
+      if (stem === 'inst') {
+        // If vocal is ready but instrumental was not yet created, generate in 1s using ffmpeg
+        const instPath = getInstrumentalStemPath(primaryKey);
+        const vocalPath = getVocalStemPath(primaryKey);
+        if (isInstrumentalStemReady(primaryKey)) {
+          if (json === 'true' || json === '1') {
+            return res.json({ success: true, status: 'ready', url: `/uploads/stems/inst_${primaryKey}.mp3`, cached: true, stem: 'inst' });
+          }
+          return res.sendFile(instPath);
+        }
+      } else {
+        const stemFilePath = getVocalStemPath(primaryKey);
+        if (json === 'true' || json === '1') {
+          return res.json({ success: true, status: 'ready', url: status.url, cached: true, stem: 'vocal' });
+        }
+        return res.sendFile(stemFilePath);
       }
-      return res.sendFile(stemFilePath);
     }
 
     let sourceAudioPath = url || '';
@@ -204,7 +246,7 @@ router.get('/vocal-stream', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Vocal separation failed: ' + err.message });
   }
-});
+}
 
 const workerAuth = (req, res, next) => {
   const secret = req.headers['x-worker-secret'] || req.query?.secret || req.body?.secret;

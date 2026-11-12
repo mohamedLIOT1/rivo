@@ -145,6 +145,7 @@ function FullPlayerModal({
     isPlaying: ctxIsPlaying, isMixMode, currentQueue, previewDjTransition,
     jamSession: ctxJamSession,
     vocalIsolationStatus,
+    stemMode, setStemMode,
     activeTransitions = {},
     isLoadingTrack: ctxIsLoadingTrack
   } = useAudioPlayer();
@@ -1547,7 +1548,49 @@ function FullPlayerModal({
             </div>
 
             {/* Deck Auxiliary Controls */}
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
+              {/* 3-Way Stem Selector (Full Mix / Vocals / Instrumental) */}
+              {!isCurQuran && (
+                <div className="flex items-center rounded-xl overflow-hidden border border-[#17a398]/50 bg-black/40 p-0.5 text-[10px] font-mono font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setStemMode?.('mix')}
+                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                      (stemMode || 'mix') === 'mix'
+                        ? 'bg-[#17a398] text-[#0b1110] font-black shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                    title="الكل: تشغيل الأغنية كاملة (موسيقى + كلمات)"
+                  >
+                    🎵 الكل
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStemMode?.('vocal')}
+                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                      stemMode === 'vocal'
+                        ? 'bg-[#10b981] text-[#0b1110] font-black shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                    title="كلمات فقط: عزل المغني (أكابيلا بدون موسيقى)"
+                  >
+                    🎤 كلمات
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStemMode?.('inst')}
+                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                      stemMode === 'inst'
+                        ? 'bg-amber-400 text-[#0b1110] font-black shadow-sm'
+                        : 'text-zinc-400 hover:text-white'
+                    }`}
+                    title="اللحن فقط: كاريوكي بدون صوت المغني"
+                  >
+                    🎹 اللحن
+                  </button>
+                </div>
+              )}
+
               {/* Vinyl Mode Toggle */}
               <button 
                 onClick={() => setIsVinylMode(!isVinylMode)}

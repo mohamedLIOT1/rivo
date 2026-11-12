@@ -209,7 +209,20 @@ export function AudioProvider({ children, tracks, setTracks }) {
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
   useEffect(() => { jamSessionRef.current = jamSession; }, [jamSession]);
 
-  // Handle runtime toggle of Vocal-Only Mode: seamlessly reload active track with or without vocals
+  const [stemMode, setStemModeState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rivo_stem_mode');
+      if (saved === 'vocal' || saved === 'inst' || saved === 'mix') return saved;
+      return localStorage.getItem('rivo_vocal_only') === 'true' ? 'vocal' : 'mix';
+    } catch {
+      return 'mix';
+    }
+  });
+  const stemModeRef = useRef(stemMode);
+  stemModeRef.current = stemMode;
+  const activeStemsRef = useRef({ vocal: null, inst: null, original: null });
+
+  // Handle runtime toggle of Vocal-Only Mode & background stem ready events
   useEffect(() => {
     const handleVocalModeToggle = () => {
       const activeTrack = currentTrackRef.current;
@@ -231,11 +244,90 @@ export function AudioProvider({ children, tracks, setTracks }) {
       }).catch(() => {});
     };
 
+    const handleStemReady = (e) => {
+      const { trackId, vocalUrl, instUrl, title } = e.detail || {};
+      const active = currentTrackRef.current;
+      const activeId = String(active?._id || active?.id || '');
+      if (active && (activeId === String(trackId) || (active.title && title === active.title))) {
+        activeStemsRef.current.vocal = vocalUrl;
+        activeStemsRef.current.inst = instUrl;
+        const targetMode = stemModeRef.current;
+        if (targetMode === 'vocal' && vocalUrl && audioRef.current) {
+          const curPos = audioRef.current.currentTime || 0;
+          const wasPlaying = isPlayingRef.current && !audioRef.current.paused;
+          if (audioRef.current.src !== vocalUrl) {
+            audioRef.current.src = vocalUrl;
+            lastLoadedStreamUrlRef.current = vocalUrl;
+            audioRef.current.currentTime = curPos;
+            if (wasPlaying) audioRef.current.play().catch(() => {});
+          }
+        } else if (targetMode === 'inst' && instUrl && audioRef.current) {
+          const curPos = audioRef.current.currentTime || 0;
+          const wasPlaying = isPlayingRef.current && !audioRef.current.paused;
+          if (audioRef.current.src !== instUrl) {
+            audioRef.current.src = instUrl;
+            lastLoadedStreamUrlRef.current = instUrl;
+            audioRef.current.currentTime = curPos;
+            if (wasPlaying) audioRef.current.play().catch(() => {});
+          }
+        }
+      }
+    };
+
     if (typeof window !== 'undefined') {
       window.addEventListener('rivo-vocal-mode-changed', handleVocalModeToggle);
-      return () => window.removeEventListener('rivo-vocal-mode-changed', handleVocalModeToggle);
+      window.addEventListener('rivo-stem-ready', handleStemReady);
+      return () => {
+        window.removeEventListener('rivo-vocal-mode-changed', handleVocalModeToggle);
+        window.removeEventListener('rivo-stem-ready', handleStemReady);
+      };
     }
-  }, []);
+  }, [clearStreamCacheForTrack, resolvePlayableAudioStream]);
+
+  const setStemMode = useCallback((mode) => {
+    if (mode !== 'mix' && mode !== 'vocal' && mode !== 'inst') return;
+    setStemModeState(mode);
+    stemModeRef.current = mode;
+    try { localStorage.setItem('rivo_stem_mode', mode); } catch {}
+
+    const activeTrack = currentTrackRef.current;
+    if (!activeTrack || !audioRef.current) return;
+    const curPos = audioRef.current.currentTime || 0;
+    const wasPlaying = isPlayingRef.current && !audioRef.current.paused;
+
+    const stems = activeStemsRef.current;
+    if (mode === 'vocal' && stems.vocal) {
+      audioRef.current.src = stems.vocal;
+      lastLoadedStreamUrlRef.current = stems.vocal;
+      audioRef.current.currentTime = curPos;
+      if (wasPlaying) audioRef.current.play().catch(() => {});
+      return;
+    }
+    if (mode === 'inst' && stems.inst) {
+      audioRef.current.src = stems.inst;
+      lastLoadedStreamUrlRef.current = stems.inst;
+      audioRef.current.currentTime = curPos;
+      if (wasPlaying) audioRef.current.play().catch(() => {});
+      return;
+    }
+    if (mode === 'mix' && stems.original) {
+      audioRef.current.src = stems.original;
+      lastLoadedStreamUrlRef.current = stems.original;
+      audioRef.current.currentTime = curPos;
+      if (wasPlaying) audioRef.current.play().catch(() => {});
+      return;
+    }
+
+    clearStreamCacheForTrack(activeTrack.id || activeTrack._id);
+    resolvePlayableAudioStream(activeTrack).then((res) => {
+      if (res?.url && audioRef.current) {
+        audioRef.current.src = res.url;
+        lastLoadedStreamUrlRef.current = res.url;
+        audioRef.current.currentTime = curPos;
+        if (wasPlaying) audioRef.current.play().catch(() => {});
+      }
+    }).catch(() => {});
+  }, [clearStreamCacheForTrack, resolvePlayableAudioStream]);
 
   const syncMediaSessionPosition = useCallback(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
@@ -2818,6 +2910,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
     vocalIsolationStatus,
+    stemMode, setStemMode,
     isLoadingTrack, setIsLoadingTrack,
   }), [
     currentTrack,
@@ -2849,6 +2942,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     remoteDevicePlayback,
     isAutoplayBlocked, resumeAutoplay,
     vocalIsolationStatus,
+    stemMode, setStemMode,
     isLoadingTrack,
   ]);
 

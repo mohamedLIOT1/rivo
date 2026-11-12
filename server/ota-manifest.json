@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.31",
+  "version": "2.4.32",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "Global audio focus, Jam member mute, Vault bar fix, and UI polish",
-  "notesEn": "Global audio focus, Jam member mute, Vault bar fix, and UI polish",
-  "bundleSize": 5302199,
+  "notes": "تحديث هوائي فوري (5.06 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant in-app OTA update (5.06 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 5306782,
   "sizeMb": "5.06 MB",
-  "updatedAt": "2026-11-12T17:16:18.465Z"
+  "updatedAt": "2026-11-12T18:34:18.698Z"
 }

@@ -10,6 +10,7 @@ import {
 } from './webQueueUtils';
 import {
   fetchNextSmartMusicBatch,
+  fetchNextSmartMusicBatchAsync,
   pickSmartShuffleNext,
   resolvePodcastNextTarget,
   resolveQuranNextTarget,
@@ -129,7 +130,7 @@ export function useWebQueueNavigation({
         return;
       }
 
-      const appendSmartBatchAndPlay = (shuffleIt = false) => {
+      const appendSmartBatchAndPlay = async (shuffleIt = false) => {
         activeList.forEach((t) => {
           const id = getTrackId(t);
           if (id) playedSmartSongIdsRef.current.add(id);
@@ -137,7 +138,7 @@ export function useWebQueueNavigation({
           if (k) playedSmartSongIdsRef.current.add(k);
         });
         const allAvailable = (tracksRef.current?.length > 0 ? tracksRef.current : activeList).filter(matchQueueType);
-        const batch = fetchNextSmartMusicBatch({
+        const batch = await fetchNextSmartMusicBatchAsync({
           allAvailable,
           currentUser: currentUserRef.current,
           likedTrackIds: likedTrackIdsRef.current,
@@ -145,14 +146,18 @@ export function useWebQueueNavigation({
           currentTrack: cur,
           limit: 20,
         });
-        if (batch.length > 0) {
+        if (batch && batch.length > 0) {
           const ordered = shuffleIt && batch.length > 1 ? shuffleArray(batch) : batch;
-          const newQueue = cur ? [cur, ...ordered] : ordered;
+          const nextIdx = activeList.length;
+          const newQueue = [...activeList, ...ordered];
           setCurrentQueue(newQueue);
           isSmartMoodQueueRef.current = true;
-          const nextIdx = cur ? 1 : 0;
           setCurrentQueueIndex(nextIdx);
           playTrackRef.current?.(newQueue[nextIdx], newQueue, false, nextIdx, true, isAutoAdvance, navOpts);
+          setIsPlaying(true);
+        } else if (activeList.length > 0) {
+          setCurrentQueueIndex(0);
+          playTrackRef.current?.(activeList[0], activeList, false, 0, true, isAutoAdvance, navOpts);
           setIsPlaying(true);
         }
       };
@@ -168,6 +173,27 @@ export function useWebQueueNavigation({
         !isLockedPlaylistOrMix &&
         (isSmartMoodQueueRef.current || activeList.some((t) => t.isSmartMoodQueue));
       if (isSmartQueue) {
+        // Lookahead auto-replenishment: if remaining queue length <= 3, preload in background
+        if (curIdx >= activeList.length - 4) {
+          const allAvailable = (tracksRef.current?.length > 0 ? tracksRef.current : activeList).filter(matchQueueType);
+          fetchNextSmartMusicBatchAsync({
+            allAvailable,
+            currentUser: currentUserRef.current,
+            likedTrackIds: likedTrackIdsRef.current,
+            playedSmartSongIdsRef,
+            currentTrack: cur,
+            limit: 15,
+          }).then((extra) => {
+            if (extra?.length > 0) {
+              setCurrentQueue((prev) => {
+                const existingIds = new Set(prev.map(getTrackId));
+                const fresh = extra.filter((t) => !existingIds.has(getTrackId(t)));
+                return fresh.length > 0 ? [...prev, ...fresh] : prev;
+              });
+            }
+          }).catch(() => {});
+        }
+
         if (curIdx >= 0 && curIdx < activeList.length - 1) {
           const nextIdx = curIdx + 1;
           setCurrentQueueIndex(nextIdx);

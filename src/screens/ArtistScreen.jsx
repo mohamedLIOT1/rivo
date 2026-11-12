@@ -203,11 +203,13 @@ export default function ArtistScreen({
       />
 
       {/* ── 4. Artist Biography / About Section ── */}
-      <ArtistBioSection
-        bio={bio}
-        artistName={artistName}
-        isDark={isDark}
-      />
+      <div className="w-full flex justify-center my-6">
+        <ArtistBioSection
+          bio={bio}
+          artistName={artistName}
+          isDark={isDark}
+        />
+      </div>
 
       {/* Edit Artist Modal for Admins */}
       {isEditModalOpen && (

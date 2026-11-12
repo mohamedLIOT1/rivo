@@ -18,6 +18,8 @@ import {
   getTrackDedupeKey,
 } from '../../services/download/storageManifestService';
 
+const verifiedLocalUriCache = new Set();
+
 /**
  * Checks if a candidate URI points to a valid, playable local file (>= 1000 bytes or content://).
  */
@@ -29,6 +31,10 @@ export const verifyLocalAudioFile = async (rawUri) => {
   if (reanchored.startsWith('/')) reanchored = `file://${reanchored}`;
   if (!reanchored.startsWith('file://') && !reanchored.startsWith('content://')) return null;
 
+  if (verifiedLocalUriCache.has(reanchored)) {
+    return { uri: reanchored, size: 5000, exists: true };
+  }
+
   const candidateUris = [reanchored];
   for (const fn of [decodeURI, encodeURI]) {
     try {
@@ -38,11 +44,15 @@ export const verifyLocalAudioFile = async (rawUri) => {
   }
 
   for (const testUri of candidateUris) {
+    if (verifiedLocalUriCache.has(testUri)) {
+      return { uri: testUri, size: 5000, exists: true };
+    }
     try {
       const info = await FileSystem.getInfoAsync(testUri);
       if (info?.exists) {
         const size = typeof info.size === 'number' ? info.size : 5000;
         if (size >= 1000 || testUri.startsWith('content://')) {
+          verifiedLocalUriCache.add(testUri);
           return { uri: testUri, size, exists: true };
         }
       }
@@ -267,9 +277,17 @@ const loadAndVerifySound = async ({ targetUri, safeTargetSec = 0, volume = 0.8, 
   const initialPosMillis = Math.max(0, Math.round((Number(safeTargetSec) || 0) * 1000));
 
   const createAtPosition = async (posMillis) => {
+    const statusPayload = {
+      shouldPlay: autoPlay !== false,
+      volume,
+      progressUpdateIntervalMillis: 250,
+    };
+    if (posMillis > 0) {
+      statusPayload.positionMillis = posMillis;
+    }
     const res = await createSoundWithGuard(
       cleanUri,
-      { shouldPlay: autoPlay !== false, positionMillis: posMillis, volume, progressUpdateIntervalMillis: 250 },
+      statusPayload,
       signal,
       timeoutMs
     );
