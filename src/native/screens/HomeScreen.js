@@ -59,8 +59,8 @@ function HomeScreen({
     return Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
   }, [width, numColumns]);
 
-  const { playTrack, setQueue, currentTrack, isPlaying, isLoading, downloadedTracks = [] } = useAudioPlayer();
-  const { currentUser, token, tracks: userTracks, albums = [], likedTrackIds = [], fetchPublicTracks } = useUser();
+  const { playTrack, togglePlay, setQueue, currentTrack, isPlaying, isLoading, downloadedTracks = [] } = useAudioPlayer();
+  const { currentUser, token, tracks: userTracks, albums = [], likedTrackIds = [], toggleLikeTrack, fetchPublicTracks } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
@@ -75,7 +75,7 @@ function HomeScreen({
     }
   }, [initialFilter]); // 'all' | 'music' | 'downloaded'
   const [refreshing, setRefreshing] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(() => (isLiteMode ? 15 : 30));
+  const [visibleCount, setVisibleCount] = useState(() => (isLiteMode ? 10 : 15));
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [loadingAlbumId, setLoadingAlbumId] = useState(null);
@@ -514,9 +514,19 @@ function HomeScreen({
     return null;
   }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isRTL, rtlTextStyle]);
 
+  const displayTracksRef = useRef(displayTracks);
+  displayTracksRef.current = displayTracks;
+  const curTrackIdRef = useRef(curTrackId);
+  curTrackIdRef.current = curTrackId;
+
   const handlePlaySong = useCallback((track) => {
-    playTrack(track, displayTracks);
-  }, [playTrack, displayTracks]);
+    const tId = String(track?._id || track?.id || '');
+    if (tId && curTrackIdRef.current && tId === curTrackIdRef.current) {
+      togglePlay?.();
+      return;
+    }
+    playTrack(track, displayTracksRef.current);
+  }, [playTrack, togglePlay]);
 
   const handleMoreSong = useCallback((track) => {
     if (onTrackAction) onTrackAction(track);
@@ -534,10 +544,18 @@ function HomeScreen({
         isLiked={likedSet.has(itemId)}
         isDark={isDark}
         onPlay={handlePlaySong}
+        onTogglePlay={togglePlay}
+        onToggleLike={toggleLikeTrack}
         onMorePress={handleMoreSong}
       />
     );
-  }, [curTrackId, isPlaying, isLoading, likedSet, isDark, handlePlaySong, handleMoreSong]);
+  }, [curTrackId, isPlaying, isLoading, likedSet, isDark, handlePlaySong, togglePlay, toggleLikeTrack, handleMoreSong]);
+
+  const handleLoadMoreOnEnd = useCallback(() => {
+    if (displayTracks.length > visibleCount) {
+      setVisibleCount((c) => Math.min(displayTracks.length, c + (isLiteMode ? 12 : 20)));
+    }
+  }, [displayTracks.length, visibleCount, isLiteMode]);
 
   return (
     <>
@@ -555,6 +573,8 @@ function HomeScreen({
         windowSize={isLiteMode ? 3 : 5}
         updateCellsBatchingPeriod={40}
         removeClippedSubviews={Platform.OS === 'android'}
+        onEndReached={handleLoadMoreOnEnd}
+        onEndReachedThreshold={0.4}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

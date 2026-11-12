@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
+import { InteractionManager } from 'react-native';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { updateMediaNotification, updateMediaQueue } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
@@ -229,7 +230,10 @@ export const AudioProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    updateMediaQueue(queue.queue, playback.currentTrack);
+    const task = InteractionManager.runAfterInteractions(() => {
+      updateMediaQueue(Array.isArray(queue.queue) ? queue.queue.slice(0, 25) : [], playback.currentTrack);
+    });
+    return () => task?.cancel?.();
   }, [queue.queue, playback.currentTrack]);
 
   const stopPlaybackForSleepTimer = useCallback(async () => {

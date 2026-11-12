@@ -169,7 +169,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const genreColumns = width >= 1024 ? 4 : width >= 600 ? 3 : 2;
   const genreCardWidth = Math.floor((width - albumPadding - (genreColumns - 1) * albumGap) / genreColumns);
 
-  const { playTrack, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
+  const { playTrack, togglePlay, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks, albums: userAlbums = [], likedTrackIds = [], toggleLikeTrack, fetchPublicTracks } = useUser();
   const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -449,8 +449,13 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const hasSearch = query.trim().length > 0 || Boolean(selectedGenre);
 
   const handlePlaySong = useCallback((track) => {
+    const tId = String(track?._id || track?.id || '');
+    if (tId && curTrackId && tId === curTrackId) {
+      togglePlay?.();
+      return;
+    }
     playTrack(track, [track]);
-  }, [playTrack]);
+  }, [playTrack, togglePlay, curTrackId]);
 
   const handleSongMorePress = useCallback((track) => {
     if (onTrackAction) onTrackAction(track);
@@ -475,6 +480,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         isLoading={isCurrent && isLoading}
         isLiked={likedSet.has(itemId)}
         onPlay={handlePlaySong}
+        onTogglePlay={togglePlay}
         onMorePress={handleSongMorePress}
         onToggleLike={handleToggleLike}
         isDark={isDark}

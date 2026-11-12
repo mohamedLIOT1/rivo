@@ -311,26 +311,13 @@ class LockScreenActivity : Activity() {
     fun updateLyricsUi(pos: Long = MediaNotificationService.getEstimatedPositionMs()) {
         lyricsSheet?.updateActivePosition(pos)
 
+        // Keep lockscreen main view clean without cluttering inline lyrics under Artist Name;
+        // full synced lyrics open strictly on demand via top-right btn_lock_lyrics -> LockScreenLyricsSheet.
         val lyricView = txtLyrics ?: return
-        val activeLine = LockScreenLyricsStore.getActiveLyric(pos)
-
-        if (activeLine.isNullOrBlank()) {
-            if (lyricView.visibility != View.GONE) {
-                lyricView.visibility = View.GONE
-                lyricView.text = ""
-                lastLyricLine = null
-            }
-            return
-        }
-
-        if (activeLine != lastLyricLine) {
-            lastLyricLine = activeLine
-            lyricView.text = activeLine
-            if (lyricView.visibility != View.VISIBLE) {
-                lyricView.alpha = 0f
-                lyricView.visibility = View.VISIBLE
-                lyricView.animate().alpha(1f).setDuration(220).start()
-            }
+        if (lyricView.visibility != View.GONE) {
+            lyricView.visibility = View.GONE
+            lyricView.text = ""
+            lastLyricLine = null
         }
     }
 

@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.26",
+  "version": "2.4.27",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "Fix podcasts hide persistence, 0ms albums load, night greeting, Hero AI Mood Mix card, 12h album rotation, lock-screen WiFi recovery & smooth DJ mix",
+  "notes": "Fix SongItem like & pause toggles, ultra-fast track start & cloud pre-warm, massive mobile lag elimination & smoother UX",
   "notesEn": "Instant in-app OTA update (5.00 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5242883,
+  "bundleSize": 5247859,
   "sizeMb": "5.00 MB",
-  "updatedAt": "2026-11-12T08:12:28.336Z"
+  "updatedAt": "2026-11-12T08:45:37.127Z"
 }

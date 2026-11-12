@@ -210,6 +210,7 @@ function LibraryScreen({
   const {
     playTrack,
     playPlaylist,
+    togglePlay,
     currentTrack,
     isPlaying,
     isLoading,
@@ -228,6 +229,7 @@ function LibraryScreen({
     currentUser,
     playlists = [],
     likedTrackIds = [],
+    toggleLikeTrack,
     tracks: userTracks = [],
     fetchPublicTracks,
     updatePlaylist,
@@ -987,6 +989,11 @@ function LibraryScreen({
   };
 
   const handlePlayTrackItem = useCallback((item, index) => {
+    const itemId = String(item?._id || item?.id || '');
+    if (itemId && curTrackId && itemId === curTrackId) {
+      togglePlay?.();
+      return;
+    }
     const list = selectedView === 'liked' ? likedTracks : activePlaylistTracks;
     const resolvedIndex = typeof index === 'number' && index >= 0
       ? index
@@ -1033,6 +1040,8 @@ function LibraryScreen({
     setIsMixMode,
     setActiveTransitions,
     playlistTransitions,
+    curTrackId,
+    togglePlay,
   ]);
 
   const handleTrackItemMorePress = useCallback((item) => {
@@ -1125,6 +1134,8 @@ function LibraryScreen({
           isDark={isDark}
           showBpmKey={Boolean(!isSelectedPlQuran && isMixActive)}
           onPlay={handlePlayTrackItem}
+          onTogglePlay={togglePlay}
+          onToggleLike={toggleLikeTrack}
           onMorePress={handleTrackItemMorePress}
         />
         {isMixActive && hasNext && !isSelectedPlQuran && (

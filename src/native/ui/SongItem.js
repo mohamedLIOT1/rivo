@@ -32,6 +32,7 @@ function areEqualSongItem(prev, next) {
 export const SongItemPure = React.memo(function SongItemPure({
   track,
   onPlay,
+  onTogglePlay,
   onOpenActionMenu,
   onMorePress,
   onToggleLike,
@@ -46,13 +47,10 @@ export const SongItemPure = React.memo(function SongItemPure({
   mixName,
   playlistName,
 }) {
-  const [imageError, setImageError] = React.useState(false);
+  const [failedRawCover, setFailedRawCover] = React.useState(null);
 
   const rawCover = track?.coverUrl || track?.cover || track?.coverImage || track?.thumbnail || track?.artwork || track?.remoteCoverUrl || track?.originalCoverUrl || track?.albumCover || '';
-
-  React.useEffect(() => {
-    setImageError(false);
-  }, [track?._id, track?.id, rawCover]);
+  const imageError = Boolean(rawCover && failedRawCover === rawCover);
 
   if (!track) return null;
 
@@ -97,7 +95,7 @@ export const SongItemPure = React.memo(function SongItemPure({
           fadeDuration={0}
           resizeMode="cover"
           resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
-          onError={() => setImageError(true)}
+          onError={() => setFailedRawCover(rawCover || '__err__')}
         />
       </View>
 
@@ -172,10 +170,17 @@ export const SongItemPure = React.memo(function SongItemPure({
           </TouchableOpacity>
         )}
 
-        {/* Teal Square Play Button */}
+        {/* Teal Square Play/Pause Button */}
         <TouchableOpacity
           style={styles.playBtn}
-          onPress={() => onPlay && onPlay(track)}
+          onPress={() => {
+            if (isCurrent && typeof onTogglePlay === 'function') {
+              onTogglePlay();
+            } else if (onPlay) {
+              onPlay(track);
+            }
+          }}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           activeOpacity={0.85}
         >
           {isCurrent && isLoading ? (

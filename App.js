@@ -123,6 +123,22 @@ function MainAppShell() {
   );
 }
 
+function FullPlayerHandlerRegistrar({ onOpen }) {
+  const { registerFullPlayerHandler } = useAudioPlayer() || {};
+  useEffect(() => {
+    if (typeof registerFullPlayerHandler === 'function') {
+      registerFullPlayerHandler(onOpen);
+    }
+  }, [registerFullPlayerHandler, onOpen]);
+  return null;
+}
+
+const MiniPlayerSlot = React.memo(function MiniPlayerSlot({ onOpenFullPlayer, bottomOffset }) {
+  const { currentTrack } = useAudioPlayer() || {};
+  if (!currentTrack) return null;
+  return <MiniPlayer onOpenFullPlayer={onOpenFullPlayer} bottomOffset={bottomOffset} />;
+});
+
 /**
  * NativeAppShell
  *
@@ -168,10 +184,6 @@ function NativeAppShell() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [chatTargetUser, setChatTargetUser] = useState(null);
   const [viewingUser, setViewingUser] = useState(null);
-
-  const audioContext = useAudioPlayer() || {};
-  const currentTrack = audioContext.currentTrack;
-  const registerFullPlayerHandler = audioContext.registerFullPlayerHandler;
 
   const handleOpenFullPlayer = useCallback(() => {
     setIsFullPlayerOpen(true);
@@ -264,11 +276,6 @@ function NativeAppShell() {
     }
   }, [currentUser]);
 
-  useEffect(() => {
-    if (typeof registerFullPlayerHandler === 'function') {
-      registerFullPlayerHandler(handleOpenFullPlayer);
-    }
-  }, [registerFullPlayerHandler, handleOpenFullPlayer]);
   const [headerSearchText, setHeaderSearchText] = useState('');
   const { isDark, toggleTheme } = useTheme();
   const { socket } = useSocket();
@@ -571,19 +578,19 @@ function NativeAppShell() {
           );
         })()}
 
-        {visitedPrimaryTabs.podcasts && (() => {
+        {normalizedTab === 'podcasts' && (() => {
           const PodcastScreenComp = getLazyScreen('podcasts', () => require('./src/native/screens/PodcastScreen').default);
           return (
-            <View style={[{ flex: 1 }, normalizedTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
+            <View style={{ flex: 1 }}>
               <PodcastScreenComp onTrackAction={handleTrackAction} />
             </View>
           );
         })()}
 
-        {visitedPrimaryTabs.quran && (() => {
+        {normalizedTab === 'quran' && (() => {
           const QuranScreenComp = getLazyScreen('quran', () => require('./src/native/screens/QuranScreen').default);
           return (
-            <View style={[{ flex: 1 }, normalizedTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
+            <View style={{ flex: 1 }}>
               <QuranScreenComp onTrackAction={handleTrackAction} />
             </View>
           );
@@ -639,14 +646,13 @@ function NativeAppShell() {
       </View>
 
       {/* ─────────────────────────────────────────
-          FLOATING MINI PLAYER
+          FLOATING MINI PLAYER & HANDLER BRIDGE (Isolated from Root Shell Re-renders)
           ───────────────────────────────────────── */}
-      {currentTrack && (
-        <MiniPlayer
-          onOpenFullPlayer={handleOpenFullPlayer}
-          bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 14 : 10) : (Platform.OS === 'ios' ? 70 : 56)}
-        />
-      )}
+      <FullPlayerHandlerRegistrar onOpen={handleOpenFullPlayer} />
+      <MiniPlayerSlot
+        onOpenFullPlayer={handleOpenFullPlayer}
+        bottomOffset={navStyle === 'fab' ? (Platform.OS === 'ios' ? 14 : 10) : (Platform.OS === 'ios' ? 70 : 56)}
+      />
 
       {/* ─────────────────────────────────────────
           NAVIGATION (Floating Action Hub or Classic Bar)
@@ -655,7 +661,6 @@ function NativeAppShell() {
         <FloatingNavMenu
           activeTab={activeTab}
           onTabPress={handleTabPress}
-          hasTrack={Boolean(currentTrack)}
         />
       ) : (
         <View style={[styles.bottomBar, !isDark && styles.bottomBarLight]}>

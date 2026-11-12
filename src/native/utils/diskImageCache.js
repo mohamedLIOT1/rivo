@@ -21,8 +21,10 @@ const activeDownloads = new Map();
 const cacheListeners = new Map();
 const downloadQueue = [];
 let activeDownloadCount = 0;
-const MAX_CONCURRENT_DOWNLOADS = 3;
+const MAX_CONCURRENT_DOWNLOADS = 2;
 const MAX_DISK_CACHE_FILES = 1500;
+const filenameMemo = new Map();
+const MAX_FILENAME_MEMO = 1500;
 
 // Pure JS MD5 Implementation (RFC 1321 compliant, zero native dependencies)
 function md5(string) {
@@ -210,12 +212,17 @@ initDiskCache();
  */
 export function getCacheFilename(url) {
   if (!url || typeof url !== 'string') return null;
+  const cached = filenameMemo.get(url);
+  if (cached) return cached;
   const clean = url.split('?')[0].split('#')[0].toLowerCase();
   let ext = '.jpg';
   if (clean.endsWith('.png')) ext = '.png';
   else if (clean.endsWith('.webp')) ext = '.webp';
   else if (clean.endsWith('.jpeg')) ext = '.jpg';
-  return `${md5(url)}${ext}`;
+  const result = `${md5(url)}${ext}`;
+  if (filenameMemo.size >= MAX_FILENAME_MEMO) filenameMemo.clear();
+  filenameMemo.set(url, result);
+  return result;
 }
 
 /**
@@ -313,7 +320,7 @@ async function _processQueue() {
     resolve(remoteUri);
   } finally {
     activeDownloadCount--;
-    _processQueue();
+    setTimeout(_processQueue, 80);
   }
 }
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../../config';
 import { updateMediaNotification } from '../../services/mediaControls';
 import { ensurePlaybackPermissions } from './playbackPermissions';
 import { updateAudioProgress } from '../AudioProgressContext';
@@ -48,6 +49,14 @@ export const useAudioPlaybackCore = ({
   const lastSeekTimestampRef = useRef(0);
   const trackCompletionHandledRef = useRef(null);
   const interruptedByOsRef = useRef(false);
+  const likedTrackIdsRef = useRef(likedTrackIds);
+  likedTrackIdsRef.current = likedTrackIds;
+  const userTracksRef = useRef(userTracks);
+  userTracksRef.current = userTracks;
+  const currentUserRef = useRef(currentUser);
+  currentUserRef.current = currentUser;
+  const nextPrewarmTimerRef = useRef(null);
+  const nextPrewarmAbortRef = useRef(null);
 
   const [currentTrack, setCurrentTrackState] = useState(null);
   const currentTrackRef = useRef(null);
@@ -142,7 +151,7 @@ export const useAudioPlaybackCore = ({
               if (playRes?.isLoaded && !playRes?.error && (playRes.isPlaying || playRes.isBuffering)) {
                 interruptedByOsRef.current = false;
                 setIsPlaying(true);
-                const isLiked = likedTrackIds.some(id => String(id) === String(cur._id || cur.id));
+                const isLiked = (likedTrackIdsRef.current || []).some(id => String(id) === String(cur._id || cur.id));
                 const isLive = isRadioTrack(cur) || Boolean(cur.isLive);
                 if (typeof updateMediaNotification === 'function') {
                   updateMediaNotification(true, repeatModeRef?.current || 'off', isShuffleRef?.current || false, isLiked, {
@@ -175,8 +184,12 @@ export const useAudioPlaybackCore = ({
         );
       }
     });
-    return () => sub?.remove?.();
-  }, [likedTrackIds, repeatModeRef, isShuffleRef, setIsPlaying, queueRef]);
+    return () => {
+      sub?.remove?.();
+      if (nextPrewarmTimerRef.current) clearTimeout(nextPrewarmTimerRef.current);
+      try { nextPrewarmAbortRef.current?.abort(); } catch {}
+    };
+  }, [repeatModeRef, isShuffleRef, setIsPlaying, queueRef]);
 
   const updateVocalStatus = useCallback((status) => {
     setVocalIsolationStatus(status);
@@ -229,7 +242,7 @@ export const useAudioPlaybackCore = ({
       handleDownloadTrack,
       autoDownloadFinishedRef,
       updateMediaNotification,
-      likedTrackIds, isShuffleRef,
+      likedTrackIds: likedTrackIdsRef.current, isShuffleRef,
       setIsPlaying,
       isPlayingRef,
       trackCompletionHandledRef,
@@ -239,7 +252,7 @@ export const useAudioPlaybackCore = ({
     isMixModeRef, activeTransRef, queueRef, nextSoundRef, isMixTransitioningRef,
     completeSeamlessHandoff, preloadNextTrackForDjMix, repeatModeRef,
     autoPersistFinishedTrack, handleDownloadTrack, autoDownloadFinishedRef,
-    likedTrackIds, isShuffleRef, lastMixBridgeUpdateRef, setIsPlaying,
+    isShuffleRef, lastMixBridgeUpdateRef, setIsPlaying,
     broadcastListeningActivity,
   ]);
 
@@ -313,7 +326,7 @@ export const useAudioPlaybackCore = ({
           shouldBePlayingRef.current = true;
           isPlayingRef.current = true;
           setIsPlaying(true);
-          const isLikedTrack = likedTrackIds.some(id => String(id) === curId);
+          const isLikedTrack = (likedTrackIdsRef.current || []).some(id => String(id) === curId);
           const curDur = isLiveStream ? 0 : (playbackStatusRef.current?.duration || sanitizedDur);
           updateMediaNotification(true, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
             ...cleanTrack,
@@ -356,7 +369,7 @@ export const useAudioPlaybackCore = ({
     updateAudioProgress({ currentTime: safeTargetSec, duration: sanitizedDur });
     setVocalIsolationStatus(null);
 
-    const isLikedTrack = likedTrackIds.some(id => String(id) === nextId);
+    const isLikedTrack = (likedTrackIdsRef.current || []).some(id => String(id) === nextId);
     updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
       ...cleanTrack,
       currentTime: safeTargetSec,
@@ -383,12 +396,16 @@ export const useAudioPlaybackCore = ({
         const isExplicitList = Boolean(trackList._isExplicitPlaylist || trackList.isMix || trackList._isMix);
         if (trackList.length === 1 && !isQuran && !isExplicitList && !isMixModeRef?.current) {
           if (isPodcastContent(cleanTrack)) {
-            const podcastPool = ((userTracks?.length > 0) ? userTracks : []).filter(t => isPodcastContent(t));
+            const uTracks = userTracksRef.current || [];
+            const cUser = currentUserRef.current;
+            const podcastPool = (uTracks.length > 0 ? uTracks : []).filter(t => isPodcastContent(t));
             const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
             setQueue(buildPodcastSeedQueue(cleanTrack, fullPool, 20));
           } else {
-            const pool = ((userTracks?.length > 0) ? userTracks : (INITIAL_TRACKS || [])).filter(t => !isQuranContent(t) && !isPodcastContent(t));
-            setQueue(buildSmartSeedQueue(cleanTrack, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
+            const uTracks = userTracksRef.current || [];
+            const cUser = currentUserRef.current;
+            const pool = (uTracks.length > 0 ? uTracks : (INITIAL_TRACKS || [])).filter(t => !isQuranContent(t) && !isPodcastContent(t));
+            setQueue(buildSmartSeedQueue(cleanTrack, pool, { currentUser: cUser, followedArtists: cUser?.following || [], likedTrackIds: likedTrackIdsRef.current || [] }));
           }
         } else {
           // Strictly isolate queue according to playing content type while preserving playlist/Mix flags
@@ -504,6 +521,25 @@ export const useAudioPlaybackCore = ({
         if (!Boolean(isRemoteParam) && jamSyncRef?.current?.jamSession && canControlJam()) {
           jamSyncRef.current.broadcastPlayState?.(true, cleanTrack, safeTargetSec);
         }
+
+        // Background non-blocking pre-warm of Next Track cloud cache so skip starts instantaneously
+        if (nextPrewarmTimerRef.current) clearTimeout(nextPrewarmTimerRef.current);
+        try { nextPrewarmAbortRef.current?.abort(); } catch {}
+        nextPrewarmTimerRef.current = setTimeout(() => {
+          if (abortController.signal.aborted || soundLoadIdRef.current !== currentLoadId) return;
+          const qNow = queueRef.current || [];
+          const curIdxNow = qNow.findIndex(t => String(t?._id || t?.id || '') === nextId);
+          const nextTr = curIdxNow >= 0 && curIdxNow + 1 < qNow.length ? qNow[curIdxNow + 1] : null;
+          const nextUrl = String(nextTr?.audioUrl || '');
+          if (nextUrl.startsWith('/uploads/cloud/')) {
+            const c = new AbortController();
+            nextPrewarmAbortRef.current = c;
+            fetch(`${API_BASE_URL}${nextUrl}`, {
+              headers: { Range: 'bytes=0-16383' },
+              signal: c.signal,
+            }).catch(() => {});
+          }
+        }, 1600);
       }
     } catch (err) {
       if (!abortController.signal.aborted) {
@@ -523,9 +559,9 @@ export const useAudioPlaybackCore = ({
       }
     }
   }, [
-    likedTrackIds, repeatModeRef, isShuffleRef, setQueue, updateVocalStatus,
+    repeatModeRef, isShuffleRef, setQueue, updateVocalStatus,
     onPlaybackStatusUpdate, broadcastListeningActivity, showToast, setIsLoading,
-    setIsPlaying, canControlJam, jamSyncRef
+    setIsPlaying, canControlJam, jamSyncRef, queueRef
   ]);
 
   playTrackRef.current = playTrack;
@@ -589,7 +625,7 @@ export const useAudioPlaybackCore = ({
       }
     }
 
-    const isLikedTrack = curTrack ? likedTrackIds.some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
+    const isLikedTrack = curTrack ? (likedTrackIdsRef.current || []).some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
     interruptedByOsRef.current = false;
     shouldBePlayingRef.current = nextPlaying;
     isPlayingRef.current = nextPlaying;
@@ -630,7 +666,7 @@ export const useAudioPlaybackCore = ({
       jamSyncRef.current.broadcastPlayState?.(nextPlaying, curTrack, curPos);
     }
   }, [
-    canControlJam, jamSyncRef, playTrack, queueRef, likedTrackIds,
+    canControlJam, jamSyncRef, playTrack, queueRef,
     repeatModeRef, isShuffleRef, broadcastListeningActivity, setIsPlaying
   ]);
 

@@ -1,6 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { Audio } from 'expo-av';
-import { applyStandardAudioMode } from './audioModeConfig';
+import { applyStandardAudioMode, ensureBackgroundAudioMode } from './audioModeConfig';
 import NetInfo from '@react-native-community/netinfo';
 import { API_BASE_URL } from '../../config';
 import {
@@ -14,6 +14,7 @@ import {
   reanchorDocumentUri,
   updateTrackDownloadRecord,
   getDownloadedTracks,
+  findDownloadedTrackFast,
   getTrackDedupeKey,
 } from '../../services/download/storageManifestService';
 
@@ -67,6 +68,11 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
   const trackId = String(track._id || track.id || '');
   const candidateLocal = pickLocalUriField(track);
   let validLocalUri = null;
+  const fastDl = !track._skipLocal ? findDownloadedTrackFast(track) : { ready: true, match: null };
+  const rawTrackUrl = String(track.audioUrl || '').trim();
+
+  // Instant fast-path for online tracks that are NOT in local offline vault (avoids 15+ sequential FileSystem calls)
+  const shouldScanDiskDirs = Boolean(candidateLocal || track.isDownloaded || track.downloaded || fastDl.match);
 
   if (!track._skipLocal) {
     if (candidateLocal) {
@@ -75,34 +81,44 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
       if (check?.exists) validLocalUri = check.uri;
     }
 
-    if (!validLocalUri) {
+    if (!validLocalUri && (!fastDl.ready || fastDl.match)) {
       try {
-        const downloadedList = await getDownloadedTracks();
+        const match = fastDl.ready
+          ? fastDl.match
+          : await (async () => {
+              const downloadedList = await getDownloadedTracks();
+              if (signal?.aborted || !Array.isArray(downloadedList) || downloadedList.length === 0) return null;
+              const dedupeKey = getTrackDedupeKey(track);
+              return downloadedList.find((item) => {
+                if (!item) return false;
+                const itemId = String(item._id || item.id || '');
+                return Boolean(
+                  (trackId && itemId && itemId === trackId) ||
+                  (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) ||
+                  (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
+                );
+              });
+            })();
         if (signal?.aborted) return null;
-        if (Array.isArray(downloadedList) && downloadedList.length > 0) {
-          const dedupeKey = getTrackDedupeKey(track);
-          const match = downloadedList.find((item) => {
-            if (!item) return false;
-            const itemId = String(item._id || item.id || '');
-            return Boolean(
-              (trackId && itemId && itemId === trackId) ||
-              (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) ||
-              (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
-            );
-          });
-          const matchUri = pickLocalUriField(match);
-          if (matchUri) {
-            const check = await verifyLocalAudioFile(matchUri);
-            if (signal?.aborted) return null;
-            if (check?.exists) validLocalUri = check.uri;
-          }
+        const matchUri = pickLocalUriField(match);
+        if (matchUri) {
+          const check = await verifyLocalAudioFile(matchUri);
+          if (signal?.aborted) return null;
+          if (check?.exists) validLocalUri = check.uri;
         }
       } catch (e) {
         console.warn('[streamResolverHelper] Storage manifest lookup error:', e?.message);
       }
     }
 
-    if (!validLocalUri && FileSystem.documentDirectory) {
+    // Immediate direct cloud URL shortcut before scanning 12+ fallback directories if not marked downloaded
+    if (!validLocalUri && !shouldScanDiskDirs && rawTrackUrl.startsWith('/uploads/')) {
+      const directCloudUrl = `${API_BASE_URL}${rawTrackUrl}`;
+      track.resolvedAudioUrl = directCloudUrl;
+      return directCloudUrl;
+    }
+
+    if (!validLocalUri && shouldScanDiskDirs && FileSystem.documentDirectory) {
       const docDir = FileSystem.documentDirectory;
       const baseDir = docDir.endsWith('/') ? docDir : `${docDir}/`;
       const candidates = [];
@@ -307,7 +323,7 @@ export const createAudioSound = async ({
   const activeUri = normalizeStreamUri(uri);
   if (signal?.aborted) return ABORTED_SOUND_RESULT;
 
-  await applyStandardAudioMode();
+  await ensureBackgroundAudioMode(false);
   if (signal?.aborted) return ABORTED_SOUND_RESULT;
 
   try {

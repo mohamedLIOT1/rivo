@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system';
 import NetInfo from '@react-native-community/netinfo';
 import { API_BASE_URL } from '../config';
 import { INNERTUBE_KEY, CLIENT_CONFIGS } from '../../utils/streamClientConfigs';
+import { findDownloadedTrackFast, getDownloadedTracks } from './download/storageManifestService';
 
 const streamCache = new Map();
 const streamDurationCache = new Map();
@@ -534,7 +535,7 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
 
   if (signal?.aborted) return null;
 
-  // 2. Direct local file on device storage (by nativeAudioUri or downloadedTracks check)
+  // 2. Direct local file on device storage (fast synchronous manifest check first)
   if (!skipLocal) {
     const localUri = track.nativeAudioUri || track.localAudioUri;
     if (localUri && localUri.startsWith('file://')) {
@@ -548,22 +549,26 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
       } catch {}
     }
 
-    // 2b. Check if track is saved in offline storage by exact track ID OR exact clean title AND artist
-    try {
-      const { getDownloadedTracks } = require('./downloadManager');
-      const dls = await getDownloadedTracks();
-      if (signal?.aborted) return null;
-      if (Array.isArray(dls) && dls.length > 0) {
-        const found = dls.find(d => {
-          if (!d) return false;
-          if (trackId && String(d._id || d.id) === trackId) return true;
-          const dTitle = (d.title || '').toLowerCase().trim();
-          const dArtist = (d.artist || '').toLowerCase().trim();
-          const cTitle = (cleanTitle || rawTitle).toLowerCase().trim();
-          const cArtist = (cleanArtist || rawArtist).toLowerCase().trim();
-          // Exact title AND artist match required. Never fallback to loose title-only match.
-          return Boolean(cTitle && cArtist && dTitle && dArtist && dTitle === cTitle && dArtist === cArtist);
-        });
+    const fastDl = findDownloadedTrackFast(track);
+    if (!fastDl.ready || fastDl.match) {
+      // 2b. Check if track is saved in offline storage by exact track ID OR exact clean title AND artist
+      try {
+        const found = fastDl.ready
+          ? fastDl.match
+          : await (async () => {
+              const dls = await getDownloadedTracks();
+              if (signal?.aborted || !Array.isArray(dls) || dls.length === 0) return null;
+              const cTitle = (cleanTitle || rawTitle).toLowerCase().trim();
+              const cArtist = (cleanArtist || rawArtist).toLowerCase().trim();
+              return dls.find(d => {
+                if (!d) return false;
+                if (trackId && String(d._id || d.id) === trackId) return true;
+                const dTitle = (d.title || '').toLowerCase().trim();
+                const dArtist = (d.artist || '').toLowerCase().trim();
+                return Boolean(cTitle && cArtist && dTitle && dArtist && dTitle === cTitle && dArtist === cArtist);
+              });
+            })();
+        if (signal?.aborted) return null;
         const dlUri = found?.localAudioUri || found?.nativeAudioUri;
         if (dlUri && dlUri.startsWith('file://')) {
           const info = await FileSystem.getInfoAsync(dlUri);
@@ -573,8 +578,8 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
             return dlUri;
           }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   if (signal?.aborted) return null;

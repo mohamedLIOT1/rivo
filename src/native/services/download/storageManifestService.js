@@ -76,6 +76,33 @@ let inMemoryDownloadedTracks = null;
 let isCommittingSave = false;
 let needsRecommitSave = false;
 
+/**
+ * Synchronous in-memory lookup so online playback never blocks on AsyncStorage or FileSystem checks.
+ */
+export const findDownloadedTrackFast = (track) => {
+  if (!Array.isArray(inMemoryDownloadedTracks)) {
+    return { ready: false, match: null };
+  }
+  if (!track || inMemoryDownloadedTracks.length === 0) {
+    return { ready: true, match: null };
+  }
+  const trackId = String(track._id || track.id || '');
+  const dedupeKey = getTrackDedupeKey(track);
+  for (let i = 0; i < inMemoryDownloadedTracks.length; i++) {
+    const item = inMemoryDownloadedTracks[i];
+    if (!item) continue;
+    const itemId = String(item._id || item.id || '');
+    if (
+      (trackId && itemId && itemId === trackId) ||
+      (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) ||
+      (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
+    ) {
+      return { ready: true, match: item };
+    }
+  }
+  return { ready: true, match: null };
+};
+
 export const commitToStorageAndManifest = async (list) => {
   if (isCommittingSave) {
     needsRecommitSave = true;

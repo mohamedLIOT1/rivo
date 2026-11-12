@@ -91,9 +91,9 @@ import {
 } from '../../utils/quranRecitersService';
 
 function QuranScreen({ onTrackAction }) {
-  const { playTrack, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
+  const { playTrack, togglePlay, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const curTrackId = String(currentTrack?._id || currentTrack?.id || '');
-  const { tracks: userTracks, likedTrackIds = [] } = useUser();
+  const { tracks: userTracks, likedTrackIds = [], toggleLikeTrack } = useUser();
   const { appMode } = useConnectivity();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
@@ -164,7 +164,14 @@ function QuranScreen({ onTrackAction }) {
     return result;
   }, [isRecitersGridMode, selectedReciter, searchQuery, quranTracks, downloadedTracks, isOffline, apiReciters]);
 
-  const handlePlayTrack = useCallback((track) => playTrack(track, displayedTracks), [playTrack, displayedTracks]);
+  const handlePlayTrack = useCallback((track) => {
+    const tId = String(track?._id || track?.id || '');
+    if (tId && curTrackId && tId === curTrackId) {
+      togglePlay?.();
+      return;
+    }
+    playTrack(track, displayedTracks);
+  }, [playTrack, togglePlay, curTrackId, displayedTracks]);
   const handleMorePress = useCallback((track) => { if (onTrackAction) onTrackAction(track); }, [onTrackAction]);
   const keyExtractor = useCallback((track, idx) => String(track?._id || track?.id || `quran-${idx}`), []);
   const handlePlayAll = useCallback(() => {
@@ -195,6 +202,8 @@ function QuranScreen({ onTrackAction }) {
         isDark={isDark}
         showBpmKey={false}
         onPlay={handlePlayTrack}
+        onTogglePlay={togglePlay}
+        onToggleLike={toggleLikeTrack}
         onMorePress={handleMorePress}
       />
     );
