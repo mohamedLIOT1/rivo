@@ -84,12 +84,6 @@ export default function ArtistHero({
             }`}>
               {isQuran ? t('profile.collectionsCount', { count: artistAlbums.length }) : t('profile.albumsCount', { count: artistAlbums.length })}
             </span>
-            {totalPlays > 0 && (
-              <>
-                <span>•</span>
-                <span>{totalPlays.toLocaleString()} {isQuran ? t('profile.listensCount', { count: totalPlays }) : t('profile.playsCount', { count: totalPlays })}</span>
-              </>
-            )}
           </div>
 
           {/* Action Buttons */}

@@ -12,6 +12,7 @@ import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import SongRadarModal from '../components/SongRadarModal';
 import { API_BASE_URL } from '../config';
 import { getTrackArtists, ArtistLinks, getCanonicalArtistName, getArtistAliases } from '../utils/artistUtils';
+import { getExpandedSearchTerms } from '../utils/searchSynonyms';
 import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -168,15 +169,26 @@ export default function SearchScreen({
   };
   const fuzzyQuery = normalizeFuzzy(cleanQuery);
 
+  const expandedQueryTerms = React.useMemo(() => {
+    return cleanQuery ? getExpandedSearchTerms(cleanQuery) : [];
+  }, [cleanQuery]);
+
   // Matching Artists (searches canonical name and all known aliases)
   const matchedArtists = (filterType === 'people' || filterType === 'albums' || filterType === 'songs') ? [] : (
     cleanQuery ? allArtists.filter(a => {
-      if (a.name.toLowerCase().includes(cleanQuery)) return true;
-      if (fuzzyQuery && normalizeFuzzy(a.name).includes(fuzzyQuery)) return true;
-      return (a.aliases || []).some(alias => 
-        alias.toLowerCase().includes(cleanQuery) || 
-        (fuzzyQuery && normalizeFuzzy(alias).includes(fuzzyQuery))
-      );
+      const artName = (a.name || '').toLowerCase();
+      const normArtName = normalizeFuzzy(a.name);
+      const aliases = (a.aliases || []).map(al => al.toLowerCase());
+      const normAliases = (a.aliases || []).map(al => normalizeFuzzy(al));
+
+      if (artName.includes(cleanQuery) || (fuzzyQuery && normArtName.includes(fuzzyQuery))) return true;
+      if (aliases.some((al, idx) => al.includes(cleanQuery) || (fuzzyQuery && normAliases[idx].includes(fuzzyQuery)))) return true;
+
+      return expandedQueryTerms.some(term => {
+        const normTerm = normalizeFuzzy(term);
+        if (artName.includes(term) || (normTerm && normArtName.includes(normTerm))) return true;
+        return aliases.some((al, idx) => al.includes(term) || (normTerm && normAliases[idx].includes(normTerm)));
+      });
     }) : (filterType === 'artists' ? allArtists : [])
   );
 
@@ -186,20 +198,47 @@ export default function SearchScreen({
     if (!cleanQuery) return false;
     const nameMatch = (a.name && a.name.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(a.name).includes(fuzzyQuery));
     const artistMatch = (a.artist && a.artist.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(a.artist).includes(fuzzyQuery));
-    return nameMatch || artistMatch;
+    if (nameMatch || artistMatch) return true;
+    return expandedQueryTerms.some(term => {
+      const normTerm = normalizeFuzzy(term);
+      return (a.name && a.name.toLowerCase().includes(term)) ||
+             (normTerm && normalizeFuzzy(a.name).includes(normTerm)) ||
+             (a.artist && a.artist.toLowerCase().includes(term)) ||
+             (normTerm && normalizeFuzzy(a.artist).includes(normTerm));
+    });
   });
 
   // Local tracks matching
   const localFiltered = (filterType === 'people' || filterType === 'artists' || filterType === 'albums') ? [] : safeTracks.filter((t) => {
     if (!cleanQuery) return false;
     if (!isMusicTrack(t.title, t.artist)) return false;
-    const titleMatch = (t.title && t.title.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(t.title).includes(fuzzyQuery));
-    const trackArtists = getTrackArtists(t.artist, t.title).map(a => a.toLowerCase());
-    const artistMatch = (t.artist && t.artist.toLowerCase().includes(cleanQuery)) || 
-      (fuzzyQuery && normalizeFuzzy(t.artist).includes(fuzzyQuery)) ||
-      trackArtists.some(a => a.includes(cleanQuery) || (fuzzyQuery && normalizeFuzzy(a).includes(fuzzyQuery)));
-    const genreMatch = t.genre && t.genre.toLowerCase().includes(cleanQuery);
-    const albumMatch = (t.album && t.album.toLowerCase().includes(cleanQuery)) || (fuzzyQuery && normalizeFuzzy(t.album).includes(fuzzyQuery));
+
+    // Track artist canonical aliases
+    const trackArtists = getTrackArtists(t.artist, t.title);
+    const trackArtistAliases = trackArtists.flatMap(a => {
+      const can = getCanonicalArtistName(a);
+      return [a.toLowerCase(), ...(can ? getArtistAliases(can).map(al => al.toLowerCase()) : [])];
+    });
+
+    const titleLower = (t.title || '').toLowerCase();
+    const titleFuzzy = normalizeFuzzy(t.title);
+    const albumLower = (t.album || '').toLowerCase();
+    const albumFuzzy = normalizeFuzzy(t.album);
+
+    // Direct check
+    if (titleLower.includes(cleanQuery) || (fuzzyQuery && titleFuzzy.includes(fuzzyQuery))) return true;
+    if (albumLower.includes(cleanQuery) || (fuzzyQuery && albumFuzzy.includes(fuzzyQuery))) return true;
+    if (trackArtistAliases.some(al => al.includes(cleanQuery) || (fuzzyQuery && normalizeFuzzy(al).includes(fuzzyQuery)))) return true;
+
+    // Expanded synonyms check (Arabic <-> English like النيه <-> El Neyya, ليجيسي <-> Lege-Cy)
+    const matchesExpanded = expandedQueryTerms.some(term => {
+      const termFuzzy = normalizeFuzzy(term);
+      if (titleLower.includes(term) || (termFuzzy && titleFuzzy.includes(termFuzzy))) return true;
+      if (albumLower.includes(term) || (termFuzzy && albumFuzzy.includes(termFuzzy))) return true;
+      return trackArtistAliases.some(al => al.includes(term) || (termFuzzy && normalizeFuzzy(al).includes(termFuzzy)));
+    });
+
+    if (matchesExpanded) return true;
 
     if (isPopSearch) {
       const popKeywords = ['pop', 'بوب', 'عربي', 'arabic', 'عمرو', 'تامر', 'سعد', 'حماقي', 'شيرين', 'دياب', 'حسني'];
@@ -207,7 +246,7 @@ export default function SearchScreen({
       if (popKeywords.some(kw => text.includes(kw))) return true;
     }
 
-    return titleMatch || artistMatch || genreMatch || albumMatch;
+    return false;
   });
 
   // Debounced Online / AI Search

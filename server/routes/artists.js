@@ -5,6 +5,8 @@ const { adminAuth } = require('../middleware/auth');
 const {
   getCanonicalArtistName,
   getArtistAliases,
+  splitArtistNames,
+  getPrimaryArtist,
   detectQuranReciter,
   escapeRegex
 } = require('../utils/helpers');
@@ -20,7 +22,15 @@ router.get('/', async (req, res) => {
     const artistDocMap = {};
     for (const doc of allArtistDocs) {
       if (doc.name) {
-        artistDocMap[doc.name.toLowerCase().trim()] = doc;
+        const rawKey = doc.name.toLowerCase().trim();
+        const canonical = getCanonicalArtistName(doc.name) || doc.name;
+        const canKey = canonical.toLowerCase().trim();
+        
+        artistDocMap[rawKey] = doc;
+        // Prioritize docs with avatar/cover or verified flag for canonical key
+        if (!artistDocMap[canKey] || (!artistDocMap[canKey].cover && doc.cover) || (!artistDocMap[canKey].isVerified && doc.isVerified)) {
+          artistDocMap[canKey] = doc;
+        }
       }
     }
 
@@ -71,15 +81,30 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Also include any custom artists from Artist collection that have no tracks yet
+    // Also merge or include custom artists from Artist collection
     for (const doc of allArtistDocs) {
       if (!doc.name) continue;
-      const key = doc.name.toLowerCase().trim();
-      if (!artistMap[key]) {
+      // Do not create standalone artist profiles for collaboration strings (e.g. "Cairokee, Sary Hany")
+      const isCollab = splitArtistNames(doc.name).length > 1;
+      const canonical = getCanonicalArtistName(doc.name) || doc.name;
+      const key = canonical.toLowerCase().trim();
+      
+      if (artistMap[key]) {
+        // Merge missing artwork or verification into existing track-populated artist
+        if (!artistMap[key].avatar && (doc.cover || doc.avatar)) {
+          const img = doc.cover || doc.avatar;
+          artistMap[key].avatar = img;
+          artistMap[key].image = img;
+          artistMap[key].cover = img;
+        }
+        if (doc.isVerified) {
+          artistMap[key].isVerified = true;
+        }
+      } else if (!isCollab) {
         const initialImg = doc.cover || doc.avatar || '';
         artistMap[key] = {
           id: key,
-          name: doc.name,
+          name: doc.name || canonical,
           avatar: initialImg,
           image: initialImg,
           cover: initialImg,
@@ -107,14 +132,15 @@ router.get('/:name', async (req, res) => {
     const rawName = decodeURIComponent(req.params.name).trim();
     const canonicalName = getCanonicalArtistName(rawName);
     const aliases = getArtistAliases(rawName);
-    const allNames = Array.from(new Set([rawName, canonicalName, ...aliases]));
+    const allNames = Array.from(new Set([rawName, canonicalName, ...aliases])).filter(Boolean);
     const pattern = allNames.map(escapeRegex).join('|');
-    const regex = new RegExp(`^(?:${pattern})$`, 'i');
+    // Match exact artist name or artist as part of a collaboration (e.g. "Cairokee, Sary Hany")
+    const regex = new RegExp(`(?:^|[\\s,،;&+/])(?:${pattern})(?:$|[\\s,،;&+/])`, 'i');
 
     const [tracks, albums, artistDoc] = await Promise.all([
       Track.find({ artist: { $regex: regex } }).sort({ plays: -1 }).lean(),
       Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean(),
-      Artist.findOne({ name: { $regex: regex } }).lean()
+      Artist.findOne({ name: { $regex: new RegExp(`^(?:${pattern})$`, 'i') } }).lean()
     ]);
 
     const formattedTracks = tracks.map(t => ({

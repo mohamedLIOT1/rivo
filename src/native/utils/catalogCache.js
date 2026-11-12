@@ -46,7 +46,16 @@ const rotatedAlbumsWindowCache = new WeakMap();
 export function getCachedHomeAlbums(albums, userTracks, ownerId = 'guest') {
   const bucket12h = get12hBucket();
   const safeAlbums = Array.isArray(albums) ? albums : EMPTY;
-  const dbAlbums = safeAlbums.filter((alb) => !isQuranContent(alb));
+  const dbAlbums = safeAlbums.filter((alb) => {
+    if (!alb || isQuranContent(alb)) return false;
+    const type = (alb.releaseType || '').toLowerCase();
+    if (type === 'single') return false;
+    const count = Number(alb.trackCount || alb.songsCount || (Array.isArray(alb.tracks) ? alb.tracks.length : (alb.trackIds ? alb.trackIds.length : 0)));
+    if (count <= 1) return false;
+    const name = (alb.name || alb.title || '').toLowerCase();
+    if (name.endsWith('- single') || name.endsWith('(single)')) return false;
+    return true;
+  });
   if (dbAlbums.length > 0) {
     const entry = rotatedAlbumsWindowCache.get(safeAlbums);
     if (entry && entry.bucket === bucket12h && entry.ownerId === ownerId) {

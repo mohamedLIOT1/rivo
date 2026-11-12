@@ -171,7 +171,11 @@ const resolveStreamHandler = async (req, res) => {
               : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}&title=${encodeURIComponent(dbTrack.title || title || '')}&artist=${encodeURIComponent(dbTrack.artist || artist || '')}`;
             const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
             if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
-              Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+              const currentDur = Number(dbTrack.duration) || 0;
+              const isCorruptingConcertDur = finalDur > 600 && currentDur < 600 && currentDur > 0;
+              if (!isCorruptingConcertDur) {
+                Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+              }
             }
             return res.json({
               success: true,
@@ -248,7 +252,11 @@ const resolveStreamHandler = async (req, res) => {
               : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}&title=${encodeURIComponent(dbTrack.title || title || '')}&artist=${encodeURIComponent(dbTrack.artist || artist || '')}`;
             const finalDur = (directAudio.duration && directAudio.duration > 0) ? directAudio.duration : (dbTrack.duration || 210);
             if (dbTrack._id && finalDur > 0 && Math.abs((dbTrack.duration || 0) - finalDur) > 3) {
-              Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+              const currentDur = Number(dbTrack.duration) || 0;
+              const isCorruptingConcertDur = finalDur > 600 && currentDur < 600 && currentDur > 0;
+              if (!isCorruptingConcertDur) {
+                Track.updateOne({ _id: dbTrack._id }, { $set: { duration: finalDur } }).catch(() => {});
+              }
             }
             return res.json({
               success: true,

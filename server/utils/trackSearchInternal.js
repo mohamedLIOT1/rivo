@@ -2,6 +2,8 @@ const axios = require('axios');
 const { Track } = require('../models');
 const { isMusicTrackServer } = require('./trackMetadataUtils');
 const { getActiveYouTubeApiKey, markYouTubeApiKeyExceeded } = require('./youtubeSearch');
+const { getExpandedSearchTerms } = require('./searchSynonyms');
+const { getCanonicalArtistName } = require('./artistAlbumUtils');
 
 const searchCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
@@ -29,14 +31,25 @@ async function searchTracksInternal(query) {
     const fuzzyRegex = new RegExp(fuzzyPattern, 'i');
     const exactRegex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
 
-    const dbTracks = await Track.find({
-      $or: [
-        { title: { $regex: exactRegex } },
-        { artist: { $regex: exactRegex } },
-        { title: { $regex: fuzzyRegex } },
-        { artist: { $regex: fuzzyRegex } }
-      ]
-    }).limit(15).lean();
+    const expandedTerms = getExpandedSearchTerms(q);
+    const orConditions = [];
+
+    // Add exact and fuzzy regex for each term
+    for (const term of expandedTerms) {
+      const cleanTerm = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const termRegex = new RegExp(cleanTerm, 'i');
+      orConditions.push({ title: termRegex });
+      orConditions.push({ artist: termRegex });
+      orConditions.push({ album: termRegex });
+    }
+
+    // Also check if q matches an artist name or alias
+    const canonical = getCanonicalArtistName(q);
+    if (canonical && canonical.toLowerCase() !== q.toLowerCase()) {
+      orConditions.push({ artist: new RegExp(canonical.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') });
+    }
+
+    const dbTracks = await Track.find(orConditions.length > 0 ? { $or: orConditions } : {}).limit(20).lean();
 
     const formattedDbTracks = dbTracks
       .filter(t => isMusicTrackServer(t.title, t.artist))

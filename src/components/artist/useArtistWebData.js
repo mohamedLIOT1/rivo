@@ -114,8 +114,9 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
             id: a.id || a._id,
             name: a.name,
             artist: a.artist || artistName,
+            releaseType: a.releaseType,
             trackIds: allTrackIds,
-            trackCount: allTrackIds.length,
+            trackCount: Number(a.trackCount || a.songsCount || allTrackIds.length),
             cover: a.cover || matchingTracks[0]?.cover || '',
             isAlbum: true,
             isPublic: true

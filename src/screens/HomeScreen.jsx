@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { usePreferences, useTranslation } from '../context/PreferencesContext';
 import { Play, Plus, Disc } from 'lucide-react';
 import { API_BASE_URL } from '../config';
@@ -20,6 +20,42 @@ import {
 } from '../utils/aiMoodMixCache';
 
 export { getGlobalTrackScore };
+
+// Safely debounces and limits cached album list in localStorage to prevent main thread lockups
+function cacheAlbumsToStorage(albumsList) {
+  if (!Array.isArray(albumsList) || albumsList.length === 0 || typeof window === 'undefined') return;
+
+  const persist = () => {
+    try {
+      // Limit to max 30 items and only store lightweight fields (prevent multi-MB payloads)
+      const sliceLimit = Math.min(albumsList.length, 30);
+      const slim = [];
+      for (let i = 0; i < sliceLimit; i++) {
+        const a = albumsList[i];
+        if (!a) continue;
+        slim.push({
+          id: a.id || a._id,
+          _id: a._id || a.id,
+          name: a.name || a.title || '',
+          title: a.title || a.name || '',
+          artist: a.artist || '',
+          cover: a.cover || '',
+          trackCount: Number(a.trackCount || a.songsCount || (Array.isArray(a.tracks) ? a.tracks.length : (a.trackIds ? a.trackIds.length : 0))),
+          releaseType: a.releaseType || '',
+          genre: a.genre || '',
+          isQuran: Boolean(a.isQuran)
+        });
+      }
+      localStorage.setItem('rivo_albums', JSON.stringify(slim));
+    } catch {}
+  };
+
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(persist, { timeout: 3000 });
+  } else {
+    setTimeout(persist, 1000);
+  }
+}
 
 export default function HomeScreen({
   tracks = [],
@@ -52,47 +88,73 @@ export default function HomeScreen({
   const cacheOwnerId = String(currentUser?.id || currentUser?._id || 'guest');
   const [aiMoodMix, setAiMoodMix] = useState(() => loadCachedAiMoodMix(cacheOwnerId, displayTracks) || []);
 
+  const currentTrackId = currentTrack?.id || currentTrack?._id;
   const isTrackActive = useCallback((tr) => {
-    if (!currentTrack || !tr) return false;
-    const curId = currentTrack.id || currentTrack._id;
+    if (!currentTrackId || !tr) return false;
     const tId = tr.id || tr._id;
-    return Boolean(curId && tId && String(curId) === String(tId));
-  }, [currentTrack]);
+    return Boolean(tId && String(currentTrackId) === String(tId));
+  }, [currentTrackId]);
 
   // Sort tracks by global popularity with intelligent scoring and artist interleaving
   const popularTracks = useMemo(() => sortTracksByPopularity(displayTracks), [displayTracks]);
 
   const [fetchedAlbums, setFetchedAlbums] = useState(() => {
-    if (Array.isArray(albums) && albums.length > 0) return albums;
     try {
       const raw = localStorage.getItem('rivo_albums');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const valid = parsed.filter(a => {
+            const count = Number(a.trackCount || a.songsCount || (Array.isArray(a.tracks) ? a.tracks.length : (a.trackIds ? a.trackIds.length : 0)));
+            const type = (a.releaseType || '').toLowerCase();
+            return type !== 'single' && count > 1;
+          });
+          if (valid.length > 0) return valid;
+        }
       }
     } catch {}
-    return albums || [];
+    return (Array.isArray(albums) && albums.length > 0) ? albums : [];
   });
+
+  const prevAlbumsLenRef = useRef(0);
   useEffect(() => {
-    if (albums && albums.length > 0) setFetchedAlbums(albums);
-  }, [albums]);
+    if (albums && albums.length > 0) {
+      if (fetchedAlbums.length > 0 && albums.length === prevAlbumsLenRef.current) {
+        return;
+      }
+      prevAlbumsLenRef.current = albums.length;
+      const valid = albums.filter(a => {
+        const count = Number(a.trackCount || a.songsCount || (Array.isArray(a.tracks) ? a.tracks.length : (a.trackIds ? a.trackIds.length : 0)));
+        const type = (a.releaseType || '').toLowerCase();
+        return type !== 'single' && count > 1;
+      });
+      if (valid.length > 0) {
+        setFetchedAlbums(prev => {
+          if (prev && prev.length === valid.length && prev[0]?.id === valid[0]?.id) return prev;
+          return valid;
+        });
+      }
+    }
+  }, [albums, fetchedAlbums.length]);
 
   useEffect(() => {
-    if (fetchedAlbums && fetchedAlbums.length > 0) return;
     const controller = new AbortController();
     fetch(`${API_BASE_URL}/api/albums`, { signal: controller.signal })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        if (!controller.signal.aborted && d?.success && Array.isArray(d.albums) && d.albums.length > 0) {
-          setFetchedAlbums(d.albums);
-          try {
-            localStorage.setItem('rivo_albums', JSON.stringify(d.albums));
-          } catch {}
+        if (!controller.signal.aborted && d?.success && Array.isArray(d.albums)) {
+          const valid = d.albums.filter(a => {
+            const count = Number(a.trackCount || a.songsCount || (Array.isArray(a.tracks) ? a.tracks.length : (a.trackIds ? a.trackIds.length : 0)));
+            const type = (a.releaseType || '').toLowerCase();
+            return type !== 'single' && count > 1;
+          });
+          setFetchedAlbums(valid);
+          cacheAlbumsToStorage(valid);
         }
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [fetchedAlbums?.length]);
+  }, []);
 
   const currentMood = getCurrentTimeMood();
   const bucket12h = get12hBucket();
@@ -178,11 +240,23 @@ export default function HomeScreen({
     };
   }, [showMusic, displayTracks, cacheOwnerId, bucket12h, currentMood.id, currentMood.label, currentUser, isRTL]);
 
-  // Filter out Quran albums and apply 12-hour seeded rotation so Featured Albums order stays fresh
+  // Filter out singles & Quran albums and apply 12-hour seeded rotation so Featured Albums only contains real Albums and EPs
+  const hasFetchedAlbums = Boolean(fetchedAlbums && fetchedAlbums.length > 0);
   const displayAlbums = useMemo(() => {
-    const list = (fetchedAlbums && fetchedAlbums.length > 0) ? fetchedAlbums : (albums || []);
-    return rotateAlbumsForWindow(list, cacheOwnerId);
-  }, [fetchedAlbums, albums, bucket12h, cacheOwnerId]);
+    const list = hasFetchedAlbums ? fetchedAlbums : (albums || []);
+    if (!list || list.length === 0) return [];
+    const realAlbums = list.filter(a => {
+      if (!a) return false;
+      const type = (a.releaseType || '').toLowerCase();
+      if (type === 'single') return false;
+      const count = Number(a.trackCount || a.songsCount || (Array.isArray(a.tracks) ? a.tracks.length : (a.trackIds ? a.trackIds.length : 0)));
+      if (count <= 1) return false;
+      const name = (a.name || a.title || '').toLowerCase();
+      if (name.endsWith('- single') || name.endsWith('(single)')) return false;
+      return true;
+    });
+    return rotateAlbumsForWindow(realAlbums, cacheOwnerId);
+  }, [hasFetchedAlbums ? fetchedAlbums : albums, bucket12h, cacheOwnerId]);
 
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];

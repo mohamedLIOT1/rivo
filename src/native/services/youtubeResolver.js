@@ -747,23 +747,37 @@ export const resolveAudioStream = async (track, isVocalOnly = false, onVocalStat
 };
 
 export function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist = '') {
-  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
-  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
-  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t || !c) return 0;
-  if (c === t || (t.length >= 4 && c.includes(t))) return 1.0;
+  if (c === t) return 1.0;
 
   const tTokens = t.split(/\s+/).filter(w => w.length > 1);
   const cTokens = c.split(/\s+/).filter(w => w.length > 1);
-  if (tTokens.length === 0) return 0;
+  if (tTokens.length === 0 || cTokens.length === 0) return 0;
 
   let matched = 0;
   for (const tok of tTokens) {
     if (cTokens.includes(tok) || c.includes(tok)) matched++;
   }
-  let score = matched / tTokens.length;
+  const tokenRecall = matched / tTokens.length;
+  const tokenPrecision = matched / cTokens.length;
+  let score = 2 * (tokenRecall * tokenPrecision) / (tokenRecall + tokenPrecision || 1);
+
+  // Severe penalty for compilations, medleys, or full concerts when target is single track
+  const isMedleyOrCompilation = (
+    c.includes('كاملة') || c.includes('حفلة كاملة') || c.includes('ألبوم كامل') ||
+    c.includes('full album') || c.includes('medley') || c.includes('ميدلي') ||
+    c.includes('ساعتين') || c.includes('كوكتيل') || c.includes('تجميعة')
+  ) && !t.includes('كامل') && !t.includes('حفلة') && !t.includes('ميدلي') && !t.includes('album');
+
+  if (isMedleyOrCompilation) {
+    score = Math.max(0, score - 0.7);
+  }
+
   if (a && (c.includes(a) || cTokens.includes(a))) {
-    score = Math.min(1.0, score + 0.2);
+    score = Math.min(1.0, score + 0.15);
   }
   return score;
 }
@@ -897,8 +911,21 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {},
         if (normTitle && candTitle.includes(normTitle)) score += 40;
         if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
 
-        if (candChannel.includes('topic')) score += 90;
-        else if (candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
+        if (candChannel.includes('topic')) {
+          if (normArtist && (candChannel.includes(normArtist) || candTitle.includes(normArtist))) {
+            score += 90;
+          } else if (normArtist) {
+            score -= 150; // Topic channel of an unrelated artist!
+          } else {
+            score += 20;
+          }
+        } else if (candChannel.includes('official') || candChannel.includes('vevo')) {
+          if (normArtist && (candChannel.includes(normArtist) || candTitle.includes(normArtist))) {
+            score += 40;
+          } else {
+            score += 10;
+          }
+        }
 
         if (candTitle.includes('official audio') || candTitle.includes('audio')) score += 70;
         else if (candTitle.includes('official lyric') || candTitle.includes('lyrics')) score += 30;
@@ -906,10 +933,15 @@ export const searchYouTubeClientSide = async (queryOrOptions, maybeOptions = {},
 
         const isUnwantedModifier = !normTitle.includes('remix') && !normTitle.includes('ريمكس') &&
           (candTitle.includes('remix') || candTitle.includes('ريمكس') || candTitle.includes('slowed') || candTitle.includes('reverb') || candTitle.includes('cover') || candTitle.includes('كفر') || candTitle.includes('karaoke') || candTitle.includes('حفلة') || candTitle.includes('live') || candTitle.includes('concert'));
-        if (isUnwantedModifier) score -= 200;
+        if (isUnwantedModifier) score -= 250;
 
-        if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 100;
-        if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 100;
+        // Disqualify full concerts / compilations / medleys when searching a standard single
+        const isCompilation = /(?:كاملة|حفلة\s*كاملة|ألبوم\s*كامل|سهرة|تجميعة|ميدلي|medley|full\s*concert|full\s*live|full\s*album|greatest\s*hits)/i.test(candTitle);
+        if (!normTitle.includes('حفلة') && !normTitle.includes('live') && isCompilation) score -= 400;
+
+        if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 150;
+        if (durSec > 600 && (!targetDuration || targetDuration < 600)) score -= 500;
+        if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 600;
 
         return {
           videoId: vidId,

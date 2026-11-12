@@ -5,14 +5,16 @@
  */
 
 export const CANONICAL_ARTIST_MAP = {
-  // Lege-Cy and all Arabic/English variants
-  'lege cy': 'lege-cy',
+  // Lege-Cy
   'lege-cy': 'lege-cy',
+  'lege cy': 'lege-cy',
   'legecy': 'lege-cy',
   'legi c': 'lege-cy',
   'legi-c': 'lege-cy',
   'legic': 'lege-cy',
+  'ليجيسي': 'lege-cy',
   'ليجي': 'lege-cy',
+  'ليجسي': 'lege-cy',
   'ليجي سي': 'lege-cy',
   'ليجي-سي': 'lege-cy',
 
@@ -31,8 +33,16 @@ export const CANONICAL_ARTIST_MAP = {
   'marwan moussa': 'marwan moussa',
   'marwan mousa': 'marwan moussa',
   'مروان موسى': 'marwan moussa',
+  'مروان موسي': 'marwan moussa',
   'موسى سام': 'mousa sam',
   'mousa sam': 'mousa sam',
+
+  // El Joker
+  'el joker': 'el joker',
+  'eljoker': 'el joker',
+  'joker': 'el joker',
+  'الجوكر': 'el joker',
+  'جوكر': 'el joker',
 
   // Abyusif
   'abyusif': 'abyusif',
@@ -46,6 +56,8 @@ export const CANONICAL_ARTIST_MAP = {
 
   // Cairokee / Amir Eid
   'cairokee': 'cairokee',
+  'cairokeeofficial': 'cairokee',
+  'cairokee official': 'cairokee',
   'amir eid': 'cairokee',
   'amireid': 'cairokee',
   'امير عيد': 'cairokee',
@@ -56,126 +68,171 @@ export const CANONICAL_ARTIST_MAP = {
   'amr diab': 'amr diab',
   'عمرو دياب': 'amr diab',
   'الهضبة': 'amr diab',
+  'الهضبه': 'amr diab',
   'elhadaba': 'amr diab',
   'el hadaba': 'amr diab',
-
-  // Mohamed Hamaki
-  'hamaki': 'mohamed hamaki',
-  'mohamed hamaki': 'mohamed hamaki',
-  'محمد حماقي': 'mohamed hamaki',
-  'حماقي': 'mohamed hamaki',
 
   // Tamer Hosny
   'tamer hosny': 'tamer hosny',
   'tamer hosni': 'tamer hosny',
   'تامر حسني': 'tamer hosny',
+  'تامر حسنى': 'tamer hosny',
+
+  // Mohamed Hamaki
+  'mohamed hamaki': 'mohamed hamaki',
+  'hamaki': 'mohamed hamaki',
+  'محمد حماقي': 'mohamed hamaki',
+  'محمد حماقى': 'mohamed hamaki',
+  'حماقي': 'mohamed hamaki',
+  'حماقى': 'mohamed hamaki',
+
+  // Tamer Ashour
+  'tamer ashour': 'tamer ashour',
+  'ashour': 'tamer ashour',
+  'تامر عاشور': 'tamer ashour',
+  'عاشور': 'tamer ashour',
+
+  // Sherine
+  'sherine': 'sherine',
+  'sherine abdel wahab': 'sherine',
+  'شيرين': 'sherine',
+  'شرين': 'sherine',
+  'شيرين عبد الوهاب': 'sherine',
+  'شرين عبد الوهاب': 'sherine',
 
   // Essam Sasa
   'essam sasa': 'essam sasa',
+  'sasa': 'essam sasa',
   'عصام صاصا': 'essam sasa',
-  'ساسا': 'essam sasa',
+  'صاصا': 'essam sasa',
 
   // Muslim
   'muslim': 'muslim',
   'مسلم': 'muslim',
 
-  // Hamo Bika
-  'hamo bika': 'hamo bika',
-  'حمو بيكا': 'hamo bika',
-
-  // Hassan Shakosh
-  'hassan shakosh': 'hassan shakosh',
-  'حسن شاكوش': 'hassan shakosh',
+  // Tul8te
+  'tul8te': 'tul8te',
+  'toolete': 'tul8te',
+  'tulet': 'tul8te',
+  'تو ليت': 'tul8te',
+  'توليت': 'tul8te',
+  'توو ليت': 'tul8te',
 
   // Ahmed Saad
   'ahmed saad': 'ahmed saad',
-  'احمد سعد': 'ahmed saad',
   'أحمد سعد': 'ahmed saad',
+  'احمد سعد': 'ahmed saad',
 
-  // Sherine
-  'sherine': 'sherine',
-  'شيرين': 'sherine',
-  'شيرين عبد الوهاب': 'sherine',
-  'sherine abdel wahab': 'sherine',
+  // Ramy Sabry
+  'ramy sabry': 'ramy sabry',
+  'رامي صبري': 'ramy sabry',
+  'رامى صبرى': 'ramy sabry',
+
+  // Mahmoud El Esseily
+  'mahmoud el esseily': 'mahmoud el esseily',
+  'esseily': 'mahmoud el esseily',
+  'محمود العسيلي': 'mahmoud el esseily',
+  'محمود العسيلى': 'mahmoud el esseily',
 
   // Ziad Zaza
   'ziad zaza': 'ziad zaza',
+  'zaza': 'ziad zaza',
   'زياد ظاظا': 'ziad zaza',
   'ظاظا': 'ziad zaza',
 
-  // Flx
-  'flx': 'flx',
-  'flex': 'flx',
-  'فليكس': 'flx',
+  // DizzyTooSkinny
+  'dizzytooskinny': 'dizzytooskinny',
+  'dizzy': 'dizzytooskinny',
+  'ديزي': 'dizzytooskinny',
 
   // Karim Osama
   'karim osama': 'karim osama',
   'كريم اسامة': 'karim osama',
   'كريم اسامه': 'karim osama',
 
-  // Arsenic
-  'arsenic': 'arsenic',
-  'ارسينك': 'arsenic',
+  // Shahyn
+  'shahyn': 'shahyn',
+  'شاهين': 'shahyn',
 
-  // El Joker
-  'el joker': 'el joker',
-  'الجوكر': 'el joker',
-  'joker': 'el joker',
+  // Batistuta
+  'batistuta': 'batistuta',
+  'باتيستوتا': 'batistuta',
 
-  // Abo El Anwar
-  'abo el anwar': 'abo el anwar',
-  'ابو الانوار': 'abo el anwar',
-  'أبو الأنوار': 'abo el anwar',
+  // Arsenik
+  'arsenik': 'arsenik',
+  'ارسينيك': 'arsenik',
 
-  // Double Zuksh
-  'double zuksh': 'double zuksh',
-  'دبل زوكش': 'double zuksh',
+  // FL EX
+  'fl ex': 'fl ex',
+  'flex': 'fl ex',
+  'فليكس': 'fl ex',
 
-  // 3enba
-  '3enba': '3enba',
-  'enba': '3enba',
-  'enaba': '3enba',
-  'عنبة': '3enba',
-  'عنبه': '3enba',
+  // Shaabi
+  'hassan shakosh': 'hassan shakosh',
+  'حسن شاكوش': 'hassan shakosh',
+  'omar kamal': 'omar kamal',
+  'عمر كمال': 'omar kamal',
+  'hamo bika': 'hamo bika',
+  'حمو بيكا': 'hamo bika',
+  'enaba': 'enaba',
+  'عنبة': 'enaba',
+  'عنبه': 'enaba',
+  'houda bondok': 'houda bondok',
+  'حودة بندق': 'houda bondok',
+  'حوده بندق': 'houda bondok',
 
-  // Massar Egbari
-  'massar egbari': 'massar egbari',
-  'مسار اجباري': 'massar egbari',
-  'مسار إجباري': 'massar egbari',
+  // Arabic Icons
+  'angham': 'angham',
+  'أنغام': 'angham',
+  'انغام': 'angham',
+  'asala': 'asala',
+  'assala': 'asala',
+  'أصالة': 'asala',
+  'اصالة': 'asala',
+  'elissa': 'elissa',
+  'إليسا': 'elissa',
+  'اليسا': 'elissa',
+  'nancy ajram': 'nancy ajram',
+  'نانسي عجرم': 'nancy ajram',
+  'bahaa sultan': 'bahaa sultan',
+  'بهاء سلطان': 'bahaa sultan',
+  'wael jassar': 'wael jassar',
+  'وائل جسار': 'wael jassar',
 
-  // Sharmoofers
-  'sharmoofers': 'sharmoofers',
-  'شارموفرز': 'sharmoofers',
-
-  // Hamza Namira
-  'hamza namira': 'hamza namira',
-  'حمزة نمرة': 'hamza namira',
-  'حمزه نمره': 'hamza namira',
-
-  // Ahmed Santa
-  'santa': 'santa',
-  'ahmed santa': 'santa',
-  'احمد سانتا': 'santa',
-  'سانتا': 'santa',
-
-  // Wingii
-  'wingii': 'wingii',
-  'wingi': 'wingii',
-  'وينجي': 'wingii',
-  'ونجي': 'wingii',
+  // International Icons
+  'the weeknd': 'the weeknd',
+  'weeknd': 'the weeknd',
+  'ذا ويكند': 'the weeknd',
+  'ويكند': 'the weeknd',
+  'drake': 'drake',
+  'دريك': 'drake',
+  'travis scott': 'travis scott',
+  'ترافيس سكوت': 'travis scott',
+  'eminem': 'eminem',
+  'إمينيم': 'eminem',
+  'امينيم': 'eminem',
+  'taylor swift': 'taylor swift',
+  'تايلور سويفت': 'taylor swift',
+  'billie eilish': 'billie eilish',
+  'بيلي إيليش': 'billie eilish',
+  'بيلي ايليش': 'billie eilish',
+  'dua lipa': 'dua lipa',
+  'دوا ليبا': 'dua lipa',
+  'coldplay': 'coldplay',
+  'كولدبلاي': 'coldplay'
 };
 
 /**
- * Resolves a normalized artist string to its authentic canonical key
+ * Returns canonical artist name for any input variant or alias.
  */
-export function resolveCanonicalArtist(rawNorm) {
-  if (!rawNorm || typeof rawNorm !== 'string') return '';
-  const trimmed = rawNorm.trim();
+export function getCanonicalArtist(name) {
+  if (!name || typeof name !== 'string') return '';
+  const trimmed = name.trim().toLowerCase();
   if (CANONICAL_ARTIST_MAP[trimmed]) return CANONICAL_ARTIST_MAP[trimmed];
   for (const [alias, canonical] of Object.entries(CANONICAL_ARTIST_MAP)) {
-    if (trimmed.includes(alias) || alias.includes(trimmed)) {
-      return canonical;
-    }
+    if (trimmed.includes(alias) || alias.includes(trimmed)) return canonical;
   }
-  return trimmed;
+  return name.trim();
 }
+
+export const resolveCanonicalArtist = getCanonicalArtist;

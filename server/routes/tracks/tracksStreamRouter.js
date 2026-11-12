@@ -190,7 +190,10 @@ const handleTrackStream = async (req, res) => {
         : `/api/tracks/stream-proxy?url=${encodeURIComponent(resolvedPath)}${vidParam}&title=${encodeURIComponent(title || '')}&artist=${encodeURIComponent(artist || '')}`;
       const targetCover = req.query.cover || (vidCandidate ? `https://i.ytimg.com/vi/${vidCandidate}/hqdefault.jpg` : track?.cover || '');
       const finalDur = (streamUrl.duration && streamUrl.duration > 0) ? streamUrl.duration : (duration || track?.duration || 210);
-      if (track?._id && finalDur > 0 && Math.abs((track.duration || 0) - finalDur) > 3) {
+      const isOriginalSongShort = (track?.duration || 0) < 600;
+      const isResolvedConcertLong = finalDur > 600;
+      const isDangerousDurationOverwrite = isOriginalSongShort && isResolvedConcertLong && !track?.isPodcast && !track?.isQuran;
+      if (track?._id && finalDur > 0 && Math.abs((track.duration || 0) - finalDur) > 3 && !isDangerousDurationOverwrite) {
         Track.updateOne({ _id: track._id }, { $set: { duration: finalDur } }).catch(() => {});
       }
       const savedTrack = await autoPersistExternalTrack({

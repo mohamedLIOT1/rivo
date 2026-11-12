@@ -176,14 +176,19 @@ function normalizeString(str) {
     .trim();
 }
 
+const { getCanonicalArtistName } = require('./artistAlbumUtils');
+
 function resolveCanonicalArtist(rawNorm) {
   if (!rawNorm || typeof rawNorm !== 'string') return '';
   const trimmed = rawNorm.trim();
-  if (CANONICAL_ARTIST_MAP[trimmed]) return CANONICAL_ARTIST_MAP[trimmed];
-  for (const [alias, canonical] of Object.entries(CANONICAL_ARTIST_MAP)) {
-    if (trimmed.includes(alias) || alias.includes(trimmed)) {
-      return canonical;
-    }
+  // Exact lookup in local map first
+  if (CANONICAL_ARTIST_MAP[trimmed.toLowerCase()]) {
+    return CANONICAL_ARTIST_MAP[trimmed.toLowerCase()];
+  }
+  // Lookup via centralized canonical artist dictionary (exact alias match)
+  const canonical = getCanonicalArtistName(trimmed);
+  if (canonical && canonical.toLowerCase() !== trimmed.toLowerCase()) {
+    return canonical.toLowerCase();
   }
   return trimmed;
 }

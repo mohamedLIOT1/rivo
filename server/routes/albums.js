@@ -56,17 +56,37 @@ router.get('/', async (req, res) => {
     }
     const albums = await Album.find(filter).sort({ updatedAt: -1 }).lean();
     const formatted = albums.map(a => {
-      const trackCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const explicitCount = Number(a.trackCount || 0);
+      const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const trackCount = explicitCount > 0 ? explicitCount : arrCount;
+      const name = String(a.name || a.title || '').toLowerCase().trim();
+      let releaseType = a.releaseType;
+      if (!releaseType) {
+        if (name.endsWith('- single') || name.endsWith('(single)') || trackCount === 1) {
+          releaseType = 'single';
+        } else if (name.endsWith('- ep') || name.endsWith('(ep)') || (trackCount >= 2 && trackCount <= 6)) {
+          releaseType = 'ep';
+        } else {
+          releaseType = 'album';
+        }
+      }
       return {
         ...a,
         title: a.title || a.name || 'Untitled Album',
         name: a.name || a.title || 'Untitled Album',
+        releaseType,
         trackCount,
         songsCount: trackCount,
         tracks: a.tracks || []
       };
     });
-    cachedAlbumsJson = JSON.stringify({ success: true, albums: formatted });
+    const includeSingles = req.query.includeSingles === 'true' || Boolean(req.query.artist);
+    const finalAlbums = formatted.filter(a => {
+      if (!includeSingles && a.releaseType === 'single') return false;
+      if (!includeSingles && a.trackCount <= 1) return false;
+      return true;
+    });
+    cachedAlbumsJson = JSON.stringify({ success: true, albums: finalAlbums });
     cachedAlbumsTime = Date.now();
     cachedAlbumsEtag = `"${crypto.createHash('md5').update(cachedAlbumsJson).digest('hex')}"`;
 
@@ -246,6 +266,31 @@ router.get('/:id', async (req, res) => {
       if (tid) seenIds.add(tid);
       if (normTitle) seenTitles.add(normTitle);
       validTracks.push(t);
+    }
+
+    // Merge embedded official tracks from album.tracks if present
+    if (Array.isArray(album.tracks) && album.tracks.length > 0) {
+      for (const et of album.tracks) {
+        if (!et || !et.title) continue;
+        const normTitle = String(et.title).trim().toLowerCase().replace(/[/\\?%*:|"<>_()\-]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (normTitle && !seenTitles.has(normTitle)) {
+          seenTitles.add(normTitle);
+          const fullTrack = {
+            id: et.id || `track-${album._id}-${validTracks.length + 1}`,
+            _id: et.id || `track-${album._id}-${validTracks.length + 1}`,
+            title: et.title,
+            artist: et.artist || album.artist,
+            album: album.name || album.title,
+            cover: et.cover || album.cover,
+            duration: Number(et.duration) || 180,
+            trackNumber: et.trackNumber || (validTracks.length + 1),
+            genre: album.genre || 'Arabic',
+            source: 'official_album_tracklist',
+            isSystem: true
+          };
+          validTracks.push(fullTrack);
+        }
+      }
     }
 
     if (bogusTrackIds.length > 0) {

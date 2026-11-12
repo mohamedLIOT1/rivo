@@ -48,6 +48,8 @@ module.exports = {
   autoFixAlbumCovers: artistAlbumUtils.autoFixAlbumCovers,
   CANONICAL_ARTIST_MAP: artistAlbumUtils.CANONICAL_ARTIST_MAP,
   normalizeArtistName: artistAlbumUtils.normalizeArtistName,
+  splitArtistNames: artistAlbumUtils.splitArtistNames,
+  getPrimaryArtist: artistAlbumUtils.getPrimaryArtist,
   getCanonicalArtistName: artistAlbumUtils.getCanonicalArtistName,
   getArtistAliases: artistAlbumUtils.getArtistAliases,
   isValidAlbumName: artistAlbumUtils.isValidAlbumName,

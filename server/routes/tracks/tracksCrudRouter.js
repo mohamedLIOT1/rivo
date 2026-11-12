@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const rateLimit = require('express-rate-limit');
-const { Track, Album, User, SongLyrics } = require('../../models');
+const { Track, Album, User, SongLyrics, Artist } = require('../../models');
 const { auth, adminAuth, isAdminUser } = require('../../middleware/auth');
 const { upload, uploadsDir, verifyUploadedAudioMagicBytes } = require('../../middleware/upload');
 const { safeResolveUpload } = require('../../utils/security');
@@ -15,7 +15,8 @@ const {
   syncTrackToAlbum,
   autoAddTrackToUserLinksPlaylist,
   getTrackKey,
-  invalidateAudioCache
+  invalidateAudioCache,
+  splitArtistNames
 } = require('../../utils/helpers');
 const { invalidateTracksCache } = require('./tracksCache');
 const { performTrackDeduplication } = require('./tracksDedupeHelper');
@@ -377,14 +378,80 @@ router.post('/:id/like', auth, async (req, res) => {
   }
 });
 
-// Deduplicate tracks
+// Deduplicate tracks & Perform catalog cleanup
 router.post('/deduplicate', adminAuth, async (req, res) => {
   try {
     const result = await performTrackDeduplication();
+    let repairedDurations = 0;
+    let purgedArtists = 0;
+
+    // 1. Repair Cairokee key tracks (El Khat Dah Khatty & Ethbat Makanak)
+    const elKhatMatches = await Track.find({
+      $or: [{ title: /الخط ده خطي/i }, { title: /الخط دة خطى/i }, { title: /el khat/i }]
+    });
+    for (const t of elKhatMatches) {
+      t.duration = 309;
+      t.audioUrl = 'https://www.youtube.com/watch?v=qAq_b3cwBwk';
+      t.youtubeId = 'qAq_b3cwBwk';
+      await t.save();
+      repairedDurations++;
+    }
+
+    const ethbatMatches = await Track.find({
+      $or: [{ title: /اثبت مكانك/i }, { title: /ethbat makanak/i }]
+    });
+    for (const t of ethbatMatches) {
+      if (t.duration > 480 || (t.audioUrl && (t.audioUrl.includes('G2nwqlL1nyo') || t.duration > 600))) {
+        const isNayer = /nayer/i.test(t.title) || /ناير/i.test(t.title);
+        t.duration = isNayer ? 353 : 284;
+        t.youtubeId = isNayer ? '0hhXwSen-Vw' : 'fmFVtO5aI80';
+        t.audioUrl = `https://www.youtube.com/watch?v=${t.youtubeId}`;
+        await t.save();
+        repairedDurations++;
+      }
+    }
+
+    // 2. Scan and reset inflated durations on single songs (> 480s / 8 min)
+    const inflatedTracks = await Track.find({
+      duration: { $gt: 480 },
+      isPodcast: { $ne: true },
+      isQuran: { $ne: true },
+      contentType: { $nin: ['podcast', 'quran'] },
+      genre: { $nin: ['podcast', 'quran', 'quran-radio', 'Islamic'] }
+    });
+    for (const t of inflatedTracks) {
+      const combined = `${t.title} ${t.artist} ${t.album}`.toLowerCase();
+      const isActuallyLong = /(?:podcast|بودكاست|حلقة|سورة|مصحف|تلاوة|كوكتيل|ساعتين|حفلة|concert|live|dj|set|mix)/i.test(combined);
+      if (!isActuallyLong) {
+        t.duration = 210;
+        t.audioUrl = '';
+        await t.save();
+        repairedDurations++;
+      }
+    }
+
+    // 3. Purge fake collaboration artist profiles
+    const allArtistsInDb = await Artist.find().lean();
+    const fakeArtistIds = [];
+    for (const a of allArtistsInDb) {
+      if (!a.name) continue;
+      if (splitArtistNames(a.name).length > 1 || a.name.includes(',') || a.name.includes('،')) {
+        fakeArtistIds.push(a._id);
+      }
+    }
+    if (fakeArtistIds.length > 0) {
+      const artDelRes = await Artist.deleteMany({ _id: { $in: fakeArtistIds } });
+      purgedArtists = artDelRes.deletedCount;
+    }
+
+    invalidateTracksCache();
+
     res.json({
       success: true,
-      message: `Deduplication complete: Purged ${result.removedCount} duplicate tracks across ${result.groupsCount} duplicate groups. ${result.remainingCount} canonical tracks in catalog.`,
-      ...result
+      message: `Deduplication complete: Purged ${result.removedCount} duplicate tracks, fixed ${repairedDurations} track durations, and purged ${purgedArtists} fake collaboration artist profiles.`,
+      ...result,
+      repairedDurations,
+      purgedArtists
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -9,6 +9,18 @@ const AlbumSchema = new mongoose.Schema({
   trackIds: [{ type: String }],
   releaseDate: { type: String },
   genre: { type: String },
+  releaseType: { type: String, enum: ['album', 'ep', 'single'], default: 'album', index: true },
+  trackCount: { type: Number, default: 0 },
+  tracks: [{
+    id: String,
+    title: String,
+    artist: String,
+    album: String,
+    cover: String,
+    duration: Number,
+    trackNumber: Number,
+    streamUrl: String
+  }],
   isAlbum: { type: Boolean, default: true },
   isSystem: { type: Boolean, default: true },
   isPublic: { type: Boolean, default: true },

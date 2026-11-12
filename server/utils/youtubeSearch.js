@@ -47,11 +47,11 @@ function markYouTubeApiKeyExceeded(key, hours = 4) {
 }
 
 function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist = '') {
-  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
-  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
-  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_]/g, ' ').trim();
+  const t = String(targetTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+  const c = String(candTitle || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
+  const a = String(targetArtist || '').toLowerCase().replace(/[/\\?%*:|"<>_()\-–—]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t || !c) return 0;
-  if (c === t || (t.length >= 4 && c.includes(t))) return 1.0;
+  if (c === t) return 1.0;
 
   const tTokens = t.split(/\s+/).filter(w => w.length > 1);
   const cTokens = c.split(/\s+/).filter(w => w.length > 1);
@@ -61,11 +61,23 @@ function calculateTitleSimilarity(targetTitle = '', candTitle = '', targetArtist
   for (const tok of tTokens) {
     if (cTokens.includes(tok) || c.includes(tok)) matched++;
   }
-  let score = matched / tTokens.length;
-  if (a && (c.includes(a) || cTokens.includes(a))) {
-    score = Math.min(1.0, score + 0.2);
+  const tokenRecall = matched / tTokens.length;
+  // Dice coefficient to penalize candidate titles with bloated compilations / extra songs
+  const dice = (2 * matched) / (tTokens.length + Math.min(cTokens.length, tTokens.length * 2.5));
+  let score = (tokenRecall * 0.6) + (dice * 0.4);
+
+  if (c.includes(t)) {
+    if (cTokens.length <= tTokens.length + 3) {
+      score = Math.max(score, 0.95);
+    } else {
+      score = Math.max(score, 0.7);
+    }
   }
-  return score;
+
+  if (a && (c.includes(a) || cTokens.includes(a))) {
+    score = Math.min(1.0, score + 0.15);
+  }
+  return Math.min(1.0, score);
 }
 
 const ytSearchCache = new Map();
@@ -93,6 +105,8 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     query = queryOrOptions.trim();
     if (typeof maybeOptions === 'number') {
       targetDuration = maybeOptions;
+    } else if (typeof maybeOptions === 'string') {
+      artist = maybeOptions.trim();
     } else if (maybeOptions && typeof maybeOptions === 'object') {
       targetDuration = Number(maybeOptions.targetDuration || maybeOptions.duration) || null;
       artist = maybeOptions.artist || '';
@@ -200,8 +214,21 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
           if (normTitle && candTitle.includes(normTitle)) score += 40;
           if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
 
-          if (candChannel.includes('topic')) score += 90;
-          else if (candChannel.includes('official') || candChannel.includes('vevo')) score += 30;
+          if (candChannel.includes('topic')) {
+            if (normArtist && (candChannel.includes(normArtist) || candTitle.includes(normArtist))) {
+              score += 90;
+            } else if (normArtist) {
+              score -= 150; // Topic channel belonging to a completely different artist!
+            } else {
+              score += 20;
+            }
+          } else if (candChannel.includes('official') || candChannel.includes('vevo')) {
+            if (normArtist && (candChannel.includes(normArtist) || candTitle.includes(normArtist))) {
+              score += 40;
+            } else {
+              score += 10;
+            }
+          }
 
           if (candTitle.includes('official audio') || candTitle.includes('audio')) score += 70;
           else if (candTitle.includes('official lyric') || candTitle.includes('lyrics')) score += 30;
@@ -209,10 +236,17 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
 
           const isUnwantedModifier = !normTitle.includes('remix') && !normTitle.includes('ريمكس') &&
             (candTitle.includes('remix') || candTitle.includes('ريمكس') || candTitle.includes('slowed') || candTitle.includes('reverb') || candTitle.includes('cover') || candTitle.includes('كفر') || candTitle.includes('karaoke') || candTitle.includes('حفلة') || candTitle.includes('live') || candTitle.includes('concert'));
-          if (isUnwantedModifier) score -= 200;
+          if (isUnwantedModifier) score -= 250;
 
-          if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 100;
-          if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 100;
+          // Multi-song compilations / medleys
+          const isCompilation = /(?:كاملة|حفلة\s*كاملة|ألبوم\s*كامل|سهرة|تجميعة|ميدلي|medley|full\s*concert|full\s*live|full\s*album|greatest\s*hits)/i.test(candTitle);
+          if (!normTitle.includes('حفلة') && !normTitle.includes('live') && isCompilation) score -= 400;
+
+          if (!normTitle.includes('mix') && (candTitle.includes('mix') || candTitle.includes('full album') || candTitle.includes('playlist'))) score -= 150;
+          
+          // Strict protection against concerts/long videos matching single songs:
+          if (durSec > 600 && (!targetDuration || targetDuration < 600)) score -= 500;
+          if (durSec > 900 && (!targetDuration || targetDuration < 900)) score -= 600;
 
           // Calculate match confidence (0.0 to 1.0)
           let confidence = similarity * 0.6;
@@ -239,12 +273,14 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
         // Duration & title filter:
         scoredCandidates = scoredCandidates.filter(c => {
           if (excludeVideoIds.includes(c.videoId)) return false;
+          // Reject videos over 10 minutes when looking for a normal single song
+          if ((!targetDuration || targetDuration < 600) && c.duration && c.duration > 660) return false;
           if (targetDuration && c.durationDiff !== null) {
-            if (c.similarity >= 0.35 && c.durationDiff <= 90) return true;
-            if (c.durationDiff > 35) return false;
+            if (c.similarity >= 0.35 && c.durationDiff <= 60) return true;
+            if (c.durationDiff > 45) return false;
             if (c.durationDiff > 15 && c.similarity < 0.4) return false;
           }
-          if (cleanTit && c.similarity < 0.2) return false;
+          if (cleanTit && c.similarity < 0.25) return false;
           return true;
         });
 
@@ -316,21 +352,27 @@ async function searchYouTubeId(queryOrOptions, maybeOptions = {}) {
     }
   }
 
-  // 3. Fallback: Scraping results
+  // 3. Fallback: Scraping results with strict title verification
   try {
     const res = await axios.get(`https://www.youtube.com/results?search_query=${encodeURIComponent(finalQuery)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9'
       },
-      timeout: 3000
+      timeout: 3500
     });
-    const matches = [...res.data.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]);
-    const valid = matches.filter(id => id && id.length === 11);
-    if (valid[0]) {
-      if (ytSearchCache.size > 5000) ytSearchCache.clear();
-      ytSearchCache.set(cacheKey, valid[0]);
-      return valid[0];
+    // Extract videoId and title pairings from videoRenderer JSON blocks in the HTML
+    const videoBlocks = [...res.data.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]+?"title":\{"runs":\[\{"text":"([^"]+)"/g)];
+    for (const vb of videoBlocks) {
+      const vid = vb[1];
+      const tit = vb[2];
+      if (excludeVideoIds.includes(vid)) continue;
+      const sim = calculateTitleSimilarity(cleanTit, tit, cleanArt);
+      if (sim >= 0.35) {
+        if (ytSearchCache.size > 5000) ytSearchCache.clear();
+        ytSearchCache.set(cacheKey, vid);
+        return vid;
+      }
     }
   } catch (err) {}
 

@@ -17,6 +17,7 @@ export {
   getStoredFollowedArtists,
   serializeQueueForStorage,
   loadPersistedQueueState,
+  getTrackDedupeKey,
 };
 
 let queueUidSeq = 1;

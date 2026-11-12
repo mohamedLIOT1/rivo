@@ -78,48 +78,68 @@ const CANONICAL_ARTIST_MAP = [
     canonical: 'Cairokee',
     aliases: [
       'cairokee', 'cairokeeoffical', 'cairokeeofficial', 'cairokee official',
-      'amir eid', 'amireid', 'أمير عيد', 'كايروكي'
+      'amir eid', 'amireid', 'أمير عيد', 'كايروكي', 'cairokee كايروكي', 'كايروكي cairokee'
     ]
   },
   {
     canonical: 'Mohamed Hamaki',
-    aliases: ['hamaki', 'mohamed hamaki', 'محمد حماقي', 'حماقي']
+    aliases: ['hamaki', 'mohamed hamaki', 'محمد حماقي', 'حماقي', 'mohamed hamaki محمد حماقي', 'محمد حماقي mohamed hamaki']
   },
   {
     canonical: 'Amr Diab',
-    aliases: ['amr diab', 'عمرو دياب', 'elhadaba', 'el hadaba']
+    aliases: ['amr diab', 'عمرو دياب', 'elhadaba', 'el hadaba', 'الهضبة', 'amr diab عمرو دياب', 'عمرو دياب amr diab']
   },
   {
     canonical: 'Tamer Hosny',
-    aliases: ['tamer hosny', 'tamer hosni', 'تامر حسني']
+    aliases: ['tamer hosny', 'tamer hosni', 'تامر حسني', 'tamer hosny تامر حسني', 'تامر حسني تامر حسني']
   },
   {
     canonical: 'Marwan Pablo',
-    aliases: ['marwan pablo', 'pablo', 'مروان بابلو', 'بابلو']
+    aliases: ['marwan pablo', 'pablo', 'مروان بابلو', 'بابلو', 'marwan pablo مروان بابلو', 'مروان بابلو marwan pablo']
   },
   {
     canonical: 'Wegz',
-    aliases: ['wegz', 'ويجز']
+    aliases: ['wegz', 'ويجز', 'wegzz', 'ويجز wegz', 'wegz ويجز']
   },
   {
     canonical: 'Lege-Cy',
-    aliases: ['lege-cy', 'lege cy', 'legecy', 'ليجي سي', 'ليجي-سي']
+    aliases: ['lege-cy', 'lege cy', 'legecy', 'legi c', 'legi-c', 'legic', 'ليجيسي', 'ليجي', 'ليجسي', 'ليجي سي', 'ليجي-سي', 'lege-cy ليجيسي', 'ليجيسي lege-cy']
+  },
+  {
+    canonical: 'El Joker',
+    aliases: ['el joker', 'eljoker', 'joker', 'الجوكر', 'جوكر', 'el joker الجوكر']
+  },
+  {
+    canonical: 'Tul8te',
+    aliases: ['tul8te', 'toolete', 'tulet', 'تو ليت', 'توليت', 'توو ليت', 'tul8te توليت', 'توليت tul8te']
+  },
+  {
+    canonical: 'Essam Sasa',
+    aliases: ['essam sasa', 'sasa', 'عصام صاصا', 'صاصا', 'عصام صاصا essam sasa']
+  },
+  {
+    canonical: 'Muslim',
+    aliases: ['muslim', 'مسلم', 'مسلم muslim']
+  },
+  {
+    canonical: 'Tamer Ashour',
+    aliases: ['tamer ashour', 'ashour', 'تامر عاشور', 'عاشور', 'تامر عاشور tamer ashour']
   },
   {
     canonical: 'Abyusif',
-    aliases: ['abyusif', 'أبيوسف', 'ابيوسف']
+    aliases: ['abyusif', 'أبيوسف', 'ابيوسف', 'abyusif أبيوسف']
   },
   {
     canonical: 'Marwan Moussa',
-    aliases: ['marwan moussa', 'marwan mousa', 'مروان موسى']
+    aliases: ['marwan moussa', 'marwan mousa', 'مروان موسى', 'مروان موسى marwan moussa']
   },
   {
     canonical: 'Afroto',
-    aliases: ['afroto', 'عفروتو']
+    aliases: ['afroto', 'عفروتو', 'afroto عفروتو']
   },
   {
     canonical: 'Sharmoofers',
-    aliases: ['sharmoofers', 'شارموفرز']
+    aliases: ['sharmoofers', 'شارموفرز', 'شارموفرز sharmoofers']
   },
   {
     canonical: 'Massar Egbari',
@@ -127,7 +147,7 @@ const CANONICAL_ARTIST_MAP = [
   },
   {
     canonical: 'Ahmed Saad',
-    aliases: ['ahmed saad', 'أحمد سعد', 'احمد سعد']
+    aliases: ['ahmed saad', 'أحمد سعد', 'احمد سعد', 'ahmed saad أحمد سعد']
   },
   {
     canonical: 'Bahaa Sultan',
@@ -136,6 +156,74 @@ const CANONICAL_ARTIST_MAP = [
   {
     canonical: 'Sherine',
     aliases: ['sherine', 'sherine abdel-wahab', 'sherine abdel wahab', 'شيرين', 'شيرين عبد الوهاب']
+  },
+  {
+    canonical: 'Ziad Zaza',
+    aliases: ['ziad zaza', 'زياد ظاظا', 'ظاظا']
+  },
+  {
+    canonical: 'FLX',
+    aliases: ['flx', 'flex', 'فليكس']
+  },
+  {
+    canonical: 'Karim Osama',
+    aliases: ['karim osama', 'كريم اسامة', 'كريم اسامه']
+  },
+  {
+    canonical: 'Arsenic',
+    aliases: ['arsenic', 'ارسينك', 'أرسينك']
+  },
+  {
+    canonical: 'Abo El Anwar',
+    aliases: ['abo el anwar', 'ابو الانوار', 'أبو الأنوار']
+  },
+  {
+    canonical: 'Double Zuksh',
+    aliases: ['double zuksh', 'دبل زوكش']
+  },
+  {
+    canonical: '3enba',
+    aliases: ['3enba', 'enba', 'enaba', 'عنبة', 'عنبه']
+  },
+  {
+    canonical: 'Hamza Namira',
+    aliases: ['hamza namira', 'حمزة نمرة', 'حمزه نمره']
+  },
+  {
+    canonical: 'Santa',
+    aliases: ['santa', 'ahmed santa', 'احمد سانتا', 'سانتا']
+  },
+  {
+    canonical: 'Wingii',
+    aliases: ['wingii', 'wingi', 'وينجي', 'ونجي']
+  },
+  {
+    canonical: 'Hamo Bika',
+    aliases: ['hamo bika', 'حمو بيكا']
+  },
+  {
+    canonical: 'Hassan Shakosh',
+    aliases: ['hassan shakosh', 'حسن شاكوش']
+  },
+  {
+    canonical: 'Angham',
+    aliases: ['angham', 'أنغام', 'انغام']
+  },
+  {
+    canonical: 'Asala',
+    aliases: ['asala', 'assala', 'أصالة', 'اصالة']
+  },
+  {
+    canonical: 'Elissa',
+    aliases: ['elissa', 'إليسا', 'اليسا']
+  },
+  {
+    canonical: 'Nancy Ajram',
+    aliases: ['nancy ajram', 'نانسي عجرم']
+  },
+  {
+    canonical: 'Wael Jassar',
+    aliases: ['wael jassar', 'وائل جسار']
   }
 ];
 
@@ -149,7 +237,39 @@ function normalizeArtistName(raw) {
   return clean;
 }
 
-function getCanonicalArtistName(rawName) {
+function splitArtistNames(raw) {
+  if (!raw || typeof raw !== 'string') return [];
+  const rawStr = String(raw).trim();
+
+  // If string contains both Arabic & Latin without delimiters, check if it's the same bilingual artist (e.g. "ويجز Wegz")
+  const hasArabic = /[\u0600-\u06FF]/.test(rawStr);
+  const hasLatin = /[a-zA-Z]/.test(rawStr);
+  const hasDelim = /(?:\s*[,،;&+/]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i.test(rawStr);
+  if (hasArabic && hasLatin && !hasDelim) {
+    const arabicPart = rawStr.replace(/[^\u0600-\u06FF\s]/g, '').trim().toLowerCase();
+    const latinPart = rawStr.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().toLowerCase();
+    let arabicMatch = null;
+    let latinMatch = null;
+    for (const group of CANONICAL_ARTIST_MAP) {
+      if (arabicPart && group.aliases.includes(arabicPart)) arabicMatch = group.canonical;
+      if (latinPart && group.aliases.includes(latinPart)) latinMatch = group.canonical;
+    }
+    if (arabicMatch && latinMatch && arabicMatch === latinMatch) {
+      return [arabicMatch];
+    }
+    if (arabicMatch && !latinMatch) return [arabicMatch];
+    if (latinMatch && !arabicMatch) return [latinMatch];
+  }
+
+  // Split on comma, Arabic comma, &, +, /, ft., feat., featuring, with, مع, x, and Arabic 'و'
+  const parts = rawStr
+    .split(/(?:\s*[,،;&+/]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i)
+    .map(p => normalizeArtistName(p).trim())
+    .filter(p => p.length > 0);
+  return parts.length > 0 ? parts : [normalizeArtistName(raw).trim()];
+}
+
+function getDirectCanonicalArtist(rawName) {
   if (!rawName || typeof rawName !== 'string') return '';
   const trimmed = rawName.trim();
   const lower = trimmed.toLowerCase();
@@ -159,6 +279,53 @@ function getCanonicalArtistName(rawName) {
     if (group.aliases.includes(lower) || group.aliases.includes(normalized)) {
       return group.canonical;
     }
+  }
+
+  // Bilingual extraction (e.g. "ويجز Wegz" -> "Wegz")
+  const hasArabic = /[\u0600-\u06FF]/.test(trimmed);
+  const hasLatin = /[a-zA-Z]/.test(trimmed);
+  if (hasArabic && hasLatin) {
+    const arabicPart = trimmed.replace(/[^\u0600-\u06FF\s]/g, '').trim().toLowerCase();
+    const latinPart = trimmed.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().toLowerCase();
+    for (const group of CANONICAL_ARTIST_MAP) {
+      if ((arabicPart && group.aliases.includes(arabicPart)) || (latinPart && group.aliases.includes(latinPart))) {
+        return group.canonical;
+      }
+    }
+  }
+
+  return '';
+}
+
+function getPrimaryArtist(raw) {
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  const direct = getDirectCanonicalArtist(trimmed);
+  if (direct) return direct;
+
+  const parts = splitArtistNames(trimmed);
+  if (parts.length > 1) {
+    // If one of the parts matches a canonical artist, prioritize that canonical artist
+    for (const part of parts) {
+      const can = getDirectCanonicalArtist(part);
+      if (can) return can;
+    }
+    return parts[0];
+  }
+  return trimmed;
+}
+
+function getCanonicalArtistName(rawName) {
+  if (!rawName || typeof rawName !== 'string') return '';
+  const trimmed = rawName.trim();
+  const direct = getDirectCanonicalArtist(trimmed);
+  if (direct) return direct;
+
+  // Handle multi-artist collaborations (e.g. "Cairokee, Sary Hany" -> "Cairokee")
+  const primary = getPrimaryArtist(trimmed);
+  if (primary && primary !== trimmed) {
+    const primaryCanonical = getDirectCanonicalArtist(primary);
+    return primaryCanonical || primary;
   }
 
   const clean = normalizeArtistName(trimmed);
@@ -222,6 +389,8 @@ module.exports = {
   autoFixAlbumCovers,
   CANONICAL_ARTIST_MAP,
   normalizeArtistName,
+  splitArtistNames,
+  getPrimaryArtist,
   getCanonicalArtistName,
   getArtistAliases,
   isValidAlbumName,

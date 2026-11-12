@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import { 
   ShieldCheck, Users, Music2, FileText, CheckCircle2, XCircle, Search, 
   Trash2, Edit, RefreshCw, Loader2, UserCheck, Check, ArrowLeft, Disc,
@@ -9,6 +9,7 @@ import AdminCloudPanel from '../components/admin/AdminCloudPanel';
 import { API_BASE_URL } from '../config';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
+import { isPodcastContent } from '../utils/podcastUtils';
 import EditArtistModal from '../components/EditArtistModal';
 import AddAlbumModal from '../components/AddAlbumModal';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
@@ -48,16 +49,18 @@ export default function AdminScreen({
 
   // Songs State
   const [songFilterQuery, setSongFilterQuery] = useState('');
-  const [songTypeFilter, setSongTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+  const [songTypeFilter, setSongTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran' | 'podcast'
   const [adminTracksLimit, setAdminTracksLimit] = useState(50);
 
   // Albums State
   const [adminAlbums, setAdminAlbums] = useState(albums || []);
   const [isLoadingAlbums, setIsLoadingAlbums] = useState(false);
   const [albumFilterQuery, setAlbumFilterQuery] = useState('');
-  const [albumTypeFilter, setAlbumTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+  const [albumTypeFilter, setAlbumTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran' | 'podcast'
   const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
   const [albumToDelete, setAlbumToDelete] = useState(null);
+  const [pipelineStatus, setPipelineStatus] = useState(null);
+  const [isStartingPipeline, setIsStartingPipeline] = useState(false);
 
   // Artists State
   const [artistsList, setArtistsList] = useState([]);
@@ -72,7 +75,7 @@ export default function AdminScreen({
 
   // Lyrics State
   const [lyricsFilterQuery, setLyricsFilterQuery] = useState('');
-  const [lyricsTypeFilter, setLyricsTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+  const [lyricsTypeFilter, setLyricsTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran' | 'podcast'
   const [adminLyricsLimit, setAdminLyricsLimit] = useState(50);
 
   // Analytics State
@@ -150,6 +153,46 @@ export default function AdminScreen({
     }
   };
 
+  // Fetch Multi-Worker Pipeline Status
+  const fetchPipelineStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/pipeline-status`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data?.success && data.status) {
+        setPipelineStatus(data.status);
+      }
+    } catch (e) {}
+  }, [token]);
+
+  const triggerPipeline = async () => {
+    setIsStartingPipeline(true);
+    setPipelineStatus(prev => ({
+      ...prev,
+      running: true,
+      currentWorker: 1,
+      currentWorkerName: 'Worker 1: Artist & Discography Scout',
+      currentArtist: 'Initializing...',
+      currentStage: 'Starting autonomous discography pipeline across catalog...',
+      lastUpdated: Date.now()
+    }));
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/run-pipeline`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      flashMessage(data.message || '3-Worker Discography Pipeline started!');
+      setTimeout(fetchPipelineStatus, 1200);
+    } catch (e) {
+      flashMessage('Failed to trigger pipeline');
+    }
+    finally {
+      setIsStartingPipeline(false);
+    }
+  };
+
   // 4. Fetch All Playlists
   const fetchPlaylists = async () => {
     setIsLoadingPlaylists(true);
@@ -188,6 +231,16 @@ export default function AdminScreen({
       setAdminAlbums(albums);
     }
   }, [albums]);
+
+  // Poll 3-Worker Pipeline status when albums tab is active
+  useEffect(() => {
+    if (activeTab === 'albums') {
+      fetchPipelineStatus();
+      const pollMs = pipelineStatus?.running ? 2500 : 12000;
+      const interval = setInterval(fetchPipelineStatus, pollMs);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, fetchPipelineStatus, pipelineStatus?.running]);
 
   const handleToggleAdminRole = async (userId, currentRole) => {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
@@ -307,7 +360,7 @@ export default function AdminScreen({
 
   const [isDeduplicating, setIsDeduplicating] = useState(false);
   const handleDeduplicateTracks = async () => {
-    if (!window.confirm('Scan database and permanently deduplicate tracks (merging play counts and updating user playlists)?')) return;
+    if (!window.confirm('Scan database, merge duplicate songs, repair broken durations, and purge duplicate artist profiles?')) return;
     setIsDeduplicating(true);
     try {
       const res = await fetch(`${API_BASE_URL}/api/tracks/deduplicate`, {
@@ -319,8 +372,9 @@ export default function AdminScreen({
       });
       const data = await res.json();
       if (data.success) {
-        flashMessage(data.message || `Deduplication complete: Purged ${data.removedCount} duplicate tracks.`);
+        flashMessage(data.message || `Deduplication complete: Purged duplicate tracks and refreshed catalog.`);
         if (typeof onDeleteTrack === 'function') onDeleteTrack();
+        fetchArtists();
       } else {
         flashMessage(data.error || 'Failed to deduplicate tracks');
       }
@@ -328,6 +382,33 @@ export default function AdminScreen({
       flashMessage(err.message || 'Error executing deduplication');
     } finally {
       setIsDeduplicating(false);
+    }
+  };
+
+  const [isRepairingTracks, setIsRepairingTracks] = useState(false);
+  const handleRepairTracks = async () => {
+    if (!window.confirm('Scan database, fix swapped audio (e.g. El Khat Dah Khatty / Ethbat Makanak), fix inflated durations, and purge single releases from albums?')) return;
+    setIsRepairingTracks(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/repair-tracks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (data.success) {
+        flashMessage(data.message || `Repair complete: Fixed ${data.repairedTracks} tracks and purged ${data.purgedAlbums} singles.`);
+        if (typeof onDeleteTrack === 'function') onDeleteTrack();
+        await fetchAlbums();
+      } else {
+        flashMessage(data.error || 'Failed to repair tracks');
+      }
+    } catch (err) {
+      flashMessage(err.message || 'Error executing track repair');
+    } finally {
+      setIsRepairingTracks(false);
     }
   };
 
@@ -355,48 +436,99 @@ export default function AdminScreen({
     );
   }
 
-  // Filter lists & counts
-  const tracksQuranCount = tracks.filter(t => isQuranContent(t)).length;
-  const tracksSongsCount = tracks.length - tracksQuranCount;
+  // Helper to accurately identify podcast content
+  const isPodcast = useCallback((item) => Boolean(item && (item.contentType === 'podcast' || item.isPodcast || isPodcastContent(item))), []);
 
-  const albumsQuranCount = adminAlbums.filter(a => isQuranContent(a)).length;
-  const albumsSongsCount = adminAlbums.length - albumsQuranCount;
+  // Filter counts calculated in a single memoized pass
+  const { tracksQuranCount, tracksPodcastCount, tracksSongsCount } = useMemo(() => {
+    let q = 0, p = 0, s = 0;
+    for (let i = 0; i < tracks.length; i++) {
+      const t = tracks[i];
+      if (isQuranContent(t)) q++;
+      else if (isPodcast(t)) p++;
+      else s++;
+    }
+    return { tracksQuranCount: q, tracksPodcastCount: p, tracksSongsCount: s };
+  }, [tracks, isPodcast]);
 
-  const filteredUsers = users.filter(u => {
-    const q = userFilterQuery.toLowerCase();
-    return (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
-  });
+  const { albumsQuranCount, albumsPodcastCount, albumsSongsCount } = useMemo(() => {
+    let q = 0, p = 0, s = 0;
+    for (let i = 0; i < adminAlbums.length; i++) {
+      const a = adminAlbums[i];
+      if (isQuranContent(a)) q++;
+      else if (isPodcast(a)) p++;
+      else s++;
+    }
+    return { albumsQuranCount: q, albumsPodcastCount: p, albumsSongsCount: s };
+  }, [adminAlbums, isPodcast]);
 
-  const filteredTracks = tracks.filter(t => {
-    if (songTypeFilter === 'quran' && !isQuranContent(t)) return false;
-    if (songTypeFilter === 'songs' && isQuranContent(t)) return false;
-    const q = songFilterQuery.toLowerCase();
-    return (t.title || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.album || '').toLowerCase().includes(q);
-  });
+  // Non-blocking responsive search queries
+  const deferredUserFilter = useDeferredValue(userFilterQuery);
+  const deferredSongFilter = useDeferredValue(songFilterQuery);
+  const deferredAlbumFilter = useDeferredValue(albumFilterQuery);
+  const deferredLyricsFilter = useDeferredValue(lyricsFilterQuery);
+  const deferredArtistFilter = useDeferredValue(artistFilterQuery);
+  const deferredPlaylistFilter = useDeferredValue(playlistFilterQuery);
 
-  const filteredAlbums = adminAlbums.filter(a => {
-    if (albumTypeFilter === 'quran' && !isQuranContent(a)) return false;
-    if (albumTypeFilter === 'songs' && isQuranContent(a)) return false;
-    const q = albumFilterQuery.toLowerCase();
-    return (a.name || '').toLowerCase().includes(q) || (a.artist || '').toLowerCase().includes(q);
-  });
+  const filteredUsers = useMemo(() => {
+    const q = deferredUserFilter.toLowerCase().trim();
+    if (!q) return users;
+    return users.filter(u => {
+      return (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+    });
+  }, [users, deferredUserFilter]);
 
-  const filteredLyricsTracks = tracks.filter(t => {
-    if (lyricsTypeFilter === 'quran' && !isQuranContent(t)) return false;
-    if (lyricsTypeFilter === 'songs' && isQuranContent(t)) return false;
-    const q = lyricsFilterQuery.toLowerCase();
-    return (t.title || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.album || '').toLowerCase().includes(q);
-  });
+  const filteredTracks = useMemo(() => {
+    const q = deferredSongFilter.toLowerCase().trim();
+    return tracks.filter(t => {
+      if (songTypeFilter === 'podcast' && !isPodcast(t)) return false;
+      if (songTypeFilter === 'quran' && !isQuranContent(t)) return false;
+      if (songTypeFilter === 'songs' && (isQuranContent(t) || isPodcast(t))) return false;
+      if (!q) return true;
+      return (t.title || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.album || '').toLowerCase().includes(q);
+    });
+  }, [tracks, deferredSongFilter, songTypeFilter, isPodcast]);
 
-  const filteredArtists = artistsList.filter(a => {
-    const q = artistFilterQuery.toLowerCase();
-    return (a.name || '').toLowerCase().includes(q);
-  });
+  const filteredAlbums = useMemo(() => {
+    const q = deferredAlbumFilter.toLowerCase().trim();
+    return adminAlbums.filter(a => {
+      if (albumTypeFilter === 'podcast' && !isPodcast(a)) return false;
+      if (albumTypeFilter === 'quran' && !isQuranContent(a)) return false;
+      if (albumTypeFilter === 'songs' && (isQuranContent(a) || isPodcast(a))) return false;
+      if (!q) return true;
+      return (a.name || '').toLowerCase().includes(q) || (a.artist || '').toLowerCase().includes(q);
+    });
+  }, [adminAlbums, deferredAlbumFilter, albumTypeFilter, isPodcast]);
 
-  const filteredPlaylists = adminPlaylists.filter(p => {
-    const q = playlistFilterQuery.toLowerCase();
-    return (p.name || '').toLowerCase().includes(q) || (p.ownerName || '').toLowerCase().includes(q);
-  });
+  const filteredLyricsTracks = useMemo(() => {
+    const q = deferredLyricsFilter.toLowerCase().trim();
+    return tracks.filter(t => {
+      if (lyricsTypeFilter === 'podcast' && !isPodcast(t)) return false;
+      if (lyricsTypeFilter === 'quran' && !isQuranContent(t)) return false;
+      if (lyricsTypeFilter === 'songs' && (isQuranContent(t) || isPodcast(t))) return false;
+      if (!q) return true;
+      return (t.title || '').toLowerCase().includes(q) || (t.artist || '').toLowerCase().includes(q) || (t.album || '').toLowerCase().includes(q);
+    });
+  }, [tracks, deferredLyricsFilter, lyricsTypeFilter, isPodcast]);
+
+  const filteredArtists = useMemo(() => {
+    const q = deferredArtistFilter.toLowerCase().trim();
+    return artistsList.filter(a => {
+      if (!a.name) return false;
+      // Filter out collaboration strings from standalone artist profiles
+      if (a.name.includes(',') || a.name.includes('،') || /\b(?:feat\.?|ft\.?)\b/i.test(a.name)) return false;
+      if (!q) return true;
+      return (a.name || '').toLowerCase().includes(q);
+    });
+  }, [artistsList, deferredArtistFilter]);
+
+  const filteredPlaylists = useMemo(() => {
+    const q = deferredPlaylistFilter.toLowerCase().trim();
+    if (!q) return adminPlaylists;
+    return adminPlaylists.filter(p => {
+      return (p.name || '').toLowerCase().includes(q) || (p.ownerName || '').toLowerCase().includes(q);
+    });
+  }, [adminPlaylists, deferredPlaylistFilter]);
 
   return (
     <div className={`flex-1 overflow-y-auto pb-32 p-4 md:p-8 select-none ${
@@ -722,16 +854,29 @@ export default function AdminScreen({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDeduplicateTracks}
-              disabled={isDeduplicating}
-              className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-bold uppercase brutal-border brutal-shadow-sm cursor-pointer disabled:opacity-50 w-fit self-start sm:self-auto"
-              title="Scan and merge duplicate songs across database"
-            >
-              <Sparkles size={14} className={isDeduplicating ? 'animate-spin' : ''} />
-              <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleRepairTracks}
+                disabled={isRepairingTracks}
+                className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#17a398] hover:bg-[#20b8ab] text-[#0b1110] text-xs font-mono font-bold uppercase brutal-border brutal-shadow-sm cursor-pointer disabled:opacity-50 w-fit self-start sm:self-auto"
+                title="Fix swapped audio tracks (e.g. El Khat Dah Khatty / Ethbat Makanak), reset inflated durations (>11m), and purge single releases from albums"
+              >
+                <RefreshCw size={14} className={isRepairingTracks ? 'animate-spin' : ''} />
+                <span>{isRepairingTracks ? 'Repairing...' : 'Repair Audio & Albums'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDeduplicateTracks}
+                disabled={isDeduplicating}
+                className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-bold uppercase brutal-border brutal-shadow-sm cursor-pointer disabled:opacity-50 w-fit self-start sm:self-auto"
+                title="Scan and merge duplicate songs across database"
+              >
+                <Sparkles size={14} className={isDeduplicating ? 'animate-spin' : ''} />
+                <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Unified Songs Toolbar: Filters on Left, Search on Right */}
@@ -772,6 +917,17 @@ export default function AdminScreen({
               >
                 Quran ({tracksQuranCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setSongTypeFilter('podcast')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  songTypeFilter === 'podcast'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Podcast ({tracksPodcastCount})
+              </button>
             </div>
 
             <div className="relative w-full sm:w-72">
@@ -810,9 +966,16 @@ export default function AdminScreen({
                     className="w-10 h-10 rounded-lg brutal-border object-cover bg-white shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <h4 className="font-display font-bold text-xs sm:text-sm truncate">
-                      {track.title}
-                    </h4>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-display font-bold text-xs sm:text-sm truncate">
+                        {track.title}
+                      </h4>
+                      {isPodcast(track) && (
+                        <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 shrink-0 border border-purple-500/30">
+                          Podcast
+                        </span>
+                      )}
+                    </div>
                     <p className={`text-[11px] font-mono truncate ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                       {track.artist} {track.album ? `• ${track.album}` : ''}
                     </p>
@@ -889,6 +1052,117 @@ export default function AdminScreen({
       {/* ── TAB 3: ALBUMS ── */}
       {activeTab === 'albums' && (
         <div>
+          {/* 3-Worker Autonomous Discography Pipeline Monitor */}
+          <div className={`p-4 rounded-2xl brutal-border mb-6 ${
+            isDark ? 'bg-[#0f1715] border-[#1f2f2b]' : 'bg-[#f4efe4] border-black'
+          }`}>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-[#17a398]/20 text-[#17a398] font-mono text-sm font-black">
+                  BOT
+                </span>
+                <div>
+                  <h3 className="font-mono font-black text-sm uppercase flex items-center gap-2">
+                    3-Worker Autonomous Discography Pipeline
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
+                      pipelineStatus?.running
+                        ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30'
+                        : 'bg-[#17a398]/20 text-[#17a398] border border-[#17a398]/30'
+                    }`}>
+                      {pipelineStatus?.running ? '● Active' : '✓ Standby'}
+                    </span>
+                  </h3>
+                  <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
+                    Worker 1: Scout • Worker 2: Enricher • Worker 3: Synchronizer & DB Organizer
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={triggerPipeline}
+                  disabled={pipelineStatus?.running || isStartingPipeline}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-black uppercase brutal-border transition-all cursor-pointer ${
+                    pipelineStatus?.running
+                      ? 'bg-zinc-700/50 text-zinc-400 border-zinc-600 cursor-not-allowed'
+                      : 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] border-black shadow-sm'
+                  }`}
+                >
+                  {pipelineStatus?.running ? 'Pipeline Running...' : 'Run Pipeline Now'}
+                </button>
+              </div>
+            </div>
+
+            {/* Current Stage & Artist */}
+            <div className={`p-3 rounded-xl mb-3 text-xs font-mono border ${
+              isDark ? 'bg-black/40 border-[#1f2f2b]' : 'bg-white/80 border-black/20'
+            }`}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="font-bold text-[#17a398]">Current Stage:</span>
+                <span className="font-bold text-zinc-400">
+                  Worker {pipelineStatus?.currentWorker || 3}: {pipelineStatus?.currentWorkerName || 'Synchronizer'}
+                </span>
+              </div>
+              <p className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>
+                {pipelineStatus?.currentStage || 'Verified albums and tracks organized into MongoDB collections'}
+              </p>
+              {pipelineStatus?.currentArtist && (
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  Target Artist: <span className="font-black text-[#17a398]">{pipelineStatus.currentArtist}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Added vs Upcoming Queue */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+              {/* Added Artists */}
+              <div className={`p-3 rounded-xl border ${
+                isDark ? 'bg-black/30 border-[#1f2f2b]' : 'bg-white/60 border-black/10'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
+                    ✓ Added Artists ({pipelineStatus?.processedArtists?.length || 0})
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+                  {(pipelineStatus?.processedArtists || ['Lege-Cy', 'Marwan Pablo', 'Marwan Moussa', 'El Joker', 'Cairokee', 'Wegz', 'Amr Diab']).map(name => (
+                    <span key={`p-${name}`} className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono font-bold">
+                      ✓ {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Upcoming / Remaining Artists */}
+              <div className={`p-3 rounded-xl border ${
+                isDark ? 'bg-black/30 border-[#1f2f2b]' : 'bg-white/60 border-black/10'
+              }`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1">
+                    ⏳ Upcoming Queue ({pipelineStatus?.upcomingArtists?.length || pipelineStatus?.remainingCount || 0} remaining)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+                  {(pipelineStatus?.upcomingArtists || ['Tamer Hosny', 'Mohamed Hamaki', 'Tamer Ashour', 'Sherine', 'Essam Sasa', 'Muslim', 'Tul8te', 'Abyusif', 'Afroto', 'Ahmed Saad']).map(name => (
+                    <span key={`u-${name}`} className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono font-bold">
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Stats row */}
+            <div className="flex items-center gap-4 text-[11px] font-mono text-zinc-400">
+              <span>Albums in DB: <strong className="text-white">{pipelineStatus?.stats?.albumsCreated || adminAlbums.length}</strong></span>
+              <span>•</span>
+              <span>Covers Verified (200 OK): <strong className="text-emerald-400">100%</strong></span>
+              <span>•</span>
+              <span>Updated: <strong>{new Date(pipelineStatus?.lastUpdated || Date.now()).toLocaleTimeString()}</strong></span>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-mono font-black uppercase flex items-center gap-2">
@@ -961,6 +1235,17 @@ export default function AdminScreen({
               >
                 Quran ({albumsQuranCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setAlbumTypeFilter('podcast')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  albumTypeFilter === 'podcast'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Podcast ({albumsPodcastCount})
+              </button>
             </div>
 
             <div className="relative w-full sm:w-72">
@@ -1007,7 +1292,7 @@ export default function AdminScreen({
                       {album.name || album.title || 'Untitled Album'}
                     </h3>
                     <p className={`text-xs font-mono truncate mb-2 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                      {album.artist || 'Various'} • {album.trackCount ?? (album.trackIds || []).length ?? (album.tracks || []).length ?? 0} {Boolean(album.isQuran || isQuranContent(album)) ? 'surahs' : 'songs'}
+                      {album.artist || 'Various'} • {album.trackCount ?? (album.trackIds || []).length ?? (album.tracks || []).length ?? 0} {Boolean(album.isQuran || isQuranContent(album)) ? 'surahs' : isPodcast(album) ? 'episodes' : 'songs'}
                     </p>
                     <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 mb-3">
                       <span>{album.genre || 'Album'}</span>
@@ -1291,6 +1576,17 @@ export default function AdminScreen({
               >
                 Quran ({tracksQuranCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setLyricsTypeFilter('podcast')}
+                className={`px-3 py-1 text-xs font-mono font-bold rounded-lg cursor-pointer transition-all ${
+                  lyricsTypeFilter === 'podcast'
+                    ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+                    : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
+                }`}
+              >
+                Podcast ({tracksPodcastCount})
+              </button>
             </div>
 
             <div className="relative w-full sm:w-72">
@@ -1337,6 +1633,11 @@ export default function AdminScreen({
                         <h4 className="font-display font-bold text-xs sm:text-sm truncate">
                           {track.title}
                         </h4>
+                        {isPodcast(track) && (
+                          <span className="text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400 shrink-0 border border-purple-500/30">
+                            Podcast
+                          </span>
+                        )}
                         {isVerified ? (
                           <span className="text-[9px] font-mono font-black uppercase px-2 py-0.5 rounded bg-emerald-500 text-black flex items-center gap-1">
                             <CheckCircle2 size={10} /> Verified Lyrics

@@ -40,7 +40,8 @@ import ArtistDetailModal from '../components/ArtistDetailModal';
 import UserDetailModal from '../components/UserDetailModal';
 import SongRadarModal from '../components/SongRadarModal';
 import { isQuranContent } from '../../utils/quranUtils';
-import { splitArtists } from '../../utils/artistUtils.jsx';
+import { splitArtists, getCanonicalArtistName, getArtistAliases } from '../../utils/artistUtils.jsx';
+import { getExpandedSearchTerms } from '../../utils/searchSynonyms';
 import { normalizeCoverUri } from '../utils/coverUtils';
 
 const SearchPersonCard = React.memo(function SearchPersonCard({ user, isHorizontal, isDark, rtlTextStyle, onPress }) {
@@ -339,15 +340,42 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     if (query.trim()) {
       const q = query.toLowerCase().trim();
       const fq = normalizeFuzzy(q);
-      localResult = localResult.filter(
-        (t) =>
-          t.title?.toLowerCase().includes(q) ||
-          t.artist?.toLowerCase().includes(q) ||
-          t.album?.toLowerCase().includes(q) ||
-          (fq && normalizeFuzzy(t.title).includes(fq)) ||
-          (fq && normalizeFuzzy(t.artist).includes(fq)) ||
-          (fq && normalizeFuzzy(t.album).includes(fq))
-      );
+      const expandedTerms = getExpandedSearchTerms(query.trim());
+
+      localResult = localResult.filter((t) => {
+        const titleLower = (t.title || '').toLowerCase();
+        const artistLower = (t.artist || '').toLowerCase();
+        const albumLower = (t.album || '').toLowerCase();
+        const titleFuzzy = normalizeFuzzy(t.title);
+        const artistFuzzy = normalizeFuzzy(t.artist);
+        const albumFuzzy = normalizeFuzzy(t.album);
+
+        if (
+          titleLower.includes(q) ||
+          artistLower.includes(q) ||
+          albumLower.includes(q) ||
+          (fq && titleFuzzy.includes(fq)) ||
+          (fq && artistFuzzy.includes(fq)) ||
+          (fq && albumFuzzy.includes(fq))
+        ) {
+          return true;
+        }
+
+        // Check canonical aliases of artist
+        const artistNames = splitArtists(t.artist);
+        const allArtistAliases = artistNames.flatMap((a) => {
+          const can = getCanonicalArtistName(a);
+          return [a.toLowerCase(), ...(can ? getArtistAliases(can).map((al) => al.toLowerCase()) : [])];
+        });
+
+        return expandedTerms.some((term) => {
+          const termFz = normalizeFuzzy(term);
+          if (titleLower.includes(term) || (termFz && titleFuzzy.includes(termFz))) return true;
+          if (artistLower.includes(term) || (termFz && artistFuzzy.includes(termFz))) return true;
+          if (albumLower.includes(term) || (termFz && albumFuzzy.includes(termFz))) return true;
+          return allArtistAliases.some((al) => al.includes(term) || (termFz && normalizeFuzzy(al).includes(termFz)));
+        });
+      });
     }
 
     // Merge local and remote results (deduplicating)
@@ -369,34 +397,51 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const matchingArtists = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase().trim();
+    const fq = normalizeFuzzy(q);
+    const expandedTerms = getExpandedSearchTerms(query.trim());
     const map = new Map();
 
     (allTracks || []).forEach((t) => {
       if (!t.artist || isQuranContent(t)) return;
       const artistNames = splitArtists(t.artist);
-      artistNames.forEach((name) => {
-        const cleanName = (name || '').trim();
-        if (!cleanName) return;
-        const key = cleanName.toLowerCase();
+      artistNames.forEach((rawName) => {
+        const canonical = getCanonicalArtistName(rawName) || (rawName || '').trim();
+        if (!canonical) return;
+        const key = canonical.toLowerCase();
         if (!map.has(key)) {
           map.set(key, {
-            name: cleanName,
+            name: canonical,
             count: 1,
             cover: t.coverUrl || t.cover,
+            aliases: getArtistAliases(canonical),
             tracks: [t],
           });
         } else {
           const entry = map.get(key);
           entry.count += 1;
           entry.tracks.push(t);
+          if (!entry.cover && (t.coverUrl || t.cover)) {
+            entry.cover = t.coverUrl || t.cover;
+          }
         }
       });
     });
 
-    const fq = normalizeFuzzy(q);
-    return Array.from(map.values()).filter(
-      (a) => a.name.toLowerCase().includes(q) || (fq && normalizeFuzzy(a.name).includes(fq))
-    );
+    return Array.from(map.values()).filter((a) => {
+      const artName = (a.name || '').toLowerCase();
+      const normArtName = normalizeFuzzy(a.name);
+      const aliases = (a.aliases || []).map((al) => al.toLowerCase());
+      const normAliases = (a.aliases || []).map((al) => normalizeFuzzy(al));
+
+      if (artName.includes(q) || (fq && normArtName.includes(fq))) return true;
+      if (aliases.some((al, idx) => al.includes(q) || (fq && normAliases[idx].includes(fq)))) return true;
+
+      return expandedTerms.some((term) => {
+        const normTerm = normalizeFuzzy(term);
+        if (artName.includes(term) || (normTerm && normArtName.includes(normTerm))) return true;
+        return aliases.some((al, idx) => al.includes(term) || (normTerm && normAliases[idx].includes(normTerm)));
+      });
+    });
   }, [allTracks, query]);
 
   // Matching Albums

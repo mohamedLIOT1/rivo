@@ -7,6 +7,7 @@ import {
   isMatchingContentKind,
   attachQueueMeta,
   findTrackIndexInQueue,
+  getTrackDedupeKey,
 } from './webQueueUtils';
 import {
   fetchNextSmartMusicBatch,
@@ -131,31 +132,37 @@ export function useWebQueueNavigation({
       }
 
       const appendSmartBatchAndPlay = async (shuffleIt = false) => {
-        activeList.forEach((t) => {
-          const id = getTrackId(t);
-          if (id) playedSmartSongIdsRef.current.add(id);
-          const k = getTrackDedupeKey(t);
-          if (k) playedSmartSongIdsRef.current.add(k);
-        });
-        const allAvailable = (tracksRef.current?.length > 0 ? tracksRef.current : activeList).filter(matchQueueType);
-        const batch = await fetchNextSmartMusicBatchAsync({
-          allAvailable,
-          currentUser: currentUserRef.current,
-          likedTrackIds: likedTrackIdsRef.current,
-          playedSmartSongIdsRef,
-          currentTrack: cur,
-          limit: 20,
-        });
-        if (batch && batch.length > 0) {
-          const ordered = shuffleIt && batch.length > 1 ? shuffleArray(batch) : batch;
-          const nextIdx = activeList.length;
-          const newQueue = [...activeList, ...ordered];
-          setCurrentQueue(newQueue);
-          isSmartMoodQueueRef.current = true;
-          setCurrentQueueIndex(nextIdx);
-          playTrackRef.current?.(newQueue[nextIdx], newQueue, false, nextIdx, true, isAutoAdvance, navOpts);
-          setIsPlaying(true);
-        } else if (activeList.length > 0) {
+        try {
+          activeList.forEach((t) => {
+            const id = getTrackId(t);
+            if (id) playedSmartSongIdsRef.current?.add(id);
+            const k = getTrackDedupeKey(t);
+            if (k) playedSmartSongIdsRef.current?.add(k);
+          });
+          const allAvailable = (tracksRef.current?.length > 0 ? tracksRef.current : activeList).filter(matchQueueType);
+          const batch = await fetchNextSmartMusicBatchAsync({
+            allAvailable,
+            currentUser: currentUserRef.current,
+            likedTrackIds: likedTrackIdsRef.current,
+            playedSmartSongIdsRef,
+            currentTrack: cur,
+            limit: 20,
+          });
+          if (batch && batch.length > 0) {
+            const ordered = shuffleIt && batch.length > 1 ? shuffleArray(batch) : batch;
+            const nextIdx = activeList.length;
+            const newQueue = [...activeList, ...ordered];
+            setCurrentQueue(newQueue);
+            isSmartMoodQueueRef.current = true;
+            setCurrentQueueIndex(nextIdx);
+            playTrackRef.current?.(newQueue[nextIdx], newQueue, false, nextIdx, true, isAutoAdvance, navOpts);
+            setIsPlaying(true);
+            return;
+          }
+        } catch (err) {
+          console.warn('[Queue Navigation] Smart batch fetch error, looping queue:', err);
+        }
+        if (activeList.length > 0) {
           setCurrentQueueIndex(0);
           playTrackRef.current?.(activeList[0], activeList, false, 0, true, isAutoAdvance, navOpts);
           setIsPlaying(true);

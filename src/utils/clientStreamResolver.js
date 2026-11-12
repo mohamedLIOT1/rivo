@@ -5,6 +5,7 @@
  */
 
 import { INNERTUBE_KEY, CLIENT_CONFIGS } from './streamClientConfigs';
+import { calculateTitleSimilarity } from './titleSimilarity';
 
 // ── In-Memory Stream Cache with TTL ──────────────────────────────────────────
 const streamCache = new Map();
@@ -137,20 +138,75 @@ export async function searchYouTubeClientSide(queryOrOptions, signal = null) {
       const candidates = contents.map(c => c.videoRenderer).filter(v => v && v.videoId);
 
       if (candidates.length > 0) {
-        const top = candidates[0];
-        let dur = null;
-        const durText = top.lengthText?.simpleText || top.lengthText?.runs?.[0]?.text || '';
-        if (durText) {
-          const parts = durText.split(':').map(p => parseInt(p, 10));
-          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) dur = parts[0] * 60 + parts[1];
-          else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) dur = parts[0] * 3600 + parts[1] * 60 + parts[2];
-        }
+        const normTitle = cleanTit.toLowerCase();
+        const normArtist = cleanArt.toLowerCase();
 
-        return {
-          videoId: top.videoId,
-          title: top.title?.runs?.[0]?.text || '',
-          duration: dur || targetDuration
-        };
+        let scored = candidates.map(v => {
+          const candTitle = (v.title?.runs?.[0]?.text || '').toLowerCase();
+          const candChannel = (v.ownerText?.runs?.[0]?.text || '').toLowerCase();
+          let dur = null;
+          const durText = v.lengthText?.simpleText || v.lengthText?.runs?.[0]?.text || '';
+          if (durText) {
+            const parts = durText.split(':').map(p => parseInt(p, 10));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) dur = parts[0] * 60 + parts[1];
+            else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) dur = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          }
+
+          let score = 0;
+          const similarity = calculateTitleSimilarity(cleanTit, candTitle, cleanArt);
+          score += Math.round(similarity * 60);
+
+          let durationDiff = targetDuration && dur > 0 ? Math.abs(dur - targetDuration) : null;
+          if (durationDiff !== null) {
+            if (durationDiff <= 5) score += 60;
+            else if (durationDiff <= 15) score += 40;
+            else if (durationDiff <= 25) score += 10;
+            else score -= 200;
+          }
+
+          if (normTitle && candTitle.includes(normTitle)) score += 30;
+          if (normArtist && (candTitle.includes(normArtist) || candChannel.includes(normArtist))) score += 30;
+
+          if (candChannel.includes('topic')) {
+            if (normArtist && (candChannel.includes(normArtist) || candTitle.includes(normArtist))) score += 90;
+            else if (normArtist) score -= 150;
+            else score += 20;
+          } else if (candChannel.includes('official') || candChannel.includes('vevo')) {
+            score += 30;
+          }
+
+          if (candTitle.includes('official audio') || candTitle.includes('audio')) score += 50;
+
+          // Penalize concerts/compilations when searching a normal track
+          const isComp = /(?:كاملة|حفلة\s*كاملة|ألبوم\s*كامل|سهرة|تجميعة|ميدلي|medley|full\s*concert|full\s*live|full\s*album)/i.test(candTitle);
+          if (isComp) score -= 400;
+
+          if (dur > 600 && (!targetDuration || targetDuration < 600)) score -= 500;
+
+          return {
+            videoId: v.videoId,
+            title: v.title?.runs?.[0]?.text || '',
+            duration: dur || targetDuration,
+            score,
+            similarity
+          };
+        });
+
+        // Filter valid candidates
+        scored = scored.filter(c => {
+          if ((!targetDuration || targetDuration < 600) && c.duration && c.duration > 660) return false;
+          if (cleanTit && c.similarity < 0.25) return false;
+          return true;
+        });
+
+        scored.sort((a, b) => b.score - a.score);
+        if (scored.length > 0 && scored[0].score > -100) {
+          return {
+            videoId: scored[0].videoId,
+            title: scored[0].title,
+            duration: scored[0].duration
+          };
+        }
       }
     } catch (e) {
       clearTimeout(timeoutId);

@@ -1550,48 +1550,6 @@ function FullPlayerModal({
 
             {/* Deck Auxiliary Controls */}
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
-              {/* 3-Way Stem Selector (Full Mix / Vocals / Instrumental) - strictly visible ONLY when vocal isolation is enabled */}
-              {!isCurQuran && Boolean(vocalOnlyMode) && (
-                <div className="flex items-center rounded-xl overflow-hidden border border-[#1f2f2b] bg-black/60 p-0.5 text-[10px] font-mono tracking-wider font-bold">
-                  <button
-                    type="button"
-                    onClick={() => setStemMode?.('mix')}
-                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                      (stemMode || 'mix') === 'mix'
-                        ? 'bg-[#17a398] text-[#0b1110] font-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                    title="All / Full Track"
-                  >
-                    ALL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStemMode?.('vocal')}
-                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                      stemMode === 'vocal'
-                        ? 'bg-[#10b981] text-[#0b1110] font-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                    title="Vocals Only"
-                  >
-                    VOCAL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStemMode?.('inst')}
-                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                      stemMode === 'inst'
-                        ? 'bg-amber-400 text-[#0b1110] font-black shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    }`}
-                    title="Instrumental / Beats"
-                  >
-                    INST
-                  </button>
-                </div>
-              )}
-
               {/* Vinyl Mode Toggle */}
               <button 
                 onClick={() => setIsVinylMode(!isVinylMode)}

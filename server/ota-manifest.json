@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.32",
+  "version": "2.4.35",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري (5.06 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (5.06 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5306782,
-  "sizeMb": "5.06 MB",
-  "updatedAt": "2026-11-12T18:34:18.698Z"
+  "notes": "تحديث هوائي فوري (5.07 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant in-app OTA update (5.07 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 5313976,
+  "sizeMb": "5.07 MB",
+  "updatedAt": "2026-11-12T21:33:15.822Z"
 }

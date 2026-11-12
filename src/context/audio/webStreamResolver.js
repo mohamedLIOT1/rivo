@@ -263,8 +263,8 @@ export async function doResolvePlayableAudioStream(
   const qDuration = encodeURIComponent(track.duration || '');
   const retryParam = isRetryAlt ? '&retryAlt=1' : '';
 
-  // 5. Direct backend audio stream endpoint
-  const backendTimer = buildTimedFetchSignal(signal, 12000);
+  // 5. Direct backend audio stream endpoint (fast 5000ms timeout)
+  const backendTimer = buildTimedFetchSignal(signal, 5000);
   try {
     const sRes = await fetch(
       `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}${retryParam}`,
@@ -290,9 +290,8 @@ export async function doResolvePlayableAudioStream(
     if (signal?.aborted) return null;
   }
 
-  // 5b. Direct client-side YouTube stream resolution fallback (native WebView only)
-  const isNativeEnvironment = typeof window !== 'undefined' && Boolean(window.ReactNativeWebView);
-  if (!signal?.aborted && isNativeEnvironment) {
+  // 5b. Direct client-side YouTube stream resolution fallback
+  if (!signal?.aborted) {
     try {
       const clientDirectStream = await resolveDirectYouTubeAudio(track, signal);
       if (clientDirectStream?.url) {

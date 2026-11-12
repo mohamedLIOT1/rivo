@@ -361,7 +361,8 @@ export default function PlaylistScreen({
         list = playlistTrackIds.map(id => trackMap.get(id)).filter(Boolean);
       }
 
-      if (playlist.isAlbum || playlist.name?.startsWith('Album -') || playlist.id?.startsWith('album-')) {
+      const hasExplicitTracks = Array.isArray(playlist.tracks) && playlist.tracks.length > 0;
+      if (!hasExplicitTracks && (playlist.isAlbum || playlist.name?.startsWith('Album -') || playlist.id?.startsWith('album-'))) {
         const cleanAlbName = (playlist.name || playlist.title || '').replace(/^album\s*-\s*/i, '').trim().toLowerCase();
         const albNorm = (playlist.name || playlist.title || '').trim().toLowerCase();
         list = list.filter(t => {
@@ -375,6 +376,9 @@ export default function PlaylistScreen({
           }
           return true;
         });
+      }
+
+      if (playlist.isAlbum || playlist.name?.startsWith('Album -') || playlist.id?.startsWith('album-')) {
 
         const seen = new Set();
         list = list.filter(t => {
@@ -1027,7 +1031,7 @@ export default function PlaylistScreen({
                     if (official && !official.includes('ui-avatars.com')) {
                       e.currentTarget.src = official;
                     } else {
-                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
                     }
                   }}
                 />

@@ -242,14 +242,19 @@ export default function ScreenRouter({
               const albumTracks = (tracks || []).filter(
                 t => t.album && t.album.toLowerCase().trim() === (alb.name || '').toLowerCase().trim()
               );
+              const explicitTracks = (Array.isArray(alb.tracks) && alb.tracks.length > 0)
+                ? alb.tracks
+                : ((Array.isArray(selectedPlaylist?.tracks) && selectedPlaylist.tracks.length > 0) ? selectedPlaylist.tracks : (albumTracks.length > 0 ? albumTracks : []));
+              const explicitTrackIds = explicitTracks.map(t => String(t.id || t._id));
               const allTrackIds = Array.from(
                 new Set([
+                  ...explicitTrackIds,
                   ...albumTracks.map(t => String(t.id || t._id)),
                   ...(alb.trackIds || []).map(String),
                   ...(selectedPlaylist?.trackIds || []).map(String),
                 ])
               );
-              return { ...selectedPlaylist, ...alb, trackIds: allTrackIds, isAlbum: true };
+              return { ...selectedPlaylist, ...alb, tracks: explicitTracks, trackIds: allTrackIds, isAlbum: true };
             }
             return selectedPlaylist;
           })()}
