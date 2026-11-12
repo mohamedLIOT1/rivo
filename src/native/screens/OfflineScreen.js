@@ -1,11 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  Platform,
-} from 'react-native';
+import { View, Text, FlatList, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { WifiOff, Wifi, Search, ListPlus, Trash2, FolderDown } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
@@ -21,11 +15,7 @@ import { styles } from './OfflineScreen.styles';
 
 function OfflineScreen() {
   const {
-    playTrack,
-    currentTrack,
-    isPlaying,
-    togglePlay,
-    addMultipleToQueue,
+    playTrack, currentTrack, isPlaying, togglePlay, addMultipleToQueue,
     removeDownloadedTrack: contextRemoveTrack,
     removeDownloadedTracksBatch: contextRemoveBatch,
     downloadedTracks = [],
@@ -360,39 +350,45 @@ function OfflineScreen() {
           style={[styles.selectActionBar, { bottom: currentTrack ? (Platform.OS === 'ios' ? 134 : 118) : 20 }]}
           renderToHardwareTextureAndroid={true}
         >
-          <View style={styles.selectInfoRow}>
-            <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
-            <Text style={styles.selectCountText}>{t('offline.selectedCount')}</Text>
-          </View>
-          <TouchableOpacity onPress={handleSelectAll} style={styles.selectActionBtnSec}>
-            <Text style={styles.selectActionBtnTextSec}>
-              {selectedIds.length > 0 && selectedIds.length === ((searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || []).length ? t('offline.deselectAll') : t('offline.selectAll')}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={handleBatchQueue}
-            disabled={selectedIds.length === 0}
-            style={[styles.selectActionBtn, selectedIds.length === 0 && { opacity: 0.4 }]}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.selectActionBarScroll}
           >
-            <ListPlus size={14} color={colors.ink} />
-            <Text style={styles.selectActionBtnText}>{t('offline.queueSelected')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onConfirmBatchExport}
-            disabled={selectedIds.length === 0}
-            style={[styles.selectActionBtnSuccess, selectedIds.length === 0 && { opacity: 0.4 }]}
-          >
-            <FolderDown size={14} color="#ffffff" />
-            <Text style={styles.selectActionBtnTextSuccess}>{t('offline.exportSelected') || (isRTL ? 'تصدير' : 'EXPORT')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={onConfirmBatchDelete}
-            disabled={selectedIds.length === 0}
-            style={[styles.selectActionBtnDanger, selectedIds.length === 0 && { opacity: 0.4 }]}
-          >
-            <Trash2 size={14} color="#ffffff" />
-            <Text style={styles.selectActionBtnTextDanger}>{t('offline.deleteSelected')}</Text>
-          </TouchableOpacity>
+            <View style={styles.selectInfoRow}>
+              <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
+              <Text style={styles.selectCountText}>{t('offline.selectedCount')}</Text>
+            </View>
+            <TouchableOpacity onPress={handleSelectAll} style={styles.selectActionBtnSec}>
+              <Text style={styles.selectActionBtnTextSec}>
+                {selectedIds.length > 0 && selectedIds.length === ((searchQuery.trim() ? filteredOfflineTracks : offlineTracks) || []).length ? t('offline.deselectAll') : t('offline.selectAll')}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleBatchQueue}
+              disabled={selectedIds.length === 0}
+              style={[styles.selectActionBtn, selectedIds.length === 0 && { opacity: 0.4 }]}
+            >
+              <ListPlus size={14} color={colors.ink} />
+              <Text style={styles.selectActionBtnText}>{t('offline.queueSelected')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onConfirmBatchExport}
+              disabled={selectedIds.length === 0}
+              style={[styles.selectActionBtnSuccess, selectedIds.length === 0 && { opacity: 0.4 }]}
+            >
+              <FolderDown size={14} color="#ffffff" />
+              <Text style={styles.selectActionBtnTextSuccess}>{t('offline.exportSelected') || (isRTL ? 'تصدير' : 'EXPORT')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={onConfirmBatchDelete}
+              disabled={selectedIds.length === 0}
+              style={[styles.selectActionBtnDanger, selectedIds.length === 0 && { opacity: 0.4 }]}
+            >
+              <Trash2 size={14} color="#ffffff" />
+              <Text style={styles.selectActionBtnTextDanger}>{t('offline.deleteSelected')}</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       )}
     </View>

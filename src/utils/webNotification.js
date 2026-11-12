@@ -8,6 +8,7 @@ const DEFAULT_ICON = '/icon-192.png';
 let flashIntervalId = null;
 let savedOriginalTitle = null;
 let flashListenersAttached = false;
+let currentUnreadBadgeCount = 0;
 
 function isPageBackgroundOrUnfocused() {
   if (typeof document === 'undefined') return false;
@@ -59,6 +60,36 @@ export async function requestWebNotificationPermission() {
   }
 }
 
+/**
+ * Updates document.title to show the badge count without alternating or flashing:
+ * e.g. "(2) Rivo" or "Rivo"
+ */
+export function setTabBadgeCount(count) {
+  if (typeof document === 'undefined') return;
+  const num = Math.max(0, Number(count) || 0);
+  currentUnreadBadgeCount = num;
+
+  if (savedOriginalTitle === null) {
+    const raw = document.title || 'Rivo';
+    savedOriginalTitle = raw.replace(/^\(\d+\)\s*/, '');
+  }
+  const baseTitle = savedOriginalTitle || 'Rivo';
+
+  if (num > 0) {
+    document.title = `(${num}) ${baseTitle}`;
+  } else {
+    document.title = baseTitle;
+  }
+}
+
+export function incrementTabBadgeCount(delta = 1) {
+  setTabBadgeCount(currentUnreadBadgeCount + delta);
+}
+
+export function clearTabBadgeCount() {
+  setTabBadgeCount(0);
+}
+
 function handleReturnToTab() {
   if (!isPageBackgroundOrUnfocused()) {
     stopTabTitleFlash();
@@ -74,6 +105,7 @@ export function stopTabTitleFlash() {
     document.title = savedOriginalTitle;
     savedOriginalTitle = null;
   }
+  currentUnreadBadgeCount = 0;
   if (flashListenersAttached) {
     if (typeof window !== 'undefined') {
       window.removeEventListener('focus', handleReturnToTab);
@@ -86,25 +118,33 @@ export function stopTabTitleFlash() {
 }
 
 /**
- * Alternates document.title between alertTitle and the original title every 1000ms
- * while the page is hidden or unfocused, and restores it as soon as the user returns.
+ * Updates document.title with the unread badge count (e.g. "(1) Rivo")
+ * without flashing or alternating between sender name and website name.
  */
-export function flashTabTitle(alertTitle) {
-  if (typeof document === 'undefined' || !alertTitle) return;
+export function flashTabTitle(alertTitle, explicitCount) {
+  if (typeof document === 'undefined') return;
 
   if (!isPageBackgroundOrUnfocused()) {
     stopTabTitleFlash();
     return;
   }
 
-  if (flashIntervalId !== null) {
-    clearInterval(flashIntervalId);
-    flashIntervalId = null;
+  if (savedOriginalTitle === null) {
+    const raw = document.title || 'Rivo';
+    savedOriginalTitle = raw.replace(/^\(\d+\)\s*/, '');
   }
 
-  if (savedOriginalTitle === null) {
-    savedOriginalTitle = document.title;
+  let unread = explicitCount;
+  if (unread === undefined && typeof alertTitle === 'string') {
+    const match = alertTitle.match(/\((\d+)\)/);
+    if (match) unread = parseInt(match[1], 10);
   }
+
+  const badgeNum = (typeof unread === 'number' && !isNaN(unread) && unread > 0)
+    ? unread
+    : (currentUnreadBadgeCount > 0 ? currentUnreadBadgeCount + 1 : 1);
+
+  setTabBadgeCount(badgeNum);
 
   if (!flashListenersAttached) {
     if (typeof window !== 'undefined') {
@@ -113,18 +153,6 @@ export function flashTabTitle(alertTitle) {
     document.addEventListener('visibilitychange', handleReturnToTab);
     flashListenersAttached = true;
   }
-
-  let showingAlert = true;
-  document.title = alertTitle;
-
-  flashIntervalId = setInterval(() => {
-    if (!isPageBackgroundOrUnfocused()) {
-      stopTabTitleFlash();
-      return;
-    }
-    showingAlert = !showingAlert;
-    document.title = showingAlert ? alertTitle : (savedOriginalTitle ?? document.title);
-  }, 1000);
 }
 
 /**

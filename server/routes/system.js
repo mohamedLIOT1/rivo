@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.20',
+      version: '2.4.21',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت، صفحة كلمات الأغاني الكاملة لشاشة القفل وسلاسة فائقة للواجهة 60/120 إطار.'
+      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية، كتم الصوت لغرف Jam، عداد الرسائل النظيف وسلاسة فائقة.'
     },
     windows: {
-      version: '2.4.20',
-      displayVersion: '2.4.20',
+      version: '2.4.21',
+      displayVersion: '2.4.21',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.20.exe',
+      directFile: 'Rivo-v2.4.21.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • تحسينات الاستجابة ومزامنة التشغيل وسلاسة فائقة.'
+      notes: 'تحديث v2.4.21 • تحسينات الاستجابة وغرف Jam وسلاسة فائقة.'
     },
     android: {
-      version: '2.4.20',
-      build: 150,
+      version: '2.4.21',
+      build: 151,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.20.apk',
+      directFile: 'Rivo-v2.4.21.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت من الإشعارات والويدجت، صفحة كلمات الأغاني الكاملة لشاشة القفل وسلاسة فائقة للواجهة 60/120 إطار.',
-      notesEn: 'Update v2.4.20 • Instant notification & widget play/pause sync, full lockscreen lyrics page, and 60/120 FPS UI smoothness optimizations.',
+      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية لجميع التطبيقات، كتم صوت Jam للأعضاء، إعادة ترتيب القوائم بسلاسة، وحل مشكلة أزرار الخزنة.',
+      notesEn: 'Update v2.4.21 • Global audio focus interruption, Jam member local mute, silky smooth drag-reorder, and Vault selection bar fix.',
       ota: {
         enabled: true,
-        version: '2.4.30',
+        version: '2.4.31',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.30 • مزامنة فورية للإيقاف المؤقت من الإشعارات والويدجت، صفحة كلمات الأغاني لشاشة القفل وسلاسة للأجهزة',
-        notesEn: 'Instant OTA v2.4.30 • Instant notification play/pause sync, full lockscreen lyrics sheet, and 60/120Hz UI smoothness',
-        bundleSize: 5251574,
-        sizeMb: '5.01 MB'
+        notes: 'تحديث هوائي فوري v2.4.31 • مقاطعة الصوت العالمية، كتم صوت Jam، حل مشكلة أزرار الخزنة وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.31 • Global audio focus interruption, Jam member local mute, Vault bar fix, and silky smooth reorder',
+        bundleSize: 5298755,
+        sizeMb: '5.05 MB'
       }
     },
     ios: {
-      version: '2.4.20',
-      build: 150,
+      version: '2.4.21',
+      build: 151,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.20.ipa',
+      directFile: 'Rivo-v2.4.21.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت، صفحة كلمات الأغاني الكاملة وسلاسة فائقة للواجهة 60/120 إطار.'
+      notes: 'تحديث v2.4.21 • حل تداخل النصوص على الآيفون، مقاطعة الصوت العالمية وكتم صوت Jam للأعضاء.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.20',
+      version: '2.4.21',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت، صفحة كلمات الأغاني الكاملة لشاشة القفل وسلاسة فائقة.'
+      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية، كتم الصوت لغرف Jam وسلاسة فائقة.'
     },
     windows: {
-      version: '2.4.20',
-      displayVersion: '2.4.20',
+      version: '2.4.21',
+      displayVersion: '2.4.21',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.20.exe',
+      directFile: 'Rivo-v2.4.21.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • تحسينات الاستجابة وسلاسة فائقة.'
+      notes: 'تحديث v2.4.21 • تحسينات الاستجابة وسلاسة فائقة.'
     },
     android: {
-      version: '2.4.20',
-      build: 150,
+      version: '2.4.21',
+      build: 151,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.20.apk',
+      directFile: 'Rivo-v2.4.21.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت من الإشعارات والويدجت، صفحة كلمات الأغاني الكاملة لشاشة القفل وسلاسة فائقة.',
-      notesEn: 'Update v2.4.20 • Instant notification play/pause sync, full lockscreen lyrics, and UI smoothness.',
+      notes: 'تحديث v2.4.21 • مقاطعة الصوت العالمية لجميع التطبيقات، كتم صوت Jam للأعضاء، إعادة ترتيب القوائم بسلاسة، وحل مشكلة أزرار الخزنة.',
+      notesEn: 'Update v2.4.21 • Global audio focus interruption, Jam member local mute, silky smooth drag-reorder, and Vault selection bar fix.',
       ota: {
         enabled: true,
-        version: '2.4.30',
+        version: '2.4.31',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.30 • مزامنة فورية للإيقاف المؤقت من الإشعارات والويدجت، صفحة كلمات الأغاني لشاشة القفل وسلاسة للأجهزة',
-        notesEn: 'Instant OTA v2.4.30 • Instant notification play/pause sync, full lockscreen lyrics sheet, and 60/120Hz UI smoothness',
-        bundleSize: 5251574,
-        sizeMb: '5.01 MB'
+        notes: 'تحديث هوائي فوري v2.4.31 • مقاطعة الصوت العالمية، كتم صوت Jam، حل مشكلة أزرار الخزنة وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.31 • Global audio focus interruption, Jam member local mute, Vault bar fix, and silky smooth reorder',
+        bundleSize: 5298755,
+        sizeMb: '5.05 MB'
       }
     },
     ios: {
-      version: '2.4.20',
-      build: 150,
+      version: '2.4.21',
+      build: 151,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.20.ipa',
+      directFile: 'Rivo-v2.4.21.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.20 • مزامنة فورية للإيقاف المؤقت، صفحة كلمات الأغاني الكاملة وسلاسة فائقة.'
+      notes: 'تحديث v2.4.21 • حل تداخل النصوص على الآيفون، مقاطعة الصوت العالمية وكتم صوت Jam للأعضاء.'
     }
   }
 };

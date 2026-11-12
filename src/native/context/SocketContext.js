@@ -32,7 +32,7 @@ export const SocketProvider = ({ children }) => {
     jamSession &&
       ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
         (socket && jamSession.hostId === socket.id) ||
-        (jamSession.members || []).some(m => (socket && m.socketId === socket.id) || (myId && String(m.id || m._id) === myId && m.isHost)))
+        (jamSession.members || []).some(m => ((socket && m.socketId === socket.id) || (myId && String(m.id || m._id) === myId)) && Boolean(m.isHost)))
   );
   const isCurrentUserHostRef = useRef(isCurrentUserHost);
   isCurrentUserHostRef.current = isCurrentUserHost;

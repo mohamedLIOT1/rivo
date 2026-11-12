@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useMemo, useCallback } from 'react';
 import { InteractionManager } from 'react-native';
+import { Audio } from 'expo-av';
 import { INITIAL_TRACKS } from '../data/initialTracks';
 import { updateMediaNotification, updateMediaQueue } from '../services/mediaControls';
 import { useConnectivity } from './ConnectivityContext';
@@ -33,7 +34,10 @@ export const AudioProvider = ({ children }) => {
   const { token, currentUser, likedTrackIds = [], tracks: userTracks = [] } = userCtx;
 
   useEffect(() => {
-    applyStandardAudioMode();
+    Audio.setIsEnabledAsync(false)
+      .then(() => Audio.setIsEnabledAsync(true))
+      .then(() => applyStandardAudioMode())
+      .catch(() => applyStandardAudioMode());
   }, []);
 
   const tokenRef = useRef(token);
@@ -350,6 +354,8 @@ export const AudioProvider = ({ children }) => {
       jamSession: jamSync.jamSession,
       setJamSync: jamSync.setJamSync,
       remoteDevicePlayback: jamSync.remoteDevicePlayback,
+      isJamMuted: playback.isJamMuted,
+      setIsJamMuted: playback.setIsJamMuted,
     };
   }, [
     playback,

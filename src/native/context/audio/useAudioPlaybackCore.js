@@ -65,6 +65,24 @@ export const useAudioPlaybackCore = ({
   const [volume, setVolumeState] = useState(0.8);
   const volumeRef = useRef(0.8);
 
+  const [isJamMuted, setIsJamMutedState] = useState(false);
+  const isJamMutedRef = useRef(false);
+
+  const setIsJamMuted = useCallback((val) => {
+    const next = typeof val === 'function' ? val(isJamMutedRef.current) : Boolean(val);
+    isJamMutedRef.current = next;
+    setIsJamMutedState(next);
+    if (soundRef.current) {
+      soundRef.current.setIsMutedAsync(next).catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!jamSyncRef?.current?.jamSession && isJamMutedRef.current) {
+      setIsJamMuted(false);
+    }
+  }, [jamSyncRef?.current?.jamSession, setIsJamMuted]);
+
   const [isVocalOnly, setIsVocalOnlyState] = useState(false);
   const [vocalIsolationStatus, setVocalIsolationStatus] = useState(null);
   const internalVocalOnlyRef = useRef(false);
@@ -261,6 +279,10 @@ export const useAudioPlaybackCore = ({
     if (!track) {
       isLoadingRef.current = false;
       setIsLoading(false);
+      return;
+    }
+    if (!isRemote && jamSyncRef?.current?.jamSession && !canControlJam()) {
+      showToast('Controls locked to host', 'info');
       return;
     }
 
@@ -501,6 +523,9 @@ export const useAudioPlaybackCore = ({
       }
 
       soundRef.current = sound;
+      if (isJamMutedRef.current) {
+        await sound.setIsMutedAsync(true).catch(() => {});
+      }
       loadedTrackIdRef.current = nextId;
       sound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
@@ -597,6 +622,10 @@ export const useAudioPlaybackCore = ({
   playTrackRef.current = playTrack;
 
   const playPlaylist = useCallback(async (playlistOrTracks, startIndex = 0) => {
+    if (jamSyncRef?.current?.jamSession && !canControlJam()) {
+      showToast('Controls locked to host', 'info');
+      return;
+    }
     const rawList = Array.isArray(playlistOrTracks) ? playlistOrTracks : (playlistOrTracks?.tracks || []);
     if (!rawList || rawList.length === 0) return;
     const list = [...rawList];
@@ -613,7 +642,12 @@ export const useAudioPlaybackCore = ({
   const togglePlay = useCallback(async (isRemoteParam = false) => {
     const isRemote = isRemoteParam === true;
     if (isResolvingRef.current) return;
-    if (!isRemote && jamSyncRef?.current?.jamSession && !canControlJam()) return;
+    if (!isRemote && jamSyncRef?.current?.jamSession && !canControlJam()) {
+      const nextMuted = !isJamMutedRef.current;
+      setIsJamMuted(nextMuted);
+      showToast(nextMuted ? 'Controls locked to host • Audio Muted' : 'Controls locked to host • Audio Unmuted', 'info');
+      return;
+    }
 
     const nextPlaying = !isPlayingRef.current;
     if (isLoadingRef.current && nextPlaying) return;
@@ -646,14 +680,6 @@ export const useAudioPlaybackCore = ({
       if (queueRef.current.length > 0) return playTrack(queueRef.current[0], queueRef.current);
       return undefined;
     };
-
-    if (nextPlaying) {
-      const st = await soundRef.current.getStatusAsync().catch(() => null);
-      if (isLoadingRef.current) return;
-      if (!st?.isLoaded || st?.error) {
-        return reloadDeadTrack();
-      }
-    }
 
     const isLikedTrack = curTrack ? (likedTrackIdsRef.current || []).some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
     interruptedByOsRef.current = false;
@@ -697,7 +723,8 @@ export const useAudioPlaybackCore = ({
     }
   }, [
     canControlJam, jamSyncRef, playTrack, queueRef,
-    repeatModeRef, isShuffleRef, broadcastListeningActivity, setIsPlaying
+    repeatModeRef, isShuffleRef, broadcastListeningActivity, setIsPlaying,
+    setIsJamMuted, showToast
   ]);
 
   const pause = useCallback(async () => {
@@ -794,6 +821,8 @@ export const useAudioPlaybackCore = ({
   }, [seekTo]);
 
   return {
+    isJamMuted,
+    setIsJamMuted,
     playbackRate,
     setPlaybackRate,
     jumpBy,

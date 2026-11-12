@@ -237,8 +237,8 @@ const executeRecoveryPlayTrack = async (ctx, { attemptIndex = 0, resumeSec = nul
  * Schedules a backed-off foreground or background recovery attempt, or advances once retries exhaust.
  */
 export const scheduleBackgroundRecovery = (ctx) => {
-  const { currentTrackRef, soundRef, stallRecoveryTimerRef, isError = false } = ctx;
-  if (!canRecover(ctx) || stallRecoveryTimerRef?.current || !currentTrackRef?.current) return;
+  const { currentTrackRef, soundRef, stallRecoveryTimerRef, isError = false, interruptedByOsRef, shouldBePlayingRef } = ctx;
+  if (!canRecover(ctx) || stallRecoveryTimerRef?.current || !currentTrackRef?.current || interruptedByOsRef?.current || !shouldBePlayingRef?.current) return;
 
   if (recoveryState.stallAttempts >= MAX_STALL_RECOVERY_ATTEMPTS) {
     fallbackOrPause(ctx);
@@ -255,7 +255,7 @@ export const scheduleBackgroundRecovery = (ctx) => {
 
   stallRecoveryTimerRef.current = setTimeout(async () => {
     stallRecoveryTimerRef.current = null;
-    if (!canRecover(ctx)) return;
+    if (!canRecover(ctx) || interruptedByOsRef?.current || !shouldBePlayingRef?.current) return;
 
     const activeSound = soundRef?.current;
     if (!isError && activeSound && typeof activeSound.getStatusAsync === 'function') {
@@ -264,7 +264,7 @@ export const scheduleBackgroundRecovery = (ctx) => {
         if (liveStatus?.isLoaded && liveStatus?.isPlaying && !liveStatus?.isBuffering) return;
       } catch {}
     }
-    if (!canRecover(ctx)) return;
+    if (!canRecover(ctx) || interruptedByOsRef?.current || !shouldBePlayingRef?.current) return;
 
     if (recoveryState.stallAttempts >= MAX_STALL_RECOVERY_ATTEMPTS) {
       fallbackOrPause(ctx);
@@ -292,13 +292,17 @@ export const handlePlaybackError = (ctx) => {
  */
 export const handlePlaybackStallOrInterruption = (ctx) => {
   const { status, soundRef, shouldBePlayingRef, isLoadingRef, isSeekingRef, interruptedByOsRef, isPlayingRef, setIsPlaying, stallRecoveryTimerRef, notifyPaused } = ctx;
-  if (!shouldBePlayingRef?.current || isLoadingRef?.current || isSeekingRef?.current) return;
+  if (!shouldBePlayingRef?.current || isLoadingRef?.current || isSeekingRef?.current || interruptedByOsRef?.current) {
+    clearStallRecoveryTimer(stallRecoveryTimerRef);
+    return;
+  }
 
   const isBackground = AppState?.currentState !== 'active';
 
   // If already marked as interrupted or app is in background while unbuffered pause occurred (external app playing sound)
   if (interruptedByOsRef?.current || (isBackground && !status?.isBuffering)) {
     if (interruptedByOsRef) interruptedByOsRef.current = true;
+    if (shouldBePlayingRef) shouldBePlayingRef.current = false;
     clearStallRecoveryTimer(stallRecoveryTimerRef);
     if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
       setIsPlaying(false);
@@ -316,7 +320,7 @@ export const handlePlaybackStallOrInterruption = (ctx) => {
 
       targetSound.playAsync().then((playStatus) => {
         recoveryState.playAsyncInFlight = false;
-        if (!shouldBePlayingRef?.current || soundRef?.current !== targetSound || isLoadingRef?.current) return;
+        if (!shouldBePlayingRef?.current || soundRef?.current !== targetSound || isLoadingRef?.current || interruptedByOsRef?.current) return;
         if (playStatus?.isPlaying) {
           if (interruptedByOsRef) interruptedByOsRef.current = false;
           if (!isPlayingRef?.current && typeof setIsPlaying === 'function') setIsPlaying(true);
@@ -324,16 +328,17 @@ export const handlePlaybackStallOrInterruption = (ctx) => {
         }
       }).catch(() => {
         recoveryState.playAsyncInFlight = false;
-        if (!shouldBePlayingRef?.current || soundRef?.current !== targetSound) return;
         if (interruptedByOsRef) interruptedByOsRef.current = true;
+        if (shouldBePlayingRef) shouldBePlayingRef.current = false;
         if (typeof setIsPlaying === 'function') setIsPlaying(false);
         notifyPaused?.();
         clearStallRecoveryTimer(stallRecoveryTimerRef);
       });
     }
+    return;
   }
 
-  if (!interruptedByOsRef?.current) {
+  if (!interruptedByOsRef?.current && shouldBePlayingRef?.current) {
     scheduleBackgroundRecovery({ ...ctx, isError: false });
   }
 };

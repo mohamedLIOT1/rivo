@@ -38,6 +38,8 @@ import {
   Lock,
   GripVertical,
   BookOpen,
+  Volume2,
+  VolumeX,
 } from 'lucide-react-native';
 import { isQuranContent } from '../../utils/quranUtils';
 import { useSocket } from '../context/SocketContext';
@@ -238,6 +240,7 @@ export default function JamRoomModal({ visible, onClose }) {
     seekTo,
     playNextTrack,
     playPrevTrack,
+    isJamMuted,
   } = useAudioPlayer();
   const progress = useAudioProgress();
   const { showToast } = useToast();
@@ -378,8 +381,7 @@ export default function JamRoomModal({ visible, onClose }) {
     (jamSession &&
       ((jamSession.hostUserId && myId && String(jamSession.hostUserId) === myId) ||
         (jamSession.hostId && socket?.id && jamSession.hostId === socket.id) ||
-        (jamSession.members || []).some(m => (m.socketId === socket?.id || (myId && String(m.id || m._id) === myId)) && m.isHost) ||
-        (jamSession.members?.length === 1 && jamSession.members[0]?.isHost)))
+        (jamSession.members || []).some(m => ((socket?.id && m.socketId === socket.id) || (myId && String(m.id || m._id) === myId)) && Boolean(m.isHost))))
   );
   const canControl = isCurrentUserHost || !jamSession?.hostOnlyControl;
 
@@ -470,7 +472,10 @@ export default function JamRoomModal({ visible, onClose }) {
     const progressPercent = durTime > 0 ? Math.min(100, Math.max(0, (curTime / durTime) * 100)) : 0;
 
     const handleTogglePlay = () => {
-      if (!canControl) return;
+      if (!canControl) {
+        togglePlay();
+        return;
+      }
       const nextPlaying = !isRoomPlaying;
       togglePlay();
       if (syncJamPlayState) {
@@ -548,12 +553,21 @@ export default function JamRoomModal({ visible, onClose }) {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.playerPlayPauseBtn, !isDark && styles.playerPlayPauseBtnLight, !canControl && { opacity: 0.35 }]}
-            disabled={!canControl}
+            style={[
+              styles.playerPlayPauseBtn,
+              !isDark && styles.playerPlayPauseBtnLight,
+              !canControl && isJamMuted && { backgroundColor: '#ef4444' },
+            ]}
             onPress={handleTogglePlay}
             activeOpacity={0.8}
           >
-            {isRoomPlaying ? (
+            {!canControl ? (
+              isJamMuted ? (
+                <VolumeX size={20} color="#ffffff" />
+              ) : (
+                <Volume2 size={20} color="#082621" />
+              )
+            ) : isRoomPlaying ? (
               <Pause size={20} color="#082621" />
             ) : (
               <Play size={20} color="#082621" style={{ marginLeft: 2 }} />

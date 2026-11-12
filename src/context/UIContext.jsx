@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { setTabBadgeCount } from '../utils/webNotification';
 
 const UIContext = createContext(null);
 
@@ -88,6 +89,12 @@ export function UIProvider({ children }) {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatTargetUser, setChatTargetUser] = useState(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      setTabBadgeCount(unreadChatCount);
+    }
+  }, [unreadChatCount]);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);

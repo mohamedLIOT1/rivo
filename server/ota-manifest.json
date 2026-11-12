@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.30",
+  "version": "2.4.31",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "Instant notification play/pause sync, full lockscreen lyrics sheet, and 60/120Hz UI smoothness",
-  "notesEn": "Instant notification play/pause sync, full lockscreen lyrics sheet, and 60/120Hz UI smoothness",
-  "bundleSize": 5298755,
-  "sizeMb": "5.05 MB",
-  "updatedAt": "2026-11-12T14:58:47.553Z"
+  "notes": "Global audio focus, Jam member mute, Vault bar fix, and UI polish",
+  "notesEn": "Global audio focus, Jam member mute, Vault bar fix, and UI polish",
+  "bundleSize": 5302199,
+  "sizeMb": "5.06 MB",
+  "updatedAt": "2026-11-12T17:16:18.465Z"
 }

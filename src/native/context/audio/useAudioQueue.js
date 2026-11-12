@@ -162,15 +162,14 @@ export const useAudioQueue = ({
   }, [setRepeatMode]);
 
   const playNextTrack = useCallback((forceLocal = false) => {
+    if (jamSyncRef?.current?.jamSession && !canControlJam()) {
+      return;
+    }
     if (!forceLocal && jamSyncRef?.current?.jamSession && jamSyncRef?.current?.socket) {
       const roomCode = jamSyncRef.current.jamSession.code || jamSyncRef.current.jamSession.roomCode;
       if (roomCode) {
         if (!canControlJam()) return;
         if (jamSyncRef.current.jamSession.queue && jamSyncRef.current.jamSession.queue.length > 0) {
-          jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
-          return;
-        }
-        if (!isJamHost() && jamSyncRef.current.jamSession.hostOnlyControl) {
           jamSyncRef.current.socket.emit('jam:next_track', { roomCode });
           return;
         }
@@ -390,6 +389,9 @@ export const useAudioQueue = ({
   ]);
 
   const playPrevTrack = useCallback((isFromRemoteJam = false) => {
+    if (jamSyncRef?.current?.jamSession && !canControlJam()) {
+      return;
+    }
     if ((playbackStatusRef.current?.currentTime || 0) > 3) {
       if (seekToCallbackRef.current) seekToCallbackRef.current(0);
       return;
