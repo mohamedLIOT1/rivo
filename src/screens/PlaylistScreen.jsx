@@ -20,7 +20,7 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { getListeningStats } from '../utils/listeningTracker';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
-import { getAlbumArtwork } from './ArtistScreen';
+import { getAlbumArtwork, OFFICIAL_ALBUM_COVERS } from './ArtistScreen';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
 export default function PlaylistScreen({
@@ -557,6 +557,16 @@ export default function PlaylistScreen({
   if (!playlist) return null;
 
   const resolvePlaylistCover = (cover) => {
+    const rawName = (playlist?.name || '').trim();
+    const cleanKey = rawName.replace(/^Album\s*[-–—:]\s*/i, '').trim().toLowerCase();
+    if (OFFICIAL_ALBUM_COVERS?.[cleanKey]) {
+      return OFFICIAL_ALBUM_COVERS[cleanKey];
+    }
+    for (const [key, val] of Object.entries(OFFICIAL_ALBUM_COVERS || {})) {
+      if (cleanKey && (cleanKey === key || cleanKey.includes(key) || key.includes(cleanKey))) {
+        return val;
+      }
+    }
     if (!cover) return `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist?.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
     if (cover.startsWith('/uploads/')) {
       return `${API_BASE_URL}${cover}`;
@@ -1013,7 +1023,12 @@ export default function PlaylistScreen({
                   className="w-full h-full object-cover" 
                   onError={(e) => {
                     e.currentTarget.onerror = null;
-                    e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+                    const official = getAlbumArtwork(playlist, '');
+                    if (official && !official.includes('ui-avatars.com')) {
+                      e.currentTarget.src = official;
+                    } else {
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(playlist.name || 'Playlist')}&background=082621&color=26c4b7&size=512&bold=true&format=svg`;
+                    }
                   }}
                 />
                 {isUpdatingCover && (

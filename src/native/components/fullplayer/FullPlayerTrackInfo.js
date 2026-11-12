@@ -13,6 +13,7 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
   vocalIsolationStatus,
   stemMode = 'mix',
   setStemMode,
+  isVocalOnly = false,
   isMixMode = false,
   mixName,
 }) {
@@ -72,34 +73,34 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
               </Text>
             </View>
 
-            {/* 3-Way Stem Mode Pills (🎵 الكل / 🎤 كلمات / 🎹 اللحن) */}
-            {displayGenre !== 'القرآن الكريم' && displayGenre !== 'QURAN' && (
+            {/* 3-Way Stem Mode Pills - strictly visible ONLY when vocal isolation is enabled */}
+            {displayGenre !== 'القرآن الكريم' && displayGenre !== 'QURAN' && Boolean(isVocalOnly) && (
               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#070c0a', borderRadius: 8, padding: 2, borderWidth: 1, borderColor: '#1f2f2b', gap: 2 }}>
                 <TouchableOpacity
                   onPress={() => setStemMode?.('mix')}
-                  style={[{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }, (stemMode || 'mix') === 'mix' && { backgroundColor: '#17a398' }]}
+                  style={[{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }, (stemMode || 'mix') === 'mix' && { backgroundColor: '#17a398' }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[{ fontSize: 10, fontWeight: '900', color: '#9ca3af', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }, (stemMode || 'mix') === 'mix' && { color: '#0b1110' }]}>
-                    🎵 {isRTL ? 'الكل' : 'Mix'}
+                    ALL
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setStemMode?.('vocal')}
-                  style={[{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }, stemMode === 'vocal' && { backgroundColor: '#10b981' }]}
+                  style={[{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }, stemMode === 'vocal' && { backgroundColor: '#10b981' }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[{ fontSize: 10, fontWeight: '900', color: '#9ca3af', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }, stemMode === 'vocal' && { color: '#0b1110' }]}>
-                    🎤 {isRTL ? 'كلمات' : 'Vocals'}
+                    VOCAL
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setStemMode?.('inst')}
-                  style={[{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }, stemMode === 'inst' && { backgroundColor: '#f59e0b' }]}
+                  style={[{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }, stemMode === 'inst' && { backgroundColor: '#f59e0b' }]}
                   activeOpacity={0.7}
                 >
                   <Text style={[{ fontSize: 10, fontWeight: '900', color: '#9ca3af', fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif' }, stemMode === 'inst' && { color: '#0b1110' }]}>
-                    🎹 {isRTL ? 'اللحن' : 'Beats'}
+                    INST
                   </Text>
                 </TouchableOpacity>
               </View>

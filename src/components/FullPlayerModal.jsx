@@ -11,7 +11,7 @@ import { useAudioPlayer } from '../context/AudioContext';
 import { subscribeWebAudioProgress, getWebAudioProgressSnapshot } from '../context/audio/AudioProgressProvider';
 import { useUser } from '../context/UserContext';
 import { useUI } from '../context/UIContext';
-import { useTranslation } from '../context/PreferencesContext';
+import { usePreferences, useTranslation } from '../context/PreferencesContext';
 import { getJamSocket } from '../utils/jamService';
 import ConfirmModal from './ConfirmModal';
 import TrackActionMenuModal from './TrackActionMenuModal';
@@ -182,6 +182,7 @@ function FullPlayerModal({
   const isTrackLiked = likedTrackIds.some(id => String(id) === String(currentTrack?.id) || String(id) === String(currentTrack?._id)) || Boolean(currentTrack?.liked);
 
   const { t } = useTranslation();
+  const { vocalOnlyMode } = usePreferences();
   const [activeTab, setActiveTab] = useState('player');
   const [desktopSideTab, setDesktopSideTab] = useState('lyrics');
   const [isVinylMode, setIsVinylMode] = useState(false);
@@ -1549,44 +1550,44 @@ function FullPlayerModal({
 
             {/* Deck Auxiliary Controls */}
             <div className="flex items-center gap-1.5 shrink-0 flex-wrap sm:flex-nowrap">
-              {/* 3-Way Stem Selector (Full Mix / Vocals / Instrumental) */}
-              {!isCurQuran && (
-                <div className="flex items-center rounded-xl overflow-hidden border border-[#17a398]/50 bg-black/40 p-0.5 text-[10px] font-mono font-bold">
+              {/* 3-Way Stem Selector (Full Mix / Vocals / Instrumental) - strictly visible ONLY when vocal isolation is enabled */}
+              {!isCurQuran && Boolean(vocalOnlyMode) && (
+                <div className="flex items-center rounded-xl overflow-hidden border border-[#1f2f2b] bg-black/60 p-0.5 text-[10px] font-mono tracking-wider font-bold">
                   <button
                     type="button"
                     onClick={() => setStemMode?.('mix')}
-                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                       (stemMode || 'mix') === 'mix'
                         ? 'bg-[#17a398] text-[#0b1110] font-black shadow-sm'
                         : 'text-zinc-400 hover:text-white'
                     }`}
-                    title="الكل: تشغيل الأغنية كاملة (موسيقى + كلمات)"
+                    title="All / Full Track"
                   >
-                    🎵 الكل
+                    ALL
                   </button>
                   <button
                     type="button"
                     onClick={() => setStemMode?.('vocal')}
-                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                       stemMode === 'vocal'
                         ? 'bg-[#10b981] text-[#0b1110] font-black shadow-sm'
                         : 'text-zinc-400 hover:text-white'
                     }`}
-                    title="كلمات فقط: عزل المغني (أكابيلا بدون موسيقى)"
+                    title="Vocals Only"
                   >
-                    🎤 كلمات
+                    VOCAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setStemMode?.('inst')}
-                    className={`px-2 py-1 rounded-lg transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
                       stemMode === 'inst'
                         ? 'bg-amber-400 text-[#0b1110] font-black shadow-sm'
                         : 'text-zinc-400 hover:text-white'
                     }`}
-                    title="اللحن فقط: كاريوكي بدون صوت المغني"
+                    title="Instrumental / Beats"
                   >
-                    🎹 اللحن
+                    INST
                   </button>
                 </div>
               )}
