@@ -2,6 +2,7 @@ import { deduplicateTrackList } from '../services/downloadManager';
 import { sortTracksByPopularity } from '../../utils/trackPopularity';
 import { isQuranContent, getQuranReciterName, cleanQuranTrackTitle, normalizeArabicText, isRadioTrack } from '../../utils/quranUtils';
 import { getQuranRecitersList } from '../../utils/quranRecitersService';
+import { get12hBucket, rotateAlbumsForWindow } from './aiMoodMixCache';
 
 // Nested WeakMap memoization keyed by array references so switching tabs never re-sorts or re-dedupes static catalogs.
 const downloadedMusicCache = new WeakMap();
@@ -37,13 +38,24 @@ export function getCachedMusicTracks({ userTracks, downloadedTracks, isOffline, 
   return cached;
 }
 
+const rotatedAlbumsWindowCache = new WeakMap();
+
 /**
- * Returns filtered/derived Featured Albums for HomeScreen in O(1) when albums & userTracks references match.
+ * Returns filtered/derived Featured Albums for HomeScreen with 12h deterministic rotation + artist interleaving.
  */
-export function getCachedHomeAlbums(albums, userTracks) {
+export function getCachedHomeAlbums(albums, userTracks, ownerId = 'guest') {
+  const bucket12h = get12hBucket();
   const safeAlbums = Array.isArray(albums) ? albums : EMPTY;
   const dbAlbums = safeAlbums.filter((alb) => !isQuranContent(alb));
-  if (dbAlbums.length > 0) return dbAlbums;
+  if (dbAlbums.length > 0) {
+    const entry = rotatedAlbumsWindowCache.get(safeAlbums);
+    if (entry && entry.bucket === bucket12h && entry.ownerId === ownerId) {
+      return entry.list;
+    }
+    const list = rotateAlbumsForWindow(dbAlbums, ownerId);
+    rotatedAlbumsWindowCache.set(safeAlbums, { bucket: bucket12h, ownerId, list });
+    return list;
+  }
 
   const src = Array.isArray(userTracks) ? userTracks : EMPTY;
   let cached = derivedAlbumsCache.get(src);
@@ -71,7 +83,13 @@ export function getCachedHomeAlbums(albums, userTracks) {
       .slice(0, 16);
     derivedAlbumsCache.set(src, cached);
   }
-  return cached;
+  const derivedEntry = rotatedAlbumsWindowCache.get(cached);
+  if (derivedEntry && derivedEntry.bucket === bucket12h && derivedEntry.ownerId === ownerId) {
+    return derivedEntry.list;
+  }
+  const rotatedDerived = rotateAlbumsForWindow(cached, ownerId);
+  rotatedAlbumsWindowCache.set(cached, { bucket: bucket12h, ownerId, list: rotatedDerived });
+  return rotatedDerived;
 }
 
 /**

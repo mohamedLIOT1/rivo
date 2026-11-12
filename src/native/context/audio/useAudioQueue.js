@@ -65,8 +65,16 @@ export const useAudioQueue = ({
   }, []);
 
   const setQueue = useCallback((newQueue) => {
-    queueRef.current = Array.isArray(newQueue) ? newQueue : [];
-    setQueueState(queueRef.current);
+    const safeArr = Array.isArray(newQueue) ? newQueue : [];
+    if (Array.isArray(newQueue)) {
+      if (newQueue.isMix) safeArr.isMix = true;
+      if (newQueue._isMix) safeArr._isMix = true;
+      if (newQueue._isExplicitPlaylist) safeArr._isExplicitPlaylist = true;
+      if (newQueue.name) safeArr.name = newQueue.name;
+      if (newQueue._transitions) safeArr._transitions = newQueue._transitions;
+    }
+    queueRef.current = safeArr;
+    setQueueState(safeArr);
   }, []);
 
   const addToQueue = useCallback((track) => {
@@ -350,7 +358,8 @@ export const useAudioQueue = ({
     const currentId = String(cur?._id || cur?.id || '');
     let i = q.findIndex(t => String(t._id || t.id) === currentId);
 
-    if (isShuffleRef.current) {
+    const isMixQueueLocked = Boolean(q.isMix || q._isMix || q._isExplicitPlaylist || isMixModeRef?.current);
+    if (isShuffleRef.current && q.length > 1) {
       const unplayed = q.filter((t, idx) => idx !== i && !playedInQueueCycleRef.current.has(String(t._id || t.id)));
       if (unplayed.length > 0) {
         const randomTrack = unplayed[Math.floor(Math.random() * unplayed.length)];
@@ -365,13 +374,13 @@ export const useAudioQueue = ({
     if (i >= 0 && i < q.length - 1) {
       if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[i + 1], q);
     } else if (q.length > 0) {
-      const isExplicitPlaylist = !q.some(t => t.isSmartMoodQueue || t.isAiSuggestion);
-      if ((repeatModeRef.current === 'all' || isMixModeRef?.current) && isExplicitPlaylist) {
+      const isExplicitPlaylist = isMixQueueLocked || !q.some(t => t.isSmartMoodQueue || t.isAiSuggestion);
+      if ((repeatModeRef.current === 'all' || isMixQueueLocked) && isExplicitPlaylist) {
         if (playTrackCallbackRef.current) playTrackCallbackRef.current(q[0], q);
       } else {
         triggerAutoQueue();
       }
-    } else {
+    } else if (!isMixQueueLocked) {
       triggerAutoQueue();
     }
   }, [

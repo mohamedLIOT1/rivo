@@ -87,7 +87,16 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     leaveJam,
   } = useJam();
 
-  const [localAlbums, setLocalAlbums] = useState([]);
+  const [localAlbums, setLocalAlbums] = useState(() => {
+    try {
+      const raw = localStorage.getItem('rivo_albums');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
   const albums = propAlbums || localAlbums;
   const setAlbums = propSetAlbums || setLocalAlbums;
   const [audioQuality, setAudioQuality] = useState('320');
@@ -100,13 +109,31 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     }
   }, []);
 
-  // Fetch albums on startup
+  // Fetch albums on startup and cache slim album summaries for 0ms render on refresh
   const fetchAlbums = useCallback(async () => {
     try {
       const alb = await dataService.fetchAlbums();
-      setAlbums(alb);
+      if (Array.isArray(alb) && alb.length > 0) {
+        setAlbums(alb);
+        try {
+          const slimAlbs = alb.map(a => ({
+            _id: a._id,
+            id: a.id || a._id,
+            name: a.name,
+            artist: a.artist,
+            cover: a.cover || a.coverUrl,
+            coverUrl: a.coverUrl || a.cover,
+            year: a.year,
+            isQuran: a.isQuran,
+            isPodcast: a.isPodcast,
+            trackIds: Array.isArray(a.trackIds) ? a.trackIds : [],
+            trackCount: a.trackCount || (Array.isArray(a.tracks) ? a.tracks.length : (Array.isArray(a.trackIds) ? a.trackIds.length : 0)),
+          }));
+          localStorage.setItem('rivo_albums', JSON.stringify(slimAlbs));
+        } catch {}
+      }
     } catch {}
-  }, []);
+  }, [setAlbums]);
 
   useEffect(() => {
     fetchAlbums();

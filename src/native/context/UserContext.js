@@ -505,19 +505,28 @@ export const UserProvider = ({ children }) => {
 
   const updatePlaylistTransitions = useCallback(async (playlistId, { isMix, transitions }) => {
     const plIdStr = String(playlistId);
+    const applyPatch = (list) => (list || []).map(p => {
+      if (String(p.id || p._id) === plIdStr) {
+        return {
+          ...p,
+          ...(isMix !== undefined ? { isMix } : {}),
+          ...(transitions !== undefined ? { transitions } : {}),
+        };
+      }
+      return p;
+    });
+
     setPlaylists(prev => {
-      const next = prev.map(p => {
-        if (String(p.id || p._id) === plIdStr) {
-          return {
-            ...p,
-            ...(isMix !== undefined ? { isMix } : {}),
-            ...(transitions !== undefined ? { transitions } : {}),
-          };
-        }
-        return p;
-      });
-      savePlaylistsDebounced(next);
+      const next = applyPatch(prev);
+      AsyncStorage.setItem(CACHE_PLAYLISTS_KEY, JSON.stringify(next)).catch(() => {});
       return next;
+    });
+
+    setCurrentUser(prevUser => {
+      if (!prevUser || !Array.isArray(prevUser.playlists)) return prevUser;
+      const nextUser = { ...prevUser, playlists: applyPatch(prevUser.playlists) };
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(nextUser)).catch(() => {});
+      return nextUser;
     });
 
     const t = tokenRef.current;
@@ -531,11 +540,13 @@ export const UserProvider = ({ children }) => {
         },
         body: JSON.stringify({ isMix, transitions }),
       });
-      return await res.json().catch(() => ({ success: false }));
+      const data = await res.json().catch(() => ({ success: false }));
+      if (!res.ok) return { success: false, error: data?.error || `HTTP ${res.status}` };
+      return { success: true, ...data };
     } catch (err) {
       return { success: false, error: err.message };
     }
-  }, [savePlaylistsDebounced]);
+  }, []);
 
   const uploadPlaylistCover = useCallback(async (playlistId, fileUri) => {
     const t = tokenRef.current;

@@ -369,8 +369,19 @@ export const useAudioPlaybackCore = ({
 
     try {
       const isQuran = isQuranContent(cleanTrack) || isRadioTrack(cleanTrack);
+      const preserveQueueProps = (targetArr, sourceArr) => {
+        if (!Array.isArray(targetArr) || !sourceArr) return targetArr;
+        if (sourceArr.isMix) targetArr.isMix = true;
+        if (sourceArr._isMix) targetArr._isMix = true;
+        if (sourceArr._isExplicitPlaylist) targetArr._isExplicitPlaylist = true;
+        if (sourceArr.name) targetArr.name = sourceArr.name;
+        if (sourceArr._transitions) targetArr._transitions = sourceArr._transitions;
+        return targetArr;
+      };
+
       if (Array.isArray(trackList) && trackList.length > 0) {
-        if (trackList.length === 1 && !isQuran) {
+        const isExplicitList = Boolean(trackList._isExplicitPlaylist || trackList.isMix || trackList._isMix);
+        if (trackList.length === 1 && !isQuran && !isExplicitList && !isMixModeRef?.current) {
           if (isPodcastContent(cleanTrack)) {
             const podcastPool = ((userTracks?.length > 0) ? userTracks : []).filter(t => isPodcastContent(t));
             const fullPool = podcastPool.length > 0 ? podcastPool : PODCAST_SHOWS_EPISODES;
@@ -380,29 +391,30 @@ export const useAudioPlaybackCore = ({
             setQueue(buildSmartSeedQueue(cleanTrack, pool, { currentUser, followedArtists: currentUser?.following || [], likedTrackIds }));
           }
         } else {
-          // Strictly isolate queue according to playing content type
+          // Strictly isolate queue according to playing content type while preserving playlist/Mix flags
           if (isQuran) {
             const quranList = trackList.filter(t => isQuranContent(t) || isRadioTrack(t));
-            setQueue(quranList.length > 0 ? quranList : [cleanTrack]);
+            setQueue(preserveQueueProps(quranList.length > 0 ? quranList : [cleanTrack], trackList));
           } else if (isPodcastContent(cleanTrack)) {
             const podcastList = trackList.filter(isPodcastContent);
-            setQueue(podcastList.length > 0 ? podcastList : [cleanTrack]);
+            setQueue(preserveQueueProps(podcastList.length > 0 ? podcastList : [cleanTrack], trackList));
           } else {
             const musicList = trackList.filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
-            setQueue(musicList.length > 0 ? musicList : [cleanTrack]);
+            setQueue(preserveQueueProps(musicList.length > 0 ? musicList : [cleanTrack], trackList));
           }
         }
       } else {
         // No trackList provided: ensure existing queue is strictly segregated
+        const existingQ = queueRef.current || [];
         if (isQuran) {
-          const quranQueue = (queueRef.current || []).filter(t => isQuranContent(t) || isRadioTrack(t));
-          setQueue(quranQueue.length > 0 ? quranQueue : (isRadioTrack(cleanTrack) ? QURAN_LIVE_STATIONS : [cleanTrack]));
+          const quranQueue = existingQ.filter(t => isQuranContent(t) || isRadioTrack(t));
+          setQueue(preserveQueueProps(quranQueue.length > 0 ? quranQueue : (isRadioTrack(cleanTrack) ? QURAN_LIVE_STATIONS : [cleanTrack]), existingQ));
         } else if (isPodcastContent(cleanTrack)) {
-          const podcastQueue = (queueRef.current || []).filter(isPodcastContent);
-          setQueue(podcastQueue.length > 0 ? podcastQueue : [cleanTrack]);
+          const podcastQueue = existingQ.filter(isPodcastContent);
+          setQueue(preserveQueueProps(podcastQueue.length > 0 ? podcastQueue : [cleanTrack], existingQ));
         } else {
-          const musicQueue = (queueRef.current || []).filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
-          setQueue(musicQueue.length > 0 ? musicQueue : [cleanTrack]);
+          const musicQueue = existingQ.filter(t => !isQuranContent(t) && !isRadioTrack(t) && !isPodcastContent(t));
+          setQueue(preserveQueueProps(musicQueue.length > 0 ? musicQueue : [cleanTrack], existingQ));
         }
       }
 
@@ -519,8 +531,14 @@ export const useAudioPlaybackCore = ({
   playTrackRef.current = playTrack;
 
   const playPlaylist = useCallback(async (playlistOrTracks, startIndex = 0) => {
-    let list = Array.isArray(playlistOrTracks) ? playlistOrTracks : (playlistOrTracks?.tracks || []);
-    if (!list || list.length === 0) return;
+    const rawList = Array.isArray(playlistOrTracks) ? playlistOrTracks : (playlistOrTracks?.tracks || []);
+    if (!rawList || rawList.length === 0) return;
+    const list = [...rawList];
+    list._isExplicitPlaylist = true;
+    if (playlistOrTracks?.isMix) list.isMix = true;
+    if (playlistOrTracks?._isMix) list._isMix = true;
+    if (playlistOrTracks?.name) list.name = playlistOrTracks.name;
+    if (playlistOrTracks?._transitions) list._transitions = playlistOrTracks._transitions;
     const safeIdx = Math.max(0, Math.min(startIndex, list.length - 1));
     setQueue(list);
     return playTrack(list[safeIdx], list);

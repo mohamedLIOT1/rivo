@@ -655,6 +655,7 @@ function LibraryScreen({
   const handlePlayLiked = (shuffle = false) => {
     if (!likedTracks || likedTracks.length === 0) return;
     const list = [...likedTracks];
+    list._isExplicitPlaylist = true;
     list.isMix = isMixActive;
     list._isMix = isMixActive;
     list.name = 'Liked Songs';
@@ -677,7 +678,14 @@ function LibraryScreen({
     const list = [...activePlaylistTracks];
     if (list.length === 0) return;
     const isPlQuran = Boolean(isSelectedPlQuran || isQuranContent(playlist) || list.some(isQuranContent));
-    if (!isPlQuran && isMixActive) {
+    const mixFlag = !isPlQuran && isMixActive;
+    list._isExplicitPlaylist = true;
+    list.isMix = mixFlag;
+    list._isMix = mixFlag;
+    list.name = playlist?.name || selectedView?.name;
+    if (playlistTransitions) list._transitions = playlistTransitions;
+
+    if (mixFlag) {
       if (typeof setIsMixMode === 'function') setIsMixMode(true);
       if (typeof setActiveTransitions === 'function' && playlistTransitions) {
         setActiveTransitions(playlistTransitions);
@@ -1003,6 +1011,7 @@ function LibraryScreen({
         if (typeof setActiveTransitions === 'function') setActiveTransitions({});
       }
       const pList = [...activePlaylistTracks];
+      pList._isExplicitPlaylist = true;
       pList.isMix = !isItemQuran && isMixActive;
       pList._isMix = !isItemQuran && isMixActive;
       pList.name = selectedView?.name;
@@ -1908,20 +1917,18 @@ function LibraryScreen({
                playlistTransitions[activeMixerPair.index])
             : null
         }
-        onSaveTransition={(newTrans) => {
+        onSaveTransition={async (newTrans) => {
           if (activeMixerPair) {
-            const { from, to, pairKey, index } = activeMixerPair;
-            const tAId = String(from?._id || from?.id || '');
-            const tBId = String(to?._id || to?.id || '');
+            const { from, to } = activeMixerPair;
+            const tAId = String(from?._id || from?.id || '').replace(/[.$]/g, '_');
+            const tBId = String(to?._id || to?.id || '').replace(/[.$]/g, '_');
+            const pairKey = `${tAId}___${tBId}`;
             const altKey = `${tAId}_${tBId}`;
-            const titleKey = `${(from?.title || '').trim().toLowerCase()}_${(to?.title || '').trim().toLowerCase()}`;
 
             const updated = {
               ...playlistTransitions,
               [pairKey]: newTrans,
               [altKey]: newTrans,
-              [titleKey]: newTrans,
-              [index]: newTrans,
             };
             setPlaylistTransitions(updated);
 
@@ -1930,8 +1937,6 @@ function LibraryScreen({
                 ...prev,
                 [pairKey]: newTrans,
                 [altKey]: newTrans,
-                [titleKey]: newTrans,
-                [index]: newTrans,
               }));
             }
 
@@ -1943,9 +1948,11 @@ function LibraryScreen({
               setSelectedView(prev => (prev && typeof prev === 'object') ? { ...prev, isMix: true, transitions: updated } : prev);
               const plId = String(selectedView.id || selectedView._id);
               if (typeof updatePlaylistTransitions === 'function') {
-                updatePlaylistTransitions(plId, { isMix: true, transitions: updated }).catch(err => {
-                  console.warn('Failed to sync transitions to playlist:', err);
-                });
+                const res = await updatePlaylistTransitions(plId, { isMix: true, transitions: updated }).catch(() => ({ success: false }));
+                if (res?.success === false) {
+                  showToast('Saved locally — server sync failed', 'warning');
+                  return;
+                }
               } else {
                 const authTok = token || '';
                 fetch(`${API_BASE_URL}/api/playlists/${plId}/transitions`, {
@@ -1959,7 +1966,7 @@ function LibraryScreen({
               }
             }
 
-            showToast(`Applied ${newTrans.style.toUpperCase()} (${newTrans.bars || 4} bars) transition`, 'success');
+            showToast(`Applied ${(newTrans.style || 'fade').toUpperCase()} (${newTrans.bars || 4} bars) transition`, 'success');
           }
         }}
       />

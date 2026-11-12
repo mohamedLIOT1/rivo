@@ -107,6 +107,10 @@ export function PreferencesProvider({ children, currentUser }) {
     return DEFAULT_CONTENT_MODES;
   });
 
+  const contentModesRef = React.useRef(contentModes);
+  contentModesRef.current = contentModes;
+  const hasToggledContentModeRef = React.useRef(false);
+
   // Sync preferences from server if user is logged in
   useEffect(() => {
     const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
@@ -119,24 +123,27 @@ export function PreferencesProvider({ children, currentUser }) {
     })
       .then(res => (res.ok ? res.json() : null))
       .then(data => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted || hasToggledContentModeRef.current) return;
         if (data?.success && data?.preferences) {
           if (data.preferences.contentModes) {
-            setContentModesState(prev => ({
-              ...DEFAULT_CONTENT_MODES,
-              ...prev,
-              ...data.preferences.contentModes,
-              podcasts: data.preferences.contentModes.podcasts !== false
-            }));
-            localStorage.setItem('rivo_content_modes', JSON.stringify({
+            const mergedModes = {
               ...DEFAULT_CONTENT_MODES,
               ...data.preferences.contentModes,
-              podcasts: data.preferences.contentModes.podcasts !== false
-            }));
+              music: data.preferences.contentModes.music !== false,
+              quran: data.preferences.contentModes.quran !== false,
+              podcasts: data.preferences.contentModes.podcasts !== false,
+            };
+            contentModesRef.current = mergedModes;
+            setContentModesState(mergedModes);
+            try {
+              localStorage.setItem('rivo_content_modes', JSON.stringify(mergedModes));
+            } catch {}
           }
           if (data.preferences.preferredLanguage === 'ar' || data.preferences.preferredLanguage === 'en') {
             setLanguageState(data.preferences.preferredLanguage);
-            localStorage.setItem('rivo_language', data.preferences.preferredLanguage);
+            try {
+              localStorage.setItem('rivo_language', data.preferences.preferredLanguage);
+            } catch {}
           }
         }
       })
@@ -172,26 +179,30 @@ export function PreferencesProvider({ children, currentUser }) {
 
   // Toggle Content Mode (e.g. disable music for Islamic mode)
   const toggleContentMode = useCallback((modeKey, isEnabled) => {
-    setContentModesState(prev => {
-      const updated = {
-        ...prev,
-        [modeKey]: isEnabled
-      };
+    hasToggledContentModeRef.current = true;
+    const prev = contentModesRef.current || DEFAULT_CONTENT_MODES;
+    const updated = {
+      ...DEFAULT_CONTENT_MODES,
+      ...prev,
+      [modeKey]: isEnabled,
+    };
+    contentModesRef.current = updated;
+    setContentModesState(updated);
+    try {
       localStorage.setItem('rivo_content_modes', JSON.stringify(updated));
+    } catch {}
 
-      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      if (token) {
-        fetch(`${API_BASE_URL}/api/users/preferences`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
-          },
-          body: JSON.stringify({ contentModes: updated })
-        }).catch(() => {});
-      }
-      return updated;
-    });
+    const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+    if (token) {
+      fetch(`${API_BASE_URL}/api/users/preferences`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ contentModes: updated })
+      }).catch(() => {});
+    }
   }, []);
 
   const showMusic = contentModes.music !== false;

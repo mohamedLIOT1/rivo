@@ -43,10 +43,25 @@ export const useDjCrossfade = ({
   const nextSoundRef = useRef(null);
   const nextTrackRef = useRef(null);
   const nextSoundPlayingRef = useRef(false);
+  const nextSoundRateRef = useRef(1.0);
+  const speedEaseTimersRef = useRef([]);
   const isMixPreloadingRef = useRef(false);
   const isMixTransitioningRef = useRef(false);
   const isHandoffRunningRef = useRef(false);
   const lastMixBridgeUpdateRef = useRef({ time: 0, volA: -1, volB: -1, speedA: 1.0 });
+
+  const clearSpeedEaseTimers = useCallback(() => {
+    if (speedEaseTimersRef.current.length > 0) {
+      speedEaseTimersRef.current.forEach((id) => clearTimeout(id));
+      speedEaseTimersRef.current = [];
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearSpeedEaseTimers();
+    };
+  }, [clearSpeedEaseTimers]);
 
   const [activeTransitions, setActiveTransitions] = useState({});
   const activeTransRef = useRef({});
@@ -176,13 +191,14 @@ export const useDjCrossfade = ({
       }
       if (nextUri.startsWith('/')) nextUri = `${API_BASE_URL}${nextUri}`;
 
+      const safeRate = Math.max(0.5, Math.min(2.0, Number(speedB) || 1.0));
       const soundSource = { uri: nextUri };
       const { sound } = await Audio.Sound.createAsync(
         soundSource,
         {
           shouldPlay: false,
           positionMillis: Math.max(0, Math.floor(inPointSec * 1000)),
-          rate: Number(speedB) || 1.0,
+          rate: safeRate,
           shouldCorrectPitch: true,
           volume: 0,
           progressUpdateIntervalMillis: 250,
@@ -191,6 +207,8 @@ export const useDjCrossfade = ({
       nextSoundRef.current = sound;
       nextTrackRef.current = nTrack;
       nextSoundPlayingRef.current = false;
+      nextSoundRateRef.current = safeRate;
+      lastMixBridgeUpdateRef.current = { time: 0, volA: -1, volB: -1, speedA: safeRate };
     } catch (err) {
       if (nextSoundRef.current) {
         try { nextSoundRef.current.unloadAsync().catch(() => {}); } catch {}
@@ -235,13 +253,16 @@ export const useDjCrossfade = ({
               prevSound.stopAsync().catch(() => {});
               prevSound.unloadAsync().catch(() => {});
             } catch {}
-          }, 300);
+          }, 480);
         }
 
         soundRef.current = newActiveSound;
         nextSoundRef.current = null;
         nextTrackRef.current = null;
         nextSoundPlayingRef.current = false;
+        const startRate = Number(nextSoundRateRef.current) || 1.0;
+        nextSoundRateRef.current = 1.0;
+        lastMixBridgeUpdateRef.current = { time: 0, volA: -1, volB: -1, speedA: startRate };
         loadedTrackIdRef.current = newActiveId;
         currentTrackRef.current = newActiveTrack;
         setCurrentTrack(newActiveTrack);
@@ -255,7 +276,22 @@ export const useDjCrossfade = ({
         newActiveSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
         const targetVol = volumeRef.current !== undefined ? volumeRef.current : 0.8;
         newActiveSound.setVolumeAsync(targetVol).catch(() => {});
-        try { newActiveSound.setRateAsync(1.0, true).catch(() => {}); } catch {}
+
+        // Smoothly glide playback rate back toward 1.0 over ~1.8s instead of abrupt speed/pitch snap
+        clearSpeedEaseTimers();
+        if (Math.abs(startRate - 1.0) > 0.01) {
+          const easeSteps = 4;
+          for (let s = 1; s <= easeSteps; s++) {
+            const frac = s / easeSteps;
+            const easedRate = Number((startRate + (1.0 - startRate) * frac).toFixed(3));
+            const tid = setTimeout(() => {
+              if (soundRef.current === newActiveSound) {
+                try { newActiveSound.setRateAsync(easedRate, true).catch(() => {}); } catch {}
+              }
+            }, s * 450);
+            speedEaseTimersRef.current.push(tid);
+          }
+        }
 
         const isLiked = likedTrackIds.some(id => String(id) === newActiveId);
         if (updateMediaNotificationCallback) {

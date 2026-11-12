@@ -183,7 +183,7 @@ export const handlePlaybackStatusUpdate = ({
         const curIdx = q.findIndex(t => String(t._id || t.id) === curId);
         const nextTrack = (curIdx >= 0 && curIdx + 1 < q.length) ? q[curIdx + 1] : q[0];
 
-        if (nextTrack && !isQuranContent(nextTrack)) {
+        if (nextTrack && !isQuranContent(nextTrack) && String(nextTrack._id || nextTrack.id || '') !== curId) {
           const nextId = String(nextTrack._id || nextTrack.id || '');
           const pairKey = `${curId}___${nextId}`;
           const transConf = activeTransRef?.current?.[pairKey] || activeTransRef?.current?.[`${curId}_${nextId}`] || {};
@@ -200,6 +200,7 @@ export const handlePlaybackStatusUpdate = ({
             ? Math.min(newDuration, Number(transConf.mixOutPoint))
             : newDuration;
           const remTime = effectiveOut - newCurrentTime;
+          const handoffThreshold = 0.55;
 
           if (remTime <= Math.max(12, transDur + 6) && !nextSoundRef?.current && preloadNextTrackForDjMix) {
             preloadNextTrackForDjMix(mixInPoint, speedB);
@@ -207,19 +208,25 @@ export const handlePlaybackStatusUpdate = ({
           if (remTime <= transDur && nextSoundRef?.current && !isMixTransitioningRef?.current) {
             if (!nextSoundPlayingRef?.current) {
               if (nextSoundPlayingRef) nextSoundPlayingRef.current = true;
-              nextSoundRef.current.setVolumeAsync(0.01).catch(() => {});
               nextSoundRef.current.playAsync().catch(() => {});
             }
-            const p = Math.min(1.0, Math.max(0.0, 1 - (remTime / transDur)));
+            const span = Math.max(0.5, transDur - handoffThreshold);
+            const p = Math.min(1.0, Math.max(0.0, (transDur - remTime) / span));
             const { gainA, gainB } = calculateCrossfadeGains(p, style, bias);
-            if (soundRef?.current) {
-              soundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1.0, masterVol * gainA * multA))).catch(() => {});
+            const nextVolA = Math.max(0, Math.min(1.0, masterVol * gainA * multA));
+            const nextVolB = Math.max(0, Math.min(1.0, masterVol * gainB * multB));
+
+            const bridgeState = lastMixBridgeUpdateRef?.current;
+            if (!bridgeState || Math.abs(bridgeState.volA - nextVolA) >= 0.015) {
+              if (bridgeState) bridgeState.volA = nextVolA;
+              soundRef?.current?.setVolumeAsync(nextVolA).catch(() => {});
             }
-            if (nextSoundRef.current) {
-              nextSoundRef.current.setVolumeAsync(Math.max(0.01, Math.min(1.0, masterVol * gainB * multB))).catch(() => {});
+            if (!bridgeState || Math.abs(bridgeState.volB - nextVolB) >= 0.015) {
+              if (bridgeState) bridgeState.volB = nextVolB;
+              nextSoundRef.current?.setVolumeAsync(nextVolB).catch(() => {});
             }
           }
-          if (remTime <= 1 && nextSoundRef?.current && !isMixTransitioningRef?.current && completeSeamlessHandoff) {
+          if (remTime <= handoffThreshold && nextSoundRef?.current && !isMixTransitioningRef?.current && completeSeamlessHandoff) {
             isMixTransitioningRef.current = true;
             completeSeamlessHandoff();
           }

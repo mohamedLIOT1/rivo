@@ -62,7 +62,17 @@ export default function HomeScreen({
   // Sort tracks by global popularity with intelligent scoring and artist interleaving
   const popularTracks = useMemo(() => sortTracksByPopularity(displayTracks), [displayTracks]);
 
-  const [fetchedAlbums, setFetchedAlbums] = useState(albums || []);
+  const [fetchedAlbums, setFetchedAlbums] = useState(() => {
+    if (Array.isArray(albums) && albums.length > 0) return albums;
+    try {
+      const raw = localStorage.getItem('rivo_albums');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return albums || [];
+  });
   useEffect(() => {
     if (albums && albums.length > 0) setFetchedAlbums(albums);
   }, [albums]);
@@ -75,6 +85,9 @@ export default function HomeScreen({
       .then(d => {
         if (!controller.signal.aborted && d?.success && Array.isArray(d.albums) && d.albums.length > 0) {
           setFetchedAlbums(d.albums);
+          try {
+            localStorage.setItem('rivo_albums', JSON.stringify(d.albums));
+          } catch {}
         }
       })
       .catch(() => {});
@@ -177,8 +190,9 @@ export default function HomeScreen({
 
   const getGreetingPrefix = useCallback(() => {
     const hour = new Date().getHours();
+    if (hour >= 21 || hour < 5) return t('home.greetingNightShort');
     if (hour < 12) return t('home.greetingMorningShort');
-    if (hour < 18) return t('home.greetingAfternoonShort');
+    if (hour < 17) return t('home.greetingAfternoonShort');
     return t('home.greetingEveningShort');
   }, [t]);
 

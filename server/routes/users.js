@@ -298,9 +298,19 @@ router.post('/preferences', auth, async (req, res) => {
     }
 
     if (req.body.contentModes && typeof req.body.contentModes === 'object') {
+      const existingModes = user.preferences.contentModes?.toObject
+        ? user.preferences.contentModes.toObject()
+        : (user.preferences.contentModes || {});
+      const incoming = req.body.contentModes;
       user.preferences.contentModes = {
-        ...user.preferences.contentModes,
-        ...req.body.contentModes
+        music: existingModes.music !== false,
+        quran: existingModes.quran !== false,
+        podcasts: existingModes.podcasts !== false,
+        audiobooks: existingModes.audiobooks !== false,
+        ...(typeof incoming.music === 'boolean' ? { music: incoming.music } : {}),
+        ...(typeof incoming.quran === 'boolean' ? { quran: incoming.quran } : {}),
+        ...(typeof incoming.podcasts === 'boolean' ? { podcasts: incoming.podcasts } : {}),
+        ...(typeof incoming.audiobooks === 'boolean' ? { audiobooks: incoming.audiobooks } : {}),
       };
     }
 

@@ -29,15 +29,22 @@ export const NavPreferencesProvider = ({ children }) => {
   const [hiddenMenuItems, setHiddenMenuItems] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load from local storage
+  const hasLocalToggleRef = React.useRef(false);
+
+  // Load from local storage first, then reconcile with remote preferences if logged in
   useEffect(() => {
+    const controller = new AbortController();
+    let mounted = true;
+
     (async () => {
+      let localList = [];
       try {
         const [savedStyle, savedHidden] = await Promise.all([
           AsyncStorage.getItem(NAV_STYLE_STORAGE_KEY),
           AsyncStorage.getItem(HIDDEN_ITEMS_STORAGE_KEY),
         ]);
 
+        if (!mounted) return;
         if (savedStyle === 'fab' || savedStyle === 'classic') {
           setNavStyleState(savedStyle);
         } else {
@@ -47,31 +54,28 @@ export const NavPreferencesProvider = ({ children }) => {
         if (savedHidden) {
           const parsed = JSON.parse(savedHidden);
           if (Array.isArray(parsed)) {
-            // Migrate legacy 'home' hidden item to 'music'
             const cleaned = parsed.map(id => id === 'home' ? 'music' : id).filter(id => id !== 'home');
-            setHiddenMenuItems(Array.from(new Set(cleaned)));
+            localList = Array.from(new Set(cleaned));
+            setHiddenMenuItems(localList);
           }
         }
       } catch (err) {
         console.warn('Error loading nav preferences:', err);
       } finally {
-        setIsLoaded(true);
+        if (mounted) setIsLoaded(true);
       }
-    })();
-  }, []);
 
-  // Sync with remote user preferences if token exists
-  useEffect(() => {
-    (async () => {
       try {
         const token = (await AsyncStorage.getItem('@rivo_auth_token_v2')) || (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('liofy_token'));
-        if (!token) return;
+        if (!token || controller.signal.aborted || hasLocalToggleRef.current) return;
 
         const res = await fetch(`${API_BASE_URL}/api/users/preferences`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
         });
+        if (!res.ok || controller.signal.aborted || hasLocalToggleRef.current) return;
         const data = await res.json();
-        if (data?.success && data?.preferences?.contentModes) {
+        if (data?.success && data?.preferences?.contentModes && mounted && !hasLocalToggleRef.current) {
           const modes = data.preferences.contentModes;
           setHiddenMenuItems((prev) => {
             const next = new Set(prev);
@@ -81,11 +85,18 @@ export const NavPreferencesProvider = ({ children }) => {
             else next.delete('podcasts');
             if (modes.quran === false) next.add('quran');
             else next.delete('quran');
-            return Array.from(next);
+            const arr = Array.from(next);
+            AsyncStorage.setItem(HIDDEN_ITEMS_STORAGE_KEY, JSON.stringify(arr)).catch(() => {});
+            return arr;
           });
         }
       } catch {}
     })();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
   }, []);
 
   const setNavStyle = useCallback((style) => {
@@ -94,47 +105,46 @@ export const NavPreferencesProvider = ({ children }) => {
     AsyncStorage.setItem(NAV_STYLE_STORAGE_KEY, style).catch(() => {});
   }, []);
 
+  const hiddenMenuItemsRef = React.useRef(hiddenMenuItems);
+  hiddenMenuItemsRef.current = hiddenMenuItems;
+
   const toggleMenuItemVisibility = useCallback((itemId) => {
-    setHiddenMenuItems((prev) => {
-      const isCurrentlyHidden = prev.includes(itemId);
-      let next;
-      if (isCurrentlyHidden) {
-        // Unhide
-        next = prev.filter((id) => id !== itemId);
-      } else {
-        // Ensure at least 1 item stays visible
-        const remainingCount = NAV_MENU_ITEMS.length - prev.length - 1;
-        if (remainingCount < 1) {
-          return prev;
+    hasLocalToggleRef.current = true;
+    const prev = hiddenMenuItemsRef.current || [];
+    const isCurrentlyHidden = prev.includes(itemId);
+    let next;
+    if (isCurrentlyHidden) {
+      next = prev.filter((id) => id !== itemId);
+    } else {
+      const remainingCount = NAV_MENU_ITEMS.length - prev.length - 1;
+      if (remainingCount < 1) return;
+      next = [...prev, itemId];
+    }
+
+    hiddenMenuItemsRef.current = next;
+    setHiddenMenuItems(next);
+    AsyncStorage.setItem(HIDDEN_ITEMS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
+
+    (async () => {
+      try {
+        const token = (await AsyncStorage.getItem('@rivo_auth_token_v2')) || (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('liofy_token'));
+        if (token) {
+          const contentModes = {
+            music: !next.includes('music'),
+            podcasts: !next.includes('podcasts'),
+            quran: !next.includes('quran'),
+          };
+          await fetch(`${API_BASE_URL}/api/users/preferences`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ contentModes })
+          });
         }
-        next = [...prev, itemId];
-      }
-
-      AsyncStorage.setItem(HIDDEN_ITEMS_STORAGE_KEY, JSON.stringify(next)).catch(() => {});
-
-      // Sync content modes to server if logged in
-      (async () => {
-        try {
-          const token = (await AsyncStorage.getItem('@rivo_auth_token_v2')) || (await AsyncStorage.getItem('rivo_token')) || (await AsyncStorage.getItem('token')) || (await AsyncStorage.getItem('liofy_token'));
-          if (token) {
-            const contentModes = {
-              music: !next.includes('music'),
-              quran: !next.includes('quran'),
-            };
-            fetch(`${API_BASE_URL}/api/users/preferences`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`
-              },
-              body: JSON.stringify({ contentModes })
-            }).catch(() => {});
-          }
-        } catch {}
-      })();
-
-      return next;
-    });
+      } catch {}
+    })();
   }, []);
 
   const isItemVisible = useCallback((itemId) => {

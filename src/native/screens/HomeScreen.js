@@ -20,18 +20,28 @@ import { API_BASE_URL } from '../config';
 import { colors } from '../theme/colors';
 import SongItem from '../ui/SongItem';
 import FeaturedAlbumCard from '../components/home/FeaturedAlbumCard';
+import HeroAiMixCard from '../components/home/HeroAiMixCard';
 import UpdateBanner from '../components/home/UpdateBanner';
 import AlbumDetailModal from '../components/AlbumDetailModal';
 import ArtistDetailModal from '../components/ArtistDetailModal';
 import { isQuranContent } from '../../utils/quranUtils';
 import { resolveAlbumTracks } from '../utils/resolveAlbumTracks';
-import { sortTracksByPopularity } from '../utils/trackPopularity';
 import { getCachedMusicTracks, getCachedHomeAlbums } from '../utils/catalogCache';
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
+import {
+  getMemoryCachedAiMoodMix,
+  loadCachedAiMoodMix,
+  saveCachedAiMoodMix,
+} from '../utils/aiMoodMixCache';
 import { getListeningStats } from '../context/audio/audioApiHelpers';
-import { deduplicateTrackList } from '../services/downloadManager';
 
 const keyExtractor = (item, index) => String(item._id || item.id || index);
+const TRACK_ROW_HEIGHT = 68;
+const getItemLayout = (_, index) => ({
+  length: TRACK_ROW_HEIGHT,
+  offset: TRACK_ROW_HEIGHT * index,
+  index,
+});
 
 function HomeScreen({
   onOpenAddSong,
@@ -84,10 +94,14 @@ function HomeScreen({
     return getCachedMusicTracks({ userTracks, downloadedTracks, isOffline, activeFilter });
   }, [userTracks, activeFilter, downloadedTracks, isOffline]);
 
-  // Discography Featured Albums (cached per tracks/albums identity)
+  const cacheOwnerId = String(currentUser?._id || currentUser?.id || 'guest');
+
+  // Discography Featured Albums (12h deterministic seeded rotation per ownerId)
   const displayAlbums = useMemo(() => {
-    return getCachedHomeAlbums(albums, userTracks);
-  }, [albums, userTracks]);
+    return getCachedHomeAlbums(albums, userTracks, cacheOwnerId);
+  }, [albums, userTracks, cacheOwnerId]);
+
+  const [aiMoodMix, setAiMoodMix] = useState(() => getMemoryCachedAiMoodMix(cacheOwnerId, displayTracks) || []);
 
   const handleSelectAlbumCard = useCallback((album) => {
     if (onSelectAlbum) {
@@ -135,12 +149,13 @@ function HomeScreen({
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (isRTL) {
+      if (hour >= 21 || hour < 5) return 'ليلة سعيدة';
       if (hour < 12) return 'صباح الخير';
-      if (hour < 18) return 'مساء الخير';
-      return 'أهلاً بك';
+      return 'مساء الخير';
     }
+    if (hour >= 21 || hour < 5) return 'Good night';
     if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
+    if (hour < 17) return 'Good afternoon';
     return 'Good evening';
   };
 
@@ -162,92 +177,140 @@ function HomeScreen({
     }
   }, [isRTL]);
 
-  const handlePlaySmartCassette = useCallback(async () => {
+  // Persisted 12-hour AI Mood Mix (read AsyncStorage first; generate & save at most once per 12h window)
+  useEffect(() => {
+    let mounted = true;
+    const controller = new AbortController();
+
+    (async () => {
+      const cached = await loadCachedAiMoodMix(cacheOwnerId, displayTracks);
+      if (!mounted) return;
+      if (cached && cached.length > 0) {
+        setAiMoodMix(cached);
+        return;
+      }
+      if (displayTracks.length === 0) return;
+
+      const localStats = getListeningStats?.() || {};
+      const statTracks = Object.values(localStats.trackStats || {}).slice(0, 10);
+      const recentTracks = [
+        ...(currentTrack ? [currentTrack] : []),
+        ...statTracks,
+        ...(Array.isArray(currentUser?.recentTracks) ? currentUser.recentTracks.slice(0, 8) : []),
+      ].filter(Boolean).slice(0, 15).map(tr => ({
+        id: String(tr._id || tr.id || ''),
+        title: tr.title || '',
+        artist: tr.artist || '',
+        genre: tr.genre || '',
+      }));
+
+      const localSeeds = getSmartTasteAndMoodTracks({
+        allTracks: displayTracks,
+        currentUser,
+        followedArtists: currentUser?.following || [],
+        likedTrackIds,
+        listeningStats: { ...localStats, history: recentTracks },
+        currentTrack,
+        limit: 12,
+      });
+
+      const commitMix = (list) => {
+        const merged = [];
+        const seen = new Set();
+        for (const tr of list) {
+          const tid = String(tr?._id || tr?.id || '');
+          if (tid && !seen.has(tid) && !isQuranContent(tr)) {
+            seen.add(tid);
+            merged.push({ ...tr, isSmartMoodQueue: true, isAiSuggestion: true });
+          }
+          if (merged.length >= 15) break;
+        }
+        if (merged.length > 0 && mounted) {
+          setAiMoodMix(merged);
+          saveCachedAiMoodMix({
+            ownerId: cacheOwnerId,
+            moodId: currentMood?.id || 'evening',
+            name: isRTL ? 'مُختارات لك • قائمة ذكاء ريفو' : 'Made For You • AI Mood Mix',
+            description: `${currentMood?.label || 'Music Flow'} • 12h Mix`,
+            tracks: merged,
+          });
+        }
+      };
+
+      if (isOffline || !API_BASE_URL) {
+        commitMix(localSeeds);
+        return;
+      }
+
+      const timeoutId = setTimeout(() => {
+        try { controller.abort(); } catch {}
+      }, 4500);
+
+      try {
+        const authToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2').catch(() => null));
+        if (controller.signal.aborted) return;
+        const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({
+            mood: currentMood?.id || 'neutral',
+            timeOfDay: currentMood?.id || 'evening',
+            recentTracks,
+            seedTracks: localSeeds.slice(0, 5),
+            likedTrackIds: Array.isArray(likedTrackIds) ? likedTrackIds.slice(0, 50) : [],
+            followedArtists: currentUser?.following || [],
+            isQuran: false,
+          }),
+          signal: controller.signal,
+        });
+        if (res.ok && !controller.signal.aborted) {
+          const data = await res.json();
+          const rawRecs = data?.recommendations || data?.tracks || [];
+          commitMix([...rawRecs, ...localSeeds]);
+          return;
+        }
+      } catch {} finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (mounted) commitMix(localSeeds);
+    })();
+
+    return () => {
+      mounted = false;
+      controller.abort();
+    };
+  }, [cacheOwnerId, displayTracks, isOffline, token, currentMood?.id, isRTL]);
+
+  const handlePlaySmartCassette = useCallback(() => {
+    if (aiMoodMix && aiMoodMix.length > 0) {
+      playTrack(aiMoodMix[0], aiMoodMix);
+      return;
+    }
+
     const pool = displayTracks.length > 0 ? displayTracks : (userTracks || []);
     const localStats = getListeningStats?.() || {};
-    const statTracks = Object.values(localStats.trackStats || {}).slice(0, 10);
-    const recentTracks = [
-      ...(currentTrack ? [currentTrack] : []),
-      ...statTracks,
-      ...(Array.isArray(currentUser?.recentTracks) ? currentUser.recentTracks.slice(0, 8) : []),
-    ].filter(Boolean).slice(0, 15).map(tr => ({
-      id: String(tr._id || tr.id || ''),
-      title: tr.title || '',
-      artist: tr.artist || '',
-      genre: tr.genre || '',
-    }));
-
-    const smart10 = getSmartTasteAndMoodTracks({
+    const smart12 = getSmartTasteAndMoodTracks({
       allTracks: pool,
       currentUser,
       followedArtists: currentUser?.following || [],
       likedTrackIds,
-      listeningStats: { ...localStats, history: recentTracks },
+      listeningStats: localStats,
       currentTrack,
-      limit: 10,
+      limit: 12,
     });
 
-    const initialList = smart10.length > 0
-      ? smart10.map(tr => ({ ...tr, isSmartMoodQueue: true }))
-      : displayTracks.slice(0, 10).map(tr => ({ ...tr, isSmartMoodQueue: true }));
+    const initialList = (smart12.length > 0 ? smart12 : displayTracks.slice(0, 12))
+      .map(tr => ({ ...tr, isSmartMoodQueue: true, isAiSuggestion: true }));
 
     if (initialList.length > 0) {
+      setAiMoodMix(initialList);
       playTrack(initialList[0], initialList);
     }
-
-    if (isOffline || !API_BASE_URL) return;
-
-    smartMixAbortRef.current?.abort();
-    const controller = new AbortController();
-    smartMixAbortRef.current = controller;
-    const timeoutId = setTimeout(() => {
-      try { controller.abort(); } catch {}
-    }, 3500);
-
-    try {
-      const authToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2').catch(() => null));
-      if (controller.signal.aborted) return;
-      const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          mood: currentMood?.id || 'neutral',
-          timeOfDay: currentMood?.id || 'evening',
-          recentTracks,
-          seedTracks: (initialList.length > 0 ? initialList : pool).slice(0, 5),
-          likedTrackIds: Array.isArray(likedTrackIds) ? likedTrackIds.slice(0, 50) : [],
-          followedArtists: currentUser?.following || [],
-          isQuran: false,
-          refresh: true,
-        }),
-        signal: controller.signal,
-      });
-      if (!res.ok || controller.signal.aborted) return;
-      const data = await res.json();
-      const rawRecs = data?.recommendations || data?.tracks || [];
-      if (data?.success && Array.isArray(rawRecs) && rawRecs.length > 0) {
-        const musicRecs = rawRecs.filter(tr => tr && !isQuranContent(tr)).map(tr => ({
-          ...tr,
-          isSmartMoodQueue: true,
-          isAiSuggestion: true,
-        }));
-        if (musicRecs.length === 0) return;
-        if (initialList.length > 0 && typeof setQueue === 'function') {
-          const head = initialList[0];
-          const headId = String(head._id || head.id || '');
-          const merged = [head, ...musicRecs.filter(r => String(r._id || r.id || '') !== headId)].slice(0, 12);
-          setQueue(merged);
-        } else {
-          playTrack(musicRecs[0], musicRecs);
-        }
-      }
-    } catch {} finally {
-      clearTimeout(timeoutId);
-    }
-  }, [displayTracks, userTracks, currentUser, token, likedTrackIds, currentTrack, currentMood?.id, isOffline, playTrack, setQueue]);
+  }, [aiMoodMix, displayTracks, userTracks, currentUser, likedTrackIds, currentTrack, playTrack]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -295,7 +358,7 @@ function HomeScreen({
             : (isRTL ? 'استمع للراب المصري، الإندي، كاسيت زمان، وقوائم مخصصة لذوقك. صوت نقي 24-بت وبدون إعلانات.' : 'Stream Egyptian rap, indie hits, retro cassettes, and personalized mixes. Crystal-clear 24-bit audio, zero ads, seamless listening.')}
         </Text>
 
-        {/* 2 Primary CTA Buttons (Matching Image 3) */}
+        {/* 2 Primary CTA Buttons */}
         <View style={styles.heroBtnRow}>
           <TouchableOpacity
             style={styles.playTopChartsBtn}
@@ -303,7 +366,11 @@ function HomeScreen({
             activeOpacity={0.85}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
-            <Text style={[styles.playTopChartsBtnText, rtlTextStyle]}>{isRTL ? 'تشغيل قائمة الأفضل (10)' : 'PLAY TOP CHARTS (10)'}</Text>
+            <Text style={[styles.playTopChartsBtnText, rtlTextStyle]}>
+              {aiMoodMix.length > 0
+                ? (isRTL ? `تشغيل قائمة الذكاء (${aiMoodMix.length})` : `PLAY AI MOOD MIX (${aiMoodMix.length})`)
+                : (isRTL ? 'تشغيل قائمة الأفضل (10)' : 'PLAY TOP CHARTS (10)')}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -315,6 +382,16 @@ function HomeScreen({
             <Text style={[styles.addTrackBtnText, rtlTextStyle]}>{isRTL ? '+ إضافة مقطع' : '+ Add Track'}</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Hero AI Mood Mix White Card with 2x2 Mosaic Cover & 12h Persistence */}
+        {!isOffline && (
+          <HeroAiMixCard
+            aiMoodMix={aiMoodMix}
+            moodLabel={getMoodLabel(currentMood)}
+            isRTL={isRTL}
+            onPlayMix={handlePlaySmartCassette}
+          />
+        )}
       </View>
 
       {/* ─────────────────────────────────────────
@@ -403,7 +480,7 @@ function HomeScreen({
         )}
       </View>
     </View>
-  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
+  ), [currentUser?.name, aiMoodMix, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -470,13 +547,14 @@ function HomeScreen({
         data={visibleTracks}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
+        getItemLayout={getItemLayout}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={4}
-        maxToRenderPerBatch={4}
-        windowSize={3}
-        updateCellsBatchingPeriod={50}
-        removeClippedSubviews={true}
+        initialNumToRender={isLiteMode ? 4 : 6}
+        maxToRenderPerBatch={isLiteMode ? 4 : 6}
+        windowSize={isLiteMode ? 3 : 5}
+        updateCellsBatchingPeriod={40}
+        removeClippedSubviews={Platform.OS === 'android'}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -548,12 +626,7 @@ const styles = StyleSheet.create({
   },
   heroCardLight: {
     backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: Platform.OS === 'android' ? 0 : 2,
+    borderColor: '#cbd5e1',
   },
   watermark: {
     position: 'absolute',
@@ -636,10 +709,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 10,
     gap: 6,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 3,
   },
   playTopChartsBtnText: {
     fontSize: 12,
