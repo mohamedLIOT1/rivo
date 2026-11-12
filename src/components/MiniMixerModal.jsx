@@ -594,11 +594,24 @@ export default function MiniMixerModal({
       const seekA = Math.max(0, mixOutPoint - transDur - leadInSec);
       const seekB = Math.max(0, mixInPoint);
 
-      // Start Deck A audibly and Deck B silently under user activation
-      await Promise.all([
-        safePlayAudio(audioA, seekA, 1.0 * multA, spdA),
-        safePlayAudio(audioB, seekB, 0.0, spdB)
-      ]);
+      // Start Deck A audibly, and cue Deck B paused at seekB (never play & re-seek during lead-in!)
+      await safePlayAudio(audioA, seekA, 1.0 * multA, spdA);
+      audioB.pause();
+      audioB.muted = true;
+      audioB.volume = 0;
+      audioB.playbackRate = spdB;
+      try { audioB.preservesPitch = true; } catch {}
+      const applyCueB = () => {
+        try {
+          if (seekB > 0 && isFinite(audioB.duration) && seekB < audioB.duration) {
+            audioB.currentTime = seekB;
+          } else {
+            audioB.currentTime = 0;
+          }
+        } catch {}
+      };
+      if (audioB.readyState >= 1) applyCueB();
+      else audioB.addEventListener('loadedmetadata', applyCueB, { once: true });
 
       setIsLoadingAudio(false);
       setPreviewProgress(0);
@@ -616,25 +629,20 @@ export default function MiniMixerModal({
         const remaining = mixOutPoint - curA;
 
         if (remaining > transDur) {
-          // Deck A lead-in: Deck B stays silent cue'd at seekB
+          // Deck A lead-in: Deck B remains silently cued and paused at seekB
           setPreviewProgress(0);
           audioA.volume = Math.max(0, Math.min(1, 1.0 * multA));
           audioB.volume = 0.0;
-          try {
-            if (Math.abs(audioB.currentTime - seekB) > 0.3) {
-              audioB.currentTime = seekB;
-            }
-          } catch {}
           setLiveGainA(Math.round(100 * multA));
           setLiveGainB(0);
           auditionAnimRef.current = requestAnimationFrame(tick);
         } else if (remaining > 0.05) {
-          // Active crossfade strictly matching AudioContext timing: remaining = mixOutPoint - deck.currentTime <= transDur
+          // Active crossfade strictly matching AudioContext timing
           if (!deckBActive) {
             deckBActive = true;
             crossfadeStartTime = performance.now();
             audioB.muted = false;
-            try { audioB.currentTime = seekB; } catch {}
+            audioB.playbackRate = spdB;
             if (audioB.paused) {
               audioB.play().catch(() => {});
             }

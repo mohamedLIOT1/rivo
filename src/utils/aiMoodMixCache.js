@@ -17,22 +17,24 @@ function seededHash(str) {
 }
 
 /**
- * Load persisted 12-hour AI Mood Mix for the given ownerId, rehydrating track objects
- * from the active music library so metadata/download states remain fresh.
+ * Load persisted 12-hour AI Mood Mix, rehydrating track objects from the active library.
+ * Uses rolling 12-hour expiration (`expiresAt`) and gracefully preserves cache across
+ * guest -> authenticated user hydration during page refresh.
  */
 export function loadCachedAiMoodMix(ownerId, displayTracks, now = Date.now()) {
   try {
     const rawCache = localStorage.getItem(AI_MIX_CACHE_KEY);
     if (!rawCache) return null;
     const parsed = JSON.parse(rawCache);
-    const bucket12h = get12hBucket(now);
-    const ageMs = now - Number(parsed?.savedAt || 0);
+    const expiresAt = Number(parsed?.expiresAt || ((Number(parsed?.savedAt || 0) || 0) + TWELVE_HOURS_MS));
+    const ownerMatches =
+      parsed.ownerId === ownerId ||
+      parsed.ownerId === 'guest' ||
+      ownerId === 'guest';
     if (
       !parsed ||
-      parsed.ownerId !== ownerId ||
-      parsed.bucket12h !== bucket12h ||
-      ageMs < 0 ||
-      ageMs >= TWELVE_HOURS_MS ||
+      !ownerMatches ||
+      now >= expiresAt ||
       !Array.isArray(parsed.tracks) ||
       parsed.tracks.length === 0
     ) {
@@ -64,6 +66,7 @@ export function saveCachedAiMoodMix({ ownerId, moodId, name, description, tracks
         ownerId,
         bucket12h: get12hBucket(now),
         savedAt: now,
+        expiresAt: now + TWELVE_HOURS_MS,
         moodId,
         name,
         description,

@@ -292,12 +292,13 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     } catch {}
   };
 
-  const handleUpdatePlaylist = async (updatedPl) => {
+  const handleUpdatePlaylist = async (updatedPl, options = null) => {
     const plId = String(updatedPl.id || updatedPl._id);
     setPlaylists(prev => prev.map(p => String(p.id || p._id) === plId ? updatedPl : p));
     if (selectedPlaylist && String(selectedPlaylist.id || selectedPlaylist._id) === plId) {
       setSelectedPlaylist(updatedPl);
     }
+    if (options?.localOnly) return;
     try {
       await dataService.updatePlaylist(plId, updatedPl);
     } catch {}

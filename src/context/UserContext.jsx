@@ -65,7 +65,7 @@ export function UserProvider({ children }) {
       if (s) {
         const parsed = JSON.parse(s);
         if (Array.isArray(parsed)) {
-          const cleaned = parsed
+          return parsed
             .filter(t => !isSoundCloudTrack(t))
             .map(t => {
               const title = String(t.title || t.name || '').trim().toLowerCase();
@@ -76,11 +76,6 @@ export function UserProvider({ children }) {
                 cover: isAnon ? 'https://i.ytimg.com/vi/Lp8StQkBuUQ/hqdefault.jpg' : normalizeCoverUrl(t.cover, t)
               };
             });
-          try {
-            localStorage.setItem('rivo_tracks', JSON.stringify(cleaned));
-            localStorage.setItem('liofy_tracks', JSON.stringify(cleaned));
-          } catch {}
-          return cleaned;
         }
       }
       return [];
@@ -93,7 +88,7 @@ export function UserProvider({ children }) {
       if (s) {
         const parsed = JSON.parse(s);
         if (Array.isArray(parsed)) {
-          const cleanedPl = parsed.map(pl => {
+          return parsed.map(pl => {
             if (Array.isArray(pl.tracks)) {
               return {
                 ...pl,
@@ -112,11 +107,6 @@ export function UserProvider({ children }) {
             }
             return pl;
           });
-          try {
-            localStorage.setItem('rivo_playlists', JSON.stringify(cleanedPl));
-            localStorage.setItem('liofy_playlists', JSON.stringify(cleanedPl));
-          } catch {}
-          return cleanedPl;
         }
       }
       return [];
@@ -155,16 +145,25 @@ export function UserProvider({ children }) {
   useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem('rivo_tracks', JSON.stringify(tracks));
+        // Strip heavy lyrics arrays from localStorage cache so startup parse stays fast & lightweight
+        const compact = tracks.map(t => {
+          if (!t || !Array.isArray(t.lyrics) || t.lyrics.length === 0) return t;
+          const { lyrics, ...rest } = t;
+          return { ...rest, hasLyrics: true };
+        });
+        localStorage.setItem('rivo_tracks', JSON.stringify(compact));
       } catch {}
-    }, 1200);
+    }, 3000);
     return () => clearTimeout(timer);
   }, [tracks]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('rivo_playlists', JSON.stringify(playlists));
-    } catch {}
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem('rivo_playlists', JSON.stringify(playlists));
+      } catch {}
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [playlists]);
 
   useEffect(() => {
@@ -207,7 +206,10 @@ export function UserProvider({ children }) {
     const map = new Map();
     trackList.forEach(t => {
       const key = (t.title || '').trim().toLowerCase();
-      if (!map.has(key) || (t.lyrics && t.lyrics.length > (map.get(key)?.lyrics?.length || 0))) {
+      const existing = map.get(key);
+      const tHasL = Boolean(t.hasLyrics || (t.lyrics && t.lyrics.length > 0));
+      const eHasL = Boolean(existing?.hasLyrics || (existing?.lyrics && existing.lyrics.length > 0));
+      if (!existing || (!eHasL && tHasL) || (t.lyrics && t.lyrics.length > (existing?.lyrics?.length || 0))) {
         map.set(key, t);
       }
     });

@@ -236,7 +236,7 @@ body.rtl textarea::placeholder {
 }
 
 .brutal-btn {
-  transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.1s ease;
 }
 .brutal-btn:hover {
   transform: translate(-1.5px, -1.5px);

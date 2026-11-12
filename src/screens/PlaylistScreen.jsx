@@ -635,9 +635,10 @@ export default function PlaylistScreen({
     }
 
     try {
-      if (playlist?.id && playlist.id !== 'liked') {
+      const plId = playlist?.id || playlist?._id;
+      if (plId && plId !== 'liked') {
         const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-        await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
+        const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/transitions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -645,7 +646,9 @@ export default function PlaylistScreen({
           },
           body: JSON.stringify({ isMix: nextState, transitions })
         });
-        if (playlist) playlist.isMix = nextState;
+        if (res.ok && playlist) {
+          onUpdatePlaylist?.({ ...playlist, isMix: nextState, transitions }, { localOnly: true });
+        }
       }
     } catch {}
   };
@@ -678,19 +681,22 @@ export default function PlaylistScreen({
 
     try {
       localStorage.setItem('rivo_active_transitions', JSON.stringify(updatedTransitions));
-      localStorage.setItem('liofy_active_transitions', JSON.stringify(updatedTransitions));
     } catch {}
 
     try {
-      const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ isMix: true, transitions: updatedTransitions })
-      });
+      const plId = playlist?.id || playlist?._id;
+      if (plId && plId !== 'liked') {
+        onUpdatePlaylist?.({ ...playlist, isMix: true, transitions: updatedTransitions }, { localOnly: true });
+        const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+        await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/transitions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ isMix: true, transitions: updatedTransitions })
+        });
+      }
     } catch {}
     setTimeout(() => setIsAutoMixingAll(false), 500);
   };
@@ -700,42 +706,49 @@ export default function PlaylistScreen({
     const { pairKey, trackA, trackB } = activeMixerPair;
     const idA = String(trackA?.id || trackA?._id || '');
     const idB = String(trackB?.id || trackB?._id || '');
-    const k1 = `${idA}___${idB}`;
-    const k2 = `${idA}_${idB}`;
-    const kTitle = `${trackA?.title}___${trackB?.title}`;
-    const updated = { 
-      ...transitions, 
-      [pairKey]: settings,
+    const k1 = idA && idB ? `${idA}___${idB}` : '';
+    const k2 = idA && idB ? `${idA}_${idB}` : '';
+    const safePairKey = String(pairKey || k1 || '').replace(/\./g, '_').replace(/^\$/, '_');
+    const updated = {
+      ...transitions,
+      ...(safePairKey ? { [safePairKey]: settings } : {}),
       ...(k1 ? { [k1]: settings } : {}),
       ...(k2 ? { [k2]: settings } : {}),
-      ...(kTitle ? { [kTitle]: settings } : {})
     };
     setTransitions(updated);
     setActiveTransitions?.(updated);
     setIsMixActive(true);
     setIsMixMode?.(true);
 
-    if (playlist) {
-      playlist.transitions = updated;
-      playlist.isMix = true;
+    try {
+      localStorage.setItem('rivo_active_transitions', JSON.stringify(updated));
+    } catch {}
+
+    const plId = playlist?.id || playlist?._id;
+    if (playlist && plId && plId !== 'liked') {
+      onUpdatePlaylist?.({ ...playlist, isMix: true, transitions: updated }, { localOnly: true });
     }
 
     try {
-      localStorage.setItem('rivo_active_transitions', JSON.stringify(updated));
-      localStorage.setItem('liofy_active_transitions', JSON.stringify(updated));
-    } catch {}
-
-    try {
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
-      await fetch(`${API_BASE_URL}/api/playlists/${playlist.id}/transitions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ isMix: true, transitions: updated })
-      });
-    } catch {}
+      if (plId && plId !== 'liked' && token) {
+        const res = await fetch(`${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}/transitions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({ isMix: true, transitions: updated })
+        });
+        if (res.ok) {
+          onToast?.('Transition saved ✓');
+        } else {
+          onToast?.('Failed to sync transition to server');
+        }
+      }
+    } catch {
+      onToast?.('Offline: transition saved locally');
+    }
   };
 
   const handleFetchAiRecommendations = async () => {

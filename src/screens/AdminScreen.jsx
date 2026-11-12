@@ -43,10 +43,12 @@ export default function AdminScreen({
   const [users, setUsers] = useState([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [userFilterQuery, setUserFilterQuery] = useState('');
+  const [deletingUserId, setDeletingUserId] = useState(null);
 
   // Songs State
   const [songFilterQuery, setSongFilterQuery] = useState('');
   const [songTypeFilter, setSongTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+  const [adminTracksLimit, setAdminTracksLimit] = useState(50);
 
   // Albums State
   const [adminAlbums, setAdminAlbums] = useState(albums || []);
@@ -70,6 +72,7 @@ export default function AdminScreen({
   // Lyrics State
   const [lyricsFilterQuery, setLyricsFilterQuery] = useState('');
   const [lyricsTypeFilter, setLyricsTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran'
+  const [adminLyricsLimit, setAdminLyricsLimit] = useState(50);
 
   // Analytics State
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -224,6 +227,39 @@ export default function AdminScreen({
       }
     } catch (err) {
       console.error('Update verified error:', err);
+    }
+  };
+
+  const handleDeleteUser = async (targetUser) => {
+    const uId = String(targetUser?.id || targetUser?._id || '');
+    const myId = String(currentUser?.id || currentUser?._id || '');
+    if (!uId || deletingUserId) return;
+    if (myId && uId === myId) {
+      flashMessage('Cannot delete your own logged-in admin account');
+      return;
+    }
+    const label = targetUser.name || targetUser.email || uId;
+    if (!window.confirm(`Permanently delete user account "${label}"? This removes their account, playlists, and chat history.`)) {
+      return;
+    }
+    setDeletingUserId(uId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/users/${encodeURIComponent(uId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        setUsers(prev => prev.filter(u => String(u.id || u._id) !== uId));
+        flashMessage(`Deleted account "${label}"`);
+      } else {
+        flashMessage(data.error || `Failed to delete user (${res.status})`);
+      }
+    } catch (err) {
+      console.error('Delete user error:', err);
+      flashMessage('Error deleting user account');
+    } finally {
+      setDeletingUserId(null);
     }
   };
 
@@ -632,6 +668,22 @@ export default function AdminScreen({
                         <ShieldCheck size={12} />
                         <span>{isUserAdm ? 'Revoke Admin' : 'Make Admin'}</span>
                       </button>
+
+                      {String(u.id || u._id) !== String(currentUser?.id || currentUser?._id) && (
+                        <button
+                          onClick={() => handleDeleteUser(u)}
+                          disabled={deletingUserId === String(u.id || u._id)}
+                          className="p-1.5 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white brutal-border border-red-500 cursor-pointer transition-colors disabled:opacity-50"
+                          title="Delete account permanently"
+                          aria-label={`Delete ${u.name || u.email || 'user'}`}
+                        >
+                          {deletingUserId === String(u.id || u._id) ? (
+                            <Loader2 size={13} className="animate-spin" />
+                          ) : (
+                            <Trash2 size={13} />
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -729,7 +781,7 @@ export default function AdminScreen({
                 No songs or tracks found matching your filter or search.
               </div>
             ) : (
-              filteredTracks.map((track, idx) => (
+              filteredTracks.slice(0, adminTracksLimit).map((track, idx) => (
               <div
                 key={track.id || track._id || idx}
                 className={`p-3 rounded-xl brutal-border brutal-shadow-sm flex items-center justify-between gap-3 ${
@@ -804,6 +856,17 @@ export default function AdminScreen({
                 </div>
               </div>
             )))}
+            {filteredTracks.length > adminTracksLimit && (
+              <div className="pt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setAdminTracksLimit(prev => prev + 50)}
+                  className="px-4 py-2 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm cursor-pointer"
+                >
+                  Load More Songs ({filteredTracks.length - adminTracksLimit} remaining)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1237,8 +1300,8 @@ export default function AdminScreen({
                 No tracks or recitations found matching your lyrics filter or search.
               </div>
             ) : (
-              filteredLyricsTracks.map((track) => {
-              const hasLyrics = Array.isArray(track.lyrics) && track.lyrics.length > 0;
+              filteredLyricsTracks.slice(0, adminLyricsLimit).map((track) => {
+              const hasLyrics = Boolean(track.hasLyrics || (Array.isArray(track.lyrics) && track.lyrics.length > 0));
               const isVerified = track.lyricsVerified || track.isVerifiedLyrics || false;
 
               return (
@@ -1293,6 +1356,17 @@ export default function AdminScreen({
                 </div>
               );
             }))}
+            {filteredLyricsTracks.length > adminLyricsLimit && (
+              <div className="pt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setAdminLyricsLimit(prev => prev + 50)}
+                  className="px-4 py-2 rounded-xl bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] font-mono text-xs font-black uppercase brutal-border brutal-shadow-sm cursor-pointer"
+                >
+                  Load More Lyrics ({filteredLyricsTracks.length - adminLyricsLimit} remaining)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

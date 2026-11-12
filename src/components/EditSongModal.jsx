@@ -46,18 +46,34 @@ export default function EditSongModal({
   };
 
   useEffect(() => {
-    if (track) {
-      setTitle(track.title || '');
-      setArtist(track.artist || '');
-      setAlbum(track.album || '');
-      setGenre(track.genre || '');
-      setCover(track.cover || '');
-      setAudioUrl(track.audioUrl || '');
-      
-      const lyricsString = (track.lyrics || [])
-        .map(line => `[${formatTime(line.time)}] ${line.text}`)
-        .join('\n');
-      setLyricsText(lyricsString);
+    if (!isOpen || !track) return;
+    setTitle(track.title || '');
+    setArtist(track.artist || '');
+    setAlbum(track.album || '');
+    setGenre(track.genre || '');
+    setCover(track.cover || '');
+    setAudioUrl(track.audioUrl || '');
+
+    const existingLyrics = Array.isArray(track.lyrics) ? track.lyrics : [];
+    const lyricsString = existingLyrics
+      .map(line => `[${formatTime(line.time)}] ${line.text}`)
+      .join('\n');
+    setLyricsText(lyricsString);
+
+    if (existingLyrics.length === 0 && track.hasLyrics) {
+      const tid = track.id || track._id;
+      if (tid) {
+        const controller = new AbortController();
+        fetch(`${API_BASE_URL}/api/tracks/${encodeURIComponent(tid)}/lyrics`, { signal: controller.signal })
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => {
+            if (!controller.signal.aborted && d?.success && Array.isArray(d.lyrics) && d.lyrics.length > 0) {
+              setLyricsText(d.lyrics.map(line => `[${formatTime(line.time)}] ${line.text}`).join('\n'));
+            }
+          })
+          .catch(() => {});
+        return () => controller.abort();
+      }
     }
   }, [track, isOpen]);
 

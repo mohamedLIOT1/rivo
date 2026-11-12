@@ -534,10 +534,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
       fromDeck.volume = masterVol;
       fromDeck.muted = false;
 
-      // Apply initial playback speed smoothly
-      const rateA = (!isNaN(Number(speedA)) && Number(speedA) >= 0.85 && Number(speedA) <= 1.15) ? Number(Number(speedA).toFixed(2)) : 1.0;
-      const rateB = (!isNaN(Number(speedB)) && Number(speedB) >= 0.85 && Number(speedB) <= 1.15) ? Number(Number(speedB).toFixed(2)) : 1.0;
-      fromDeck.playbackRate = rateA;
+      // Apply initial playback speed cleanly without per-frame resampler jitter
+      const parsedA = Number(speedA);
+      const parsedB = Number(speedB);
+      const rawRateA = (!isNaN(parsedA) && parsedA >= 0.85 && parsedA <= 1.15) ? Number(parsedA.toFixed(2)) : 1.0;
+      const rawRateB = (!isNaN(parsedB) && parsedB >= 0.85 && parsedB <= 1.15) ? Number(parsedB.toFixed(2)) : 1.0;
+      const rateA = Math.abs(rawRateA - 1.0) >= 0.015 ? rawRateA : 1.0;
+      const rateB = Math.abs(rawRateB - 1.0) >= 0.015 ? rawRateB : 1.0;
+      try { fromDeck.preservesPitch = true; } catch {}
+      try { toDeck.preservesPitch = true; } catch {}
+      if (Math.abs((fromDeck.playbackRate || 1) - rateA) >= 0.01) {
+        fromDeck.playbackRate = rateA;
+      }
 
       resolvePlayableAudioStream(toTrack).then(async (res) => {
         if (!isTransitionRunningRef.current) return;
@@ -635,17 +643,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
                 }, 60);
               }
 
-              // Gradually restore playbackRate -> 1.0 instead of snapping pitch abruptly on transition end
-              if (toDeck && Math.abs((toDeck.playbackRate || 1) - 1.0) > 0.005) {
-                const startRate = toDeck.playbackRate;
-                const rampStart = performance.now();
-                const rampRate = () => {
-                  if (audioRef.current !== toDeck || isChangingTrackRef.current) return;
-                  const t = Math.min(1, (performance.now() - rampStart) / 1400);
-                  toDeck.playbackRate = Number((startRate + (1.0 - startRate) * t).toFixed(3));
-                  if (t < 1) requestAnimationFrame(rampRate);
-                };
-                requestAnimationFrame(rampRate);
+              // Restore playbackRate -> 1.0 in gentle spaced 350ms steps (never per-frame rAF which stutters browser WSOLA time-stretcher)
+              if (toDeck && Math.abs((toDeck.playbackRate || 1) - 1.0) >= 0.015) {
+                const stepTimer = setInterval(() => {
+                  if (audioRef.current !== toDeck || isChangingTrackRef.current || isTransitionRunningRef.current) {
+                    clearInterval(stepTimer);
+                    return;
+                  }
+                  const curRate = toDeck.playbackRate || 1.0;
+                  const diff = 1.0 - curRate;
+                  if (Math.abs(diff) <= 0.015) {
+                    toDeck.playbackRate = 1.0;
+                    clearInterval(stepTimer);
+                  } else {
+                    toDeck.playbackRate = Number((curRate + Math.sign(diff) * 0.015).toFixed(3));
+                  }
+                }, 350);
               } else if (toDeck) {
                 toDeck.playbackRate = 1.0;
               }

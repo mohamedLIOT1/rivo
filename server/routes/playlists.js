@@ -164,9 +164,44 @@ router.post('/:id/update', auth, async (req, res) => {
       pl.trackIds = req.body.trackIds.map(String);
     }
     if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
+    if (req.body.isMix !== undefined) pl.isMix = Boolean(req.body.isMix);
+    if (req.body.transitions && typeof req.body.transitions === 'object') {
+      pl.transitions = sanitizeTransitionKeys(req.body.transitions);
+    }
     u.markModified('playlists');
     await u.save();
     res.json({ success: true, isPublic: pl.isPublic, playlist: pl });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Support RESTful PUT /api/playlists/:id used by frontend dataService.updatePlaylist
+router.put('/:id', auth, async (req, res) => {
+  try {
+    let u = await User.findById(req.user.id);
+    if (!u) return res.status(404).json({ success: false, error: 'User not found' });
+    let pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    if (!pl && isAdminUser(req.user)) {
+      const isReqObjId = mongoose.isValidObjectId(req.params.id);
+      u = await User.findOne(isReqObjId
+        ? { $or: [{ 'playlists.id': req.params.id }, { 'playlists._id': new mongoose.Types.ObjectId(req.params.id) }] }
+        : { 'playlists.id': req.params.id }
+      );
+      if (u) pl = u.playlists.find(p => String(p.id || p._id) === String(req.params.id));
+    }
+    if (!pl) return res.status(403).json({ success: false, error: 'You do not own this playlist' });
+    if (req.body.name) pl.name = sanitizeText(req.body.name).slice(0, 100);
+    if (req.body.description !== undefined) pl.description = sanitizeText(req.body.description).slice(0, 300);
+    if (Array.isArray(req.body.trackIds)) pl.trackIds = req.body.trackIds.map(String);
+    if (req.body.isPublic !== undefined) pl.isPublic = Boolean(req.body.isPublic);
+    if (req.body.isMix !== undefined) pl.isMix = Boolean(req.body.isMix);
+    if (req.body.transitions && typeof req.body.transitions === 'object') {
+      pl.transitions = sanitizeTransitionKeys(req.body.transitions);
+    }
+    u.markModified('playlists');
+    await u.save();
+    res.json({ success: true, playlist: pl });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }
@@ -335,6 +370,18 @@ router.post('/:id/upload-cover', auth, (req, res, next) => {
   }
 });
 
+function sanitizeTransitionKeys(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const clean = {};
+  for (const [k, v] of Object.entries(raw)) {
+    const safeKey = String(k).replace(/\./g, '_').replace(/^\$/, '_');
+    if (safeKey && v && typeof v === 'object') {
+      clean[safeKey] = v;
+    }
+  }
+  return clean;
+}
+
 // Playlist transitions
 router.post('/:id/transitions', auth, async (req, res) => {
   try {
@@ -345,7 +392,7 @@ router.post('/:id/transitions', auth, async (req, res) => {
     const pl = user.playlists.find(p => String(p.id || p._id) === String(req.params.id));
     if (!pl) return res.status(403).json({ error: 'You do not own this playlist' });
 
-    if (transitions !== undefined) pl.transitions = transitions;
+    if (transitions !== undefined) pl.transitions = sanitizeTransitionKeys(transitions);
     if (isMix !== undefined) pl.isMix = Boolean(isMix);
     user.markModified('playlists');
     await user.save();

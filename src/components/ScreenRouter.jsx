@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { useNavigation } from '../context/NavigationContext';
@@ -7,16 +7,16 @@ import { useUI } from '../context/UIContext';
 import { usePreferences } from '../context/PreferencesContext';
 
 import HomeScreen from '../screens/HomeScreen';
-import SearchScreen from '../screens/SearchScreen';
-import LibraryScreen from '../screens/LibraryScreen';
-import ArtistScreen from '../screens/ArtistScreen';
-import StatsScreen from '../screens/StatsScreen';
-import PlaylistScreen from '../screens/PlaylistScreen';
-import ProfileScreen from '../screens/ProfileScreen';
-import QuranScreen from '../screens/QuranScreen';
-import PodcastScreen from '../screens/PodcastScreen';
-import AdminScreen from '../screens/AdminScreen';
-import DownloadScreen from '../screens/DownloadScreen';
+const SearchScreen = lazy(() => import('../screens/SearchScreen'));
+const LibraryScreen = lazy(() => import('../screens/LibraryScreen'));
+const ArtistScreen = lazy(() => import('../screens/ArtistScreen'));
+const StatsScreen = lazy(() => import('../screens/StatsScreen'));
+const PlaylistScreen = lazy(() => import('../screens/PlaylistScreen'));
+const ProfileScreen = lazy(() => import('../screens/ProfileScreen'));
+const QuranScreen = lazy(() => import('../screens/QuranScreen'));
+const PodcastScreen = lazy(() => import('../screens/PodcastScreen'));
+const AdminScreen = lazy(() => import('../screens/AdminScreen'));
+const DownloadScreen = lazy(() => import('../screens/DownloadScreen'));
 
 export default function ScreenRouter({
   musicTracks,
@@ -96,7 +96,7 @@ export default function ScreenRouter({
   }, [currentScreen, showPodcasts, showMusic, goToScreen]);
 
   return (
-    <>
+    <Suspense fallback={<div className="flex-1" />}>
       {currentScreen === 'home' && (
         !showMusic ? (
           <QuranScreen
@@ -366,6 +366,6 @@ export default function ScreenRouter({
           onNavigateScreen={goToScreen}
         />
       )}
-    </>
+    </Suspense>
   );
 }

@@ -273,11 +273,37 @@ app.get('/api/sync', auth, async (req, res) => {
     const user = await User.findById(req.user.id).select('-password').lean();
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    const allTracks = await Track.find({
-      source: { $ne: 'SoundCloud' },
-      album: { $ne: 'SoundCloud' },
-      audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
-    }).sort({ createdAt: -1 }).limit(3000).lean();
+    const allTracks = await Track.aggregate([
+      {
+        $match: {
+          source: { $ne: 'SoundCloud' },
+          album: { $ne: 'SoundCloud' },
+          audioUrl: { $not: /soundcloud\.com|sndcdn\.com/i }
+        }
+      },
+      { $sort: { createdAt: -1 } },
+      { $limit: 3000 },
+      {
+        $project: {
+          id: 1,
+          title: 1,
+          artist: 1,
+          album: 1,
+          cover: 1,
+          audioUrl: 1,
+          duration: 1,
+          genre: 1,
+          source: 1,
+          isQuran: 1,
+          addedBy: 1,
+          youtubeId: 1,
+          lyricsVerified: 1,
+          isVerifiedLyrics: 1,
+          color: 1,
+          hasLyrics: { $gt: [{ $size: { $ifNull: ['$lyrics', []] } }, 0] }
+        }
+      }
+    ]);
 
     const { validLikedIds, extraTracks } = await syncUserLikedTracks(user, allTracks);
     const validLikedSet = new Set(validLikedIds.map(String));
@@ -300,7 +326,8 @@ app.get('/api/sync', auth, async (req, res) => {
         source: t.source,
         isQuran: Boolean(t.isQuran || isQuranContent(t.title, t.artist, t.album, t.genre)),
         addedBy: t.addedBy,
-        lyrics: t.lyrics || [],
+        hasLyrics: Boolean(t.hasLyrics),
+        lyricsVerified: Boolean(t.lyricsVerified || t.isVerifiedLyrics),
         color: t.color || '#1DB954',
         liked: isLk,
       };
