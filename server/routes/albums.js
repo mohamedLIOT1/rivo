@@ -80,25 +80,31 @@ router.get('/', async (req, res) => {
         tracks: a.tracks || []
       };
     });
-    const includeSingles = req.query.includeSingles === 'true' || Boolean(req.query.artist);
+    const includeSingles = req.query.includeSingles === 'true';
     const finalAlbums = formatted.filter(a => {
-      if (!includeSingles && a.releaseType === 'single') return false;
-      if (!includeSingles && a.trackCount <= 1) return false;
+      // Never return empty albums with 0 tracks
+      const hasTracks = (a.trackCount > 0) || (Array.isArray(a.tracks) && a.tracks.length > 0) || (Array.isArray(a.trackIds) && a.trackIds.length > 0);
+      if (!hasTracks) return false;
+      if (!includeSingles && (a.releaseType === 'single' || a.trackCount <= 1)) return false;
       return true;
     });
-    cachedAlbumsJson = JSON.stringify({ success: true, albums: finalAlbums });
-    cachedAlbumsTime = Date.now();
-    cachedAlbumsEtag = `"${crypto.createHash('md5').update(cachedAlbumsJson).digest('hex')}"`;
 
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=300');
-    res.setHeader('ETag', cachedAlbumsEtag);
+    if (isDefault) {
+      cachedAlbumsJson = JSON.stringify({ success: true, albums: finalAlbums });
+      cachedAlbumsTime = Date.now();
+      cachedAlbumsEtag = `"${crypto.createHash('md5').update(cachedAlbumsJson).digest('hex')}"`;
 
-    if (isDefault && clientEtag && (clientEtag === cachedAlbumsEtag || clientEtag === `W/${cachedAlbumsEtag}`)) {
-      return res.status(304).end();
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('ETag', cachedAlbumsEtag);
+
+      if (clientEtag && (clientEtag === cachedAlbumsEtag || clientEtag === `W/${cachedAlbumsEtag}`)) {
+        return res.status(304).end();
+      }
+      return res.send(cachedAlbumsJson);
     }
 
-    return res.send(cachedAlbumsJson);
+    return res.json({ success: true, albums: finalAlbums });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

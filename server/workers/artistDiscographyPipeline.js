@@ -211,11 +211,13 @@ async function runPipeline() {
         const rawCollection = String(alb.collectionName).trim();
         const rawTrackCount = Number(alb.trackCount) || 0;
 
-        // Accurate release classification
+        // Accurate release classification - NEVER allow singles as albums!
+        if (/\b(?:-\s*)?single\b/i.test(rawCollection) || rawTrackCount <= 1) {
+          continue;
+        }
+
         let releaseType = 'album';
-        if (/\b(?:-\s*)?single\b/i.test(rawCollection) || rawTrackCount === 1) {
-          releaseType = 'single';
-        } else if (/\b(?:-\s*)?ep\b/i.test(rawCollection) || (rawTrackCount >= 2 && rawTrackCount <= 6)) {
+        if (/\b(?:-\s*)?ep\b/i.test(rawCollection) || (rawTrackCount >= 2 && rawTrackCount <= 6)) {
           releaseType = 'ep';
         } else {
           releaseType = 'album';
@@ -237,8 +239,13 @@ async function runPipeline() {
 
           // For actual albums and EPs, lookup the official tracklist
           let albumTracks = [];
-          if (releaseType !== 'single' && alb.collectionId) {
+          if (alb.collectionId) {
             albumTracks = await fetchItunesAlbumTracks(alb.collectionId);
+          }
+
+          // If no tracklist could be verified and trackCount is 0, skip to avoid empty albums
+          if (!albumTracks.length && rawTrackCount <= 1) {
+            continue;
           }
 
           enrichedAlbums.push({
@@ -248,7 +255,7 @@ async function runPipeline() {
             releaseDate: alb.releaseDate ? new Date(alb.releaseDate).getFullYear().toString() : '',
             genre: alb.primaryGenreName || 'Arabic',
             releaseType,
-            trackCount: rawTrackCount || albumTracks.length,
+            trackCount: albumTracks.length || rawTrackCount,
             tracks: albumTracks
           });
         }
@@ -313,7 +320,15 @@ async function runPipeline() {
         const matchingIds = localMatchingTracks.map(t => String(t._id || t.id));
 
         const finalTrackCount = matchingIds.length > 0 ? matchingIds.length : (ea.tracks?.length || ea.trackCount || 0);
-        const isAlbumReal = ea.releaseType !== 'single' && finalTrackCount > 1;
+        // STRICT GATE: Never insert singles or albums with 0 or 1 track
+        if (ea.releaseType === 'single' || finalTrackCount <= 1 || (!ea.tracks?.length && !matchingIds.length)) {
+          if (existing) {
+            await Album.deleteOne({ _id: existing._id });
+          }
+          continue;
+        }
+
+        const isAlbumReal = true;
 
         if (!existing) {
           const newId = `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;

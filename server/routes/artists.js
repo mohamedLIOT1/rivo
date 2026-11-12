@@ -71,6 +71,12 @@ router.get('/', async (req, res) => {
 
     for (const a of allAlbums) {
       if (!a.artist && !a.name) continue;
+      // Do not count singles or empty albums in discography
+      const explicitCount = Number(a.trackCount || 0);
+      const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const trackCount = explicitCount > 0 ? explicitCount : arrCount;
+      if (trackCount <= 1 || a.releaseType === 'single') continue;
+
       const quranReciter = detectQuranReciter(a.name, a.artist);
       const canonical = quranReciter || getCanonicalArtistName(a.artist);
       if (!canonical) continue;
@@ -137,11 +143,20 @@ router.get('/:name', async (req, res) => {
     // Match exact artist name or artist as part of a collaboration (e.g. "Cairokee, Sary Hany")
     const regex = new RegExp(`(?:^|[\\s,،;&+/])(?:${pattern})(?:$|[\\s,،;&+/])`, 'i');
 
-    const [tracks, albums, artistDoc] = await Promise.all([
+    const [tracks, rawAlbums, artistDoc] = await Promise.all([
       Track.find({ artist: { $regex: regex } }).sort({ plays: -1 }).lean(),
       Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean(),
       Artist.findOne({ name: { $regex: new RegExp(`^(?:${pattern})$`, 'i') } }).lean()
     ]);
+
+    // Strictly filter out singles and empty albums
+    const albums = rawAlbums.filter(a => {
+      const explicitCount = Number(a.trackCount || 0);
+      const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const count = explicitCount > 0 ? explicitCount : arrCount;
+      if (count <= 1 || a.releaseType === 'single') return false;
+      return true;
+    });
 
     const formattedTracks = tracks.map(t => ({
       id: String(t._id),

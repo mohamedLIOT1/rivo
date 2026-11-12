@@ -59,8 +59,6 @@ export default function AdminScreen({
   const [albumTypeFilter, setAlbumTypeFilter] = useState('all'); // 'all' | 'songs' | 'quran' | 'podcast'
   const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
   const [albumToDelete, setAlbumToDelete] = useState(null);
-  const [pipelineStatus, setPipelineStatus] = useState(null);
-  const [isStartingPipeline, setIsStartingPipeline] = useState(false);
 
   // Artists State
   const [artistsList, setArtistsList] = useState([]);
@@ -153,46 +151,6 @@ export default function AdminScreen({
     }
   };
 
-  // Fetch Multi-Worker Pipeline Status
-  const fetchPipelineStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/pipeline-status`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data?.success && data.status) {
-        setPipelineStatus(data.status);
-      }
-    } catch (e) {}
-  }, [token]);
-
-  const triggerPipeline = async () => {
-    setIsStartingPipeline(true);
-    setPipelineStatus(prev => ({
-      ...prev,
-      running: true,
-      currentWorker: 1,
-      currentWorkerName: 'Worker 1: Artist & Discography Scout',
-      currentArtist: 'Initializing...',
-      currentStage: 'Starting autonomous discography pipeline across catalog...',
-      lastUpdated: Date.now()
-    }));
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/run-pipeline`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = await res.json();
-      flashMessage(data.message || '3-Worker Discography Pipeline started!');
-      setTimeout(fetchPipelineStatus, 1200);
-    } catch (e) {
-      flashMessage('Failed to trigger pipeline');
-    }
-    finally {
-      setIsStartingPipeline(false);
-    }
-  };
-
   // 4. Fetch All Playlists
   const fetchPlaylists = async () => {
     setIsLoadingPlaylists(true);
@@ -231,16 +189,6 @@ export default function AdminScreen({
       setAdminAlbums(albums);
     }
   }, [albums]);
-
-  // Poll 3-Worker Pipeline status when albums tab is active
-  useEffect(() => {
-    if (activeTab === 'albums') {
-      fetchPipelineStatus();
-      const pollMs = pipelineStatus?.running ? 2500 : 12000;
-      const interval = setInterval(fetchPipelineStatus, pollMs);
-      return () => clearInterval(interval);
-    }
-  }, [activeTab, fetchPipelineStatus, pipelineStatus?.running]);
 
   const handleToggleAdminRole = async (userId, currentRole) => {
     const newRole = currentRole === 'admin' ? 'user' : 'admin';
@@ -355,33 +303,6 @@ export default function AdminScreen({
       flashMessage('Playlist deleted successfully');
     } catch (err) {
       console.error('Delete playlist error:', err);
-    }
-  };
-
-  const [isDeduplicating, setIsDeduplicating] = useState(false);
-  const handleDeduplicateTracks = async () => {
-    if (!window.confirm('Scan database, merge duplicate songs, repair broken durations, and purge duplicate artist profiles?')) return;
-    setIsDeduplicating(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks/deduplicate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
-      });
-      const data = await res.json();
-      if (data.success) {
-        flashMessage(data.message || `Deduplication complete: Purged duplicate tracks and refreshed catalog.`);
-        if (typeof onDeleteTrack === 'function') onDeleteTrack();
-        fetchArtists();
-      } else {
-        flashMessage(data.error || 'Failed to deduplicate tracks');
-      }
-    } catch (err) {
-      flashMessage(err.message || 'Error executing deduplication');
-    } finally {
-      setIsDeduplicating(false);
     }
   };
 
@@ -865,17 +786,6 @@ export default function AdminScreen({
                 <RefreshCw size={14} className={isRepairingTracks ? 'animate-spin' : ''} />
                 <span>{isRepairingTracks ? 'Repairing...' : 'Repair Audio & Albums'}</span>
               </button>
-
-              <button
-                type="button"
-                onClick={handleDeduplicateTracks}
-                disabled={isDeduplicating}
-                className="brutal-btn flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#f59e0b] hover:bg-amber-400 text-[#0b1110] text-xs font-mono font-bold uppercase brutal-border brutal-shadow-sm cursor-pointer disabled:opacity-50 w-fit self-start sm:self-auto"
-                title="Scan and merge duplicate songs across database"
-              >
-                <Sparkles size={14} className={isDeduplicating ? 'animate-spin' : ''} />
-                <span>{isDeduplicating ? 'Deduplicating...' : 'Deduplicate Songs'}</span>
-              </button>
             </div>
           </div>
 
@@ -1052,117 +962,6 @@ export default function AdminScreen({
       {/* ── TAB 3: ALBUMS ── */}
       {activeTab === 'albums' && (
         <div>
-          {/* 3-Worker Autonomous Discography Pipeline Monitor */}
-          <div className={`p-4 rounded-2xl brutal-border mb-6 ${
-            isDark ? 'bg-[#0f1715] border-[#1f2f2b]' : 'bg-[#f4efe4] border-black'
-          }`}>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-              <div className="flex items-center gap-2">
-                <span className="p-1.5 rounded-lg bg-[#17a398]/20 text-[#17a398] font-mono text-sm font-black">
-                  BOT
-                </span>
-                <div>
-                  <h3 className="font-mono font-black text-sm uppercase flex items-center gap-2">
-                    3-Worker Autonomous Discography Pipeline
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                      pipelineStatus?.running
-                        ? 'bg-emerald-500/20 text-emerald-400 animate-pulse border border-emerald-500/30'
-                        : 'bg-[#17a398]/20 text-[#17a398] border border-[#17a398]/30'
-                    }`}>
-                      {pipelineStatus?.running ? '● Active' : '✓ Standby'}
-                    </span>
-                  </h3>
-                  <p className={`text-xs ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
-                    Worker 1: Scout • Worker 2: Enricher • Worker 3: Synchronizer & DB Organizer
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={triggerPipeline}
-                  disabled={pipelineStatus?.running || isStartingPipeline}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-mono font-black uppercase brutal-border transition-all cursor-pointer ${
-                    pipelineStatus?.running
-                      ? 'bg-zinc-700/50 text-zinc-400 border-zinc-600 cursor-not-allowed'
-                      : 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] border-black shadow-sm'
-                  }`}
-                >
-                  {pipelineStatus?.running ? 'Pipeline Running...' : 'Run Pipeline Now'}
-                </button>
-              </div>
-            </div>
-
-            {/* Current Stage & Artist */}
-            <div className={`p-3 rounded-xl mb-3 text-xs font-mono border ${
-              isDark ? 'bg-black/40 border-[#1f2f2b]' : 'bg-white/80 border-black/20'
-            }`}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="font-bold text-[#17a398]">Current Stage:</span>
-                <span className="font-bold text-zinc-400">
-                  Worker {pipelineStatus?.currentWorker || 3}: {pipelineStatus?.currentWorkerName || 'Synchronizer'}
-                </span>
-              </div>
-              <p className={isDark ? 'text-zinc-200' : 'text-zinc-800'}>
-                {pipelineStatus?.currentStage || 'Verified albums and tracks organized into MongoDB collections'}
-              </p>
-              {pipelineStatus?.currentArtist && (
-                <p className="mt-1 text-[11px] text-zinc-400">
-                  Target Artist: <span className="font-black text-[#17a398]">{pipelineStatus.currentArtist}</span>
-                </p>
-              )}
-            </div>
-
-            {/* Added vs Upcoming Queue */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-              {/* Added Artists */}
-              <div className={`p-3 rounded-xl border ${
-                isDark ? 'bg-black/30 border-[#1f2f2b]' : 'bg-white/60 border-black/10'
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-emerald-400 flex items-center gap-1">
-                    ✓ Added Artists ({pipelineStatus?.processedArtists?.length || 0})
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
-                  {(pipelineStatus?.processedArtists || ['Lege-Cy', 'Marwan Pablo', 'Marwan Moussa', 'El Joker', 'Cairokee', 'Wegz', 'Amr Diab']).map(name => (
-                    <span key={`p-${name}`} className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[10px] font-mono font-bold">
-                      ✓ {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Upcoming / Remaining Artists */}
-              <div className={`p-3 rounded-xl border ${
-                isDark ? 'bg-black/30 border-[#1f2f2b]' : 'bg-white/60 border-black/10'
-              }`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-amber-400 flex items-center gap-1">
-                    ⏳ Upcoming Queue ({pipelineStatus?.upcomingArtists?.length || pipelineStatus?.remainingCount || 0} remaining)
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
-                  {(pipelineStatus?.upcomingArtists || ['Tamer Hosny', 'Mohamed Hamaki', 'Tamer Ashour', 'Sherine', 'Essam Sasa', 'Muslim', 'Tul8te', 'Abyusif', 'Afroto', 'Ahmed Saad']).map(name => (
-                    <span key={`u-${name}`} className="px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono font-bold">
-                      {name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Stats row */}
-            <div className="flex items-center gap-4 text-[11px] font-mono text-zinc-400">
-              <span>Albums in DB: <strong className="text-white">{pipelineStatus?.stats?.albumsCreated || adminAlbums.length}</strong></span>
-              <span>•</span>
-              <span>Covers Verified (200 OK): <strong className="text-emerald-400">100%</strong></span>
-              <span>•</span>
-              <span>Updated: <strong>{new Date(pipelineStatus?.lastUpdated || Date.now()).toLocaleTimeString()}</strong></span>
-            </div>
-          </div>
-
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
               <h2 className="text-base font-mono font-black uppercase flex items-center gap-2">
