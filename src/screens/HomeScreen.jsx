@@ -5,7 +5,6 @@ import { API_BASE_URL } from '../config';
 import ConfirmModal from '../components/ConfirmModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import HomeTrackCard from '../components/HomeTrackCard';
-import AiMoodMixCard from '../components/AiMoodMixCard';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
@@ -85,15 +84,17 @@ export default function HomeScreen({
   const currentMood = getCurrentTimeMood();
   const bucket12h = get12hBucket();
 
-  // Personalized AI Mood & Taste Recommendations (Persisted for 12 hours instead of resetting per reload)
+  // Personalized AI Mood & Taste Recommendations (Persisted for 12 hours; instant read even before tracks hydrate)
   useEffect(() => {
-    if (!showMusic || displayTracks.length === 0) return;
+    if (!showMusic) return;
 
     const cached = loadCachedAiMoodMix(cacheOwnerId, displayTracks);
     if (cached) {
       setAiMoodMix(cached);
       return;
     }
+
+    if (displayTracks.length === 0) return;
 
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -350,18 +351,6 @@ export default function HomeScreen({
           </div>
         </div>
       </section>
-
-      {/* PERSONALIZED AI MOOD MIX PLAYLIST CARD (12-HOUR REFRESH) */}
-      <AiMoodMixCard
-        playlistObj={aiMoodPlaylistObj}
-        tracks={aiMoodMix}
-        resolvedMoodLabel={resolvedMoodLabel}
-        currentTrack={currentTrack}
-        isDark={isDark}
-        isRTL={isRTL}
-        onSelectPlaylist={onSelectPlaylist}
-        onSelectTrack={onSelectTrack}
-      />
 
       {/* FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT */}
       {displayAlbums && displayAlbums.length > 0 && (

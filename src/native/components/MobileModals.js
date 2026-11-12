@@ -1,17 +1,12 @@
 import React from 'react';
-import FullPlayerModal from './FullPlayerModal';
-import TrackActionMenuModal from './TrackActionMenuModal';
-import PlaylistPickerModal from './PlaylistPickerModal';
-import CreatePlaylistModal from './CreatePlaylistModal';
-import AddSongModal from './AddSongModal';
-import ChatModal from './ChatModal';
-import SettingsModal from './SettingsModal';
-import JamRoomModal from './JamRoomModal';
-import FriendActivityModal from './FriendActivityModal';
-import IntroAuthModal from './IntroAuthModal';
-import AlbumDetailModal from './AlbumDetailModal';
-import ArtistDetailModal from './ArtistDetailModal';
-import { useUser } from '../context/UserContext';
+
+const lazyModalsCache = {};
+function getLazyModal(key, loader) {
+  if (!lazyModalsCache[key]) {
+    lazyModalsCache[key] = loader();
+  }
+  return lazyModalsCache[key];
+}
 
 export default function MobileModals({
   tracks: propTracks,
@@ -49,143 +44,180 @@ export default function MobileModals({
 }) {
   return (
     <>
-      {Boolean(selectedAlbum) && (
-        <AlbumDetailModal
-          visible={Boolean(selectedAlbum)}
-          album={selectedAlbum}
-          allTracks={propTracks || []}
-          allAlbums={propAlbums || []}
-          onClose={() => setSelectedAlbum && setSelectedAlbum(null)}
-          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
-          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
-          onSelectArtist={(artistName) => {
-            if (setSelectedAlbum) setSelectedAlbum(null);
-            if (setSelectedArtist) setSelectedArtist({ name: artistName });
-          }}
-        />
-      )}
+      {Boolean(selectedAlbum) && (() => {
+        const AlbumDetailModal = getLazyModal('album', () => require('./AlbumDetailModal').default);
+        return (
+          <AlbumDetailModal
+            visible={Boolean(selectedAlbum)}
+            album={selectedAlbum}
+            allTracks={propTracks || []}
+            allAlbums={propAlbums || []}
+            onClose={() => setSelectedAlbum && setSelectedAlbum(null)}
+            onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+            onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+            onSelectArtist={(artistName) => {
+              if (setSelectedAlbum) setSelectedAlbum(null);
+              if (setSelectedArtist) setSelectedArtist({ name: artistName });
+            }}
+          />
+        );
+      })()}
 
-      {Boolean(selectedArtist) && (
-        <ArtistDetailModal
-          visible={Boolean(selectedArtist)}
-          artist={selectedArtist}
-          allTracks={propTracks || []}
-          allAlbums={propAlbums || []}
-          onClose={() => setSelectedArtist && setSelectedArtist(null)}
-          onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
-          onSelectAlbum={(alb) => {
-            if (setSelectedArtist) setSelectedArtist(null);
-            if (setSelectedAlbum) setSelectedAlbum(alb);
-          }}
-          onTrackAction={(track) => setActionTrack && setActionTrack(track)}
-        />
-      )}
-      {isFullPlayerOpen && (
-        <FullPlayerModal
-          visible={true}
-          onClose={() => setIsFullPlayerOpen(false)}
-          onTrackAction={(track) => track && setActionTrack(track)}
-        />
-      )}
+      {Boolean(selectedArtist) && (() => {
+        const ArtistDetailModal = getLazyModal('artist', () => require('./ArtistDetailModal').default);
+        return (
+          <ArtistDetailModal
+            visible={Boolean(selectedArtist)}
+            artist={selectedArtist}
+            allTracks={propTracks || []}
+            allAlbums={propAlbums || []}
+            onClose={() => setSelectedArtist && setSelectedArtist(null)}
+            onOpenFullPlayer={() => setIsFullPlayerOpen && setIsFullPlayerOpen(true)}
+            onSelectAlbum={(alb) => {
+              if (setSelectedArtist) setSelectedArtist(null);
+              if (setSelectedAlbum) setSelectedAlbum(alb);
+            }}
+            onTrackAction={(track) => setActionTrack && setActionTrack(track)}
+          />
+        );
+      })()}
 
-      {Boolean(actionTrack) && (
-        <TrackActionMenuModal
-          visible={!!actionTrack}
-          track={actionTrack}
-          onClose={() => setActionTrack(null)}
-          onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
-        />
-      )}
+      {isFullPlayerOpen && (() => {
+        const FullPlayerModal = getLazyModal('fullPlayer', () => require('./FullPlayerModal').default);
+        return (
+          <FullPlayerModal
+            visible={true}
+            onClose={() => setIsFullPlayerOpen(false)}
+            onTrackAction={(track) => track && setActionTrack(track)}
+          />
+        );
+      })()}
 
-      {Boolean(playlistTrack) && (
-        <PlaylistPickerModal
-          visible={!!playlistTrack}
-          track={playlistTrack}
-          onClose={() => setPlaylistTrack(null)}
-        />
-      )}
+      {Boolean(actionTrack) && (() => {
+        const TrackActionMenuModal = getLazyModal('trackAction', () => require('./TrackActionMenuModal').default);
+        return (
+          <TrackActionMenuModal
+            visible={!!actionTrack}
+            track={actionTrack}
+            onClose={() => setActionTrack(null)}
+            onOpenAddToPlaylist={(track) => setPlaylistTrack(track)}
+          />
+        );
+      })()}
 
-      {isCreatePlaylistOpen && (
-        <CreatePlaylistModal
-          visible={isCreatePlaylistOpen}
-          onClose={() => setIsCreatePlaylistOpen(false)}
-          onSuccess={() => setIsCreatePlaylistOpen(false)}
-          allTracks={propTracks}
-        />
-      )}
+      {Boolean(playlistTrack) && (() => {
+        const PlaylistPickerModal = getLazyModal('playlistPicker', () => require('./PlaylistPickerModal').default);
+        return (
+          <PlaylistPickerModal
+            visible={!!playlistTrack}
+            track={playlistTrack}
+            onClose={() => setPlaylistTrack(null)}
+          />
+        );
+      })()}
 
-      {isAddSongOpen && (
-        <AddSongModal
-          visible={isAddSongOpen}
-          onClose={() => setIsAddSongOpen(false)}
-          onSuccess={() => setIsAddSongOpen(false)}
-        />
-      )}
+      {isCreatePlaylistOpen && (() => {
+        const CreatePlaylistModal = getLazyModal('createPlaylist', () => require('./CreatePlaylistModal').default);
+        return (
+          <CreatePlaylistModal
+            visible={isCreatePlaylistOpen}
+            onClose={() => setIsCreatePlaylistOpen(false)}
+            onSuccess={() => setIsCreatePlaylistOpen(false)}
+            allTracks={propTracks}
+          />
+        );
+      })()}
 
-      {isChatOpen && (
-        <ChatModal
-          visible={isChatOpen}
-          onClose={() => {
-            setIsChatOpen(false);
-            setChatTargetUser(null);
-          }}
-          initialTargetUser={chatTargetUser}
-          onOpenJam={() => {
-            setIsChatOpen(false);
-            setIsJamOpen(true);
-          }}
-          onViewProfile={(target) => {
-            setIsChatOpen(false);
-            const myId = currentUser?._id || currentUser?.id;
-            const targetId = target?._id || target?.id;
-            if (targetId && myId && String(targetId) === String(myId)) {
-              if (setViewingUser) setViewingUser(null);
-            } else {
-              if (setViewingUser) setViewingUser(target);
-            }
-            if (setActiveTab) setActiveTab('profile');
-          }}
-        />
-      )}
+      {isAddSongOpen && (() => {
+        const AddSongModal = getLazyModal('addSong', () => require('./AddSongModal').default);
+        return (
+          <AddSongModal
+            visible={isAddSongOpen}
+            onClose={() => setIsAddSongOpen(false)}
+            onSuccess={() => setIsAddSongOpen(false)}
+          />
+        );
+      })()}
 
-      {isSettingsOpen && (
-        <SettingsModal
-          visible={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-        />
-      )}
+      {isChatOpen && (() => {
+        const ChatModal = getLazyModal('chat', () => require('./ChatModal').default);
+        return (
+          <ChatModal
+            visible={isChatOpen}
+            onClose={() => {
+              setIsChatOpen(false);
+              setChatTargetUser(null);
+            }}
+            initialTargetUser={chatTargetUser}
+            onOpenJam={() => {
+              setIsChatOpen(false);
+              setIsJamOpen(true);
+            }}
+            onViewProfile={(target) => {
+              setIsChatOpen(false);
+              const myId = currentUser?._id || currentUser?.id;
+              const targetId = target?._id || target?.id;
+              if (targetId && myId && String(targetId) === String(myId)) {
+                if (setViewingUser) setViewingUser(null);
+              } else {
+                if (setViewingUser) setViewingUser(target);
+              }
+              if (setActiveTab) setActiveTab('profile');
+            }}
+          />
+        );
+      })()}
 
-      {isJamOpen && (
-        <JamRoomModal
-          visible={isJamOpen}
-          onClose={() => setIsJamOpen(false)}
-        />
-      )}
+      {isSettingsOpen && (() => {
+        const SettingsModal = getLazyModal('settings', () => require('./SettingsModal').default);
+        return (
+          <SettingsModal
+            visible={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+          />
+        );
+      })()}
 
-      {isFriendActivityOpen && (
-        <FriendActivityModal
-          visible={isFriendActivityOpen}
-          onClose={() => setIsFriendActivityOpen(false)}
-          onViewProfile={(target) => {
-            setIsFriendActivityOpen(false);
-            const myId = currentUser?._id || currentUser?.id;
-            const targetId = target?._id || target?.id;
-            if (targetId && myId && String(targetId) === String(myId)) {
-              if (setViewingUser) setViewingUser(null);
-            } else {
-              if (setViewingUser) setViewingUser(target);
-            }
-            if (setActiveTab) setActiveTab('profile');
-          }}
-        />
-      )}
+      {isJamOpen && (() => {
+        const JamRoomModal = getLazyModal('jam', () => require('./JamRoomModal').default);
+        return (
+          <JamRoomModal
+            visible={isJamOpen}
+            onClose={() => setIsJamOpen(false)}
+          />
+        );
+      })()}
 
-      {isIntroAuthOpen && (
-        <IntroAuthModal
-          visible={isIntroAuthOpen}
-          onClose={() => setIsIntroAuthOpen(false)}
-        />
-      )}
+      {isFriendActivityOpen && (() => {
+        const FriendActivityModal = getLazyModal('friendActivity', () => require('./FriendActivityModal').default);
+        return (
+          <FriendActivityModal
+            visible={isFriendActivityOpen}
+            onClose={() => setIsFriendActivityOpen(false)}
+            onViewProfile={(target) => {
+              setIsFriendActivityOpen(false);
+              const myId = currentUser?._id || currentUser?.id;
+              const targetId = target?._id || target?.id;
+              if (targetId && myId && String(targetId) === String(myId)) {
+                if (setViewingUser) setViewingUser(null);
+              } else {
+                if (setViewingUser) setViewingUser(target);
+              }
+              if (setActiveTab) setActiveTab('profile');
+            }}
+          />
+        );
+      })()}
+
+      {isIntroAuthOpen && (() => {
+        const IntroAuthModal = getLazyModal('introAuth', () => require('./IntroAuthModal').default);
+        return (
+          <IntroAuthModal
+            visible={isIntroAuthOpen}
+            onClose={() => setIsIntroAuthOpen(false)}
+          />
+        );
+      })()}
     </>
   );
 }

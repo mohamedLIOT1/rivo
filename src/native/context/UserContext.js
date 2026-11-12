@@ -187,6 +187,7 @@ export const UserProvider = ({ children }) => {
           !String(t.id || t._id || '').startsWith('sc-')
         ));
         if (cleaned.length > 0) {
+          let didChange = true;
           setTracks(prev => {
             if (
               prev &&
@@ -194,11 +195,15 @@ export const UserProvider = ({ children }) => {
               (prev[0]?._id || prev[0]?.id) === (cleaned[0]?._id || cleaned[0]?.id) &&
               (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (cleaned[cleaned.length - 1]?._id || cleaned[cleaned.length - 1]?.id)
             ) {
+              didChange = false;
               return prev;
             }
             return cleaned;
           });
-          AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(cleaned)).catch(() => {});
+          if (didChange) {
+            const compact = cleaned.map(({ lyrics, ...rest }) => rest);
+            AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(compact)).catch(() => {});
+          }
         }
       }
     } catch {}
@@ -210,6 +215,7 @@ export const UserProvider = ({ children }) => {
         const albData = await albRes.json();
         const albList = Array.isArray(albData?.albums) ? albData.albums : [];
         if (albList.length > 0) {
+          let albChanged = true;
           setAlbums(prev => {
             if (
               prev &&
@@ -217,11 +223,14 @@ export const UserProvider = ({ children }) => {
               (prev[0]?._id || prev[0]?.id) === (albList[0]?._id || albList[0]?.id) &&
               (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (albList[albList.length - 1]?._id || albList[albList.length - 1]?.id)
             ) {
+              albChanged = false;
               return prev;
             }
             return albList;
           });
-          AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
+          if (albChanged) {
+            AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
+          }
         }
       }
     } catch {}

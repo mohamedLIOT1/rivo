@@ -147,7 +147,7 @@ public partial class Form1 : Form
             CoreWebView2Environment? environment = null;
             try
             {
-                string perfFlags = "--autoplay-policy=no-user-gesture-required --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-features=OverlayScrollbar --disable-features=Translate,OptimizationHints,MediaRouter --renderer-process-limit=2";
+                string perfFlags = "--autoplay-policy=no-user-gesture-required --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-features=OverlayScrollbar --disable-features=Translate,OptimizationHints,MediaRouter,CalculateNativeWinOcclusion --disable-background-networking --disable-background-timer-throttling --disable-renderer-backgrounding --js-flags=\"--max-old-space-size=256\" --renderer-process-limit=1";
                 var options = new CoreWebView2EnvironmentOptions(perfFlags);
                 string userDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rivo", "Profile");
                 environment = await CoreWebView2Environment.CreateAsync(null, userDataFolder, options);
@@ -243,7 +243,7 @@ public partial class Form1 : Form
                                 window.chrome.webview.postMessage(JSON.stringify({ action: 'PAUSE' }));
                             }
                         } catch (err) {}
-                    }, 1000);
+                    }, 2500);
                 })();
             ";
 

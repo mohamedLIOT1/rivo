@@ -143,16 +143,44 @@ export function UserProvider({ children }) {
   }, [currentUser]);
 
   useEffect(() => {
+    try {
+      localStorage.removeItem('liofy_tracks');
+      localStorage.removeItem('liofy_playlists');
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     const timer = setTimeout(() => {
       try {
-        // Strip heavy lyrics arrays from localStorage cache so startup parse stays fast & lightweight
+        // Store compact slim track fields so localStorage stays <500KB and parses in milliseconds
         const compact = tracks.map(t => {
-          if (!t || !Array.isArray(t.lyrics) || t.lyrics.length === 0) return t;
-          const { lyrics, ...rest } = t;
-          return { ...rest, hasLyrics: true };
+          if (!t) return t;
+          return {
+            id: t.id || t._id,
+            _id: t._id || t.id,
+            title: t.title,
+            artist: t.artist,
+            album: t.album,
+            cover: t.cover,
+            audioUrl: t.audioUrl,
+            duration: t.duration,
+            genre: t.genre,
+            source: t.source,
+            isQuran: t.isQuran,
+            liked: t.liked,
+            downloaded: t.downloaded,
+            plays: t.plays,
+            hasLyrics: Boolean(t.hasLyrics || (Array.isArray(t.lyrics) && t.lyrics.length > 0)),
+            lyricsVerified: Boolean(t.lyricsVerified),
+          };
         });
         localStorage.setItem('rivo_tracks', JSON.stringify(compact));
-      } catch {}
+      } catch {
+        try {
+          localStorage.removeItem('liofy_tracks');
+          localStorage.removeItem('liofy_playlists');
+        } catch {}
+      }
     }, 3000);
     return () => clearTimeout(timer);
   }, [tracks]);

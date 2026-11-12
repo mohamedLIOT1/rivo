@@ -67,14 +67,14 @@ import { UpdateProvider } from './src/native/context/UpdateContext';
 import UpdateModals from './src/native/components/UpdateModals';
 
 import HomeScreen from './src/native/screens/HomeScreen';
-import SearchScreen from './src/native/screens/SearchScreen';
-import LibraryScreen from './src/native/screens/LibraryScreen';
-import QuranScreen from './src/native/screens/QuranScreen';
-import PodcastScreen from './src/native/screens/PodcastScreen';
-import ProfileScreen from './src/native/screens/ProfileScreen';
-import StatsScreen from './src/native/screens/StatsScreen';
-import OfflineScreen from './src/native/screens/OfflineScreen';
-import AdminScreen from './src/native/screens/AdminScreen';
+
+const lazyScreensCache = {};
+function getLazyScreen(key, loader) {
+  if (!lazyScreensCache[key]) {
+    lazyScreensCache[key] = loader();
+  }
+  return lazyScreensCache[key];
+}
 
 import MiniPlayer from './src/native/components/MiniPlayer';
 import FloatingNavMenu from './src/native/components/FloatingNavMenu';
@@ -541,77 +541,101 @@ function NativeAppShell() {
           </View>
         )}
 
-        {normalizedTab === 'search' && (
-          <View style={{ flex: 1 }}>
-            <SearchScreen
-              initialQuery={headerSearchText}
-              onQueryChange={handleQueryChange}
-              onTrackAction={handleTrackAction}
-              onOpenChat={handleOpenChat}
-              onOpenFullPlayer={handleOpenFullPlayer}
-              onSelectAlbum={handleSelectAlbum}
-              onSelectArtist={handleSelectArtist}
-            />
-          </View>
-        )}
+        {normalizedTab === 'search' && (() => {
+          const SearchScreenComp = getLazyScreen('search', () => require('./src/native/screens/SearchScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <SearchScreenComp
+                initialQuery={headerSearchText}
+                onQueryChange={handleQueryChange}
+                onTrackAction={handleTrackAction}
+                onOpenChat={handleOpenChat}
+                onOpenFullPlayer={handleOpenFullPlayer}
+                onSelectAlbum={handleSelectAlbum}
+                onSelectArtist={handleSelectArtist}
+              />
+            </View>
+          );
+        })()}
 
-        {normalizedTab === 'library' && (
-          <View style={{ flex: 1 }}>
-            <LibraryScreen
-              onOpenCreatePlaylist={handleOpenCreatePlaylist}
-              onNavigateOffline={handleNavigateOffline}
-              onTrackAction={handleTrackAction}
-            />
-          </View>
-        )}
+        {normalizedTab === 'library' && (() => {
+          const LibraryScreenComp = getLazyScreen('library', () => require('./src/native/screens/LibraryScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <LibraryScreenComp
+                onOpenCreatePlaylist={handleOpenCreatePlaylist}
+                onNavigateOffline={handleNavigateOffline}
+                onTrackAction={handleTrackAction}
+              />
+            </View>
+          );
+        })()}
 
-        {visitedPrimaryTabs.podcasts && (
-          <View style={[{ flex: 1 }, normalizedTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
-            <PodcastScreen onTrackAction={handleTrackAction} />
-          </View>
-        )}
+        {visitedPrimaryTabs.podcasts && (() => {
+          const PodcastScreenComp = getLazyScreen('podcasts', () => require('./src/native/screens/PodcastScreen').default);
+          return (
+            <View style={[{ flex: 1 }, normalizedTab === 'podcasts' ? { display: 'flex' } : { display: 'none' }]}>
+              <PodcastScreenComp onTrackAction={handleTrackAction} />
+            </View>
+          );
+        })()}
 
-        {visitedPrimaryTabs.quran && (
-          <View style={[{ flex: 1 }, normalizedTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
-            <QuranScreen onTrackAction={handleTrackAction} />
-          </View>
-        )}
+        {visitedPrimaryTabs.quran && (() => {
+          const QuranScreenComp = getLazyScreen('quran', () => require('./src/native/screens/QuranScreen').default);
+          return (
+            <View style={[{ flex: 1 }, normalizedTab === 'quran' ? { display: 'flex' } : { display: 'none' }]}>
+              <QuranScreenComp onTrackAction={handleTrackAction} />
+            </View>
+          );
+        })()}
 
-        {normalizedTab === 'offline' && (
-          <View style={{ flex: 1 }}>
-            <OfflineScreen />
-          </View>
-        )}
+        {normalizedTab === 'offline' && (() => {
+          const OfflineScreenComp = getLazyScreen('offline', () => require('./src/native/screens/OfflineScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <OfflineScreenComp />
+            </View>
+          );
+        })()}
 
-        {normalizedTab === 'profile' && (
-          <View style={{ flex: 1 }}>
-            <ProfileScreen
-              onOpenSettings={handleOpenSettings}
-              onOpenAuth={handleOpenAuth}
-              onOpenFriendActivity={handleOpenFriendActivity}
-              onOpenJam={handleOpenJam}
-              onOpenChat={handleOpenChat}
-              onSelectPlaylist={handleSelectPlaylist}
-              onOpenFullPlayer={handleOpenFullPlayer}
-              onSelectAlbum={handleSelectAlbum}
-              onSelectArtist={handleSelectArtist}
-              viewingUser={viewingUser}
-              onClearViewingUser={handleClearViewingUser}
-            />
-          </View>
-        )}
+        {normalizedTab === 'profile' && (() => {
+          const ProfileScreenComp = getLazyScreen('profile', () => require('./src/native/screens/ProfileScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <ProfileScreenComp
+                onOpenSettings={handleOpenSettings}
+                onOpenAuth={handleOpenAuth}
+                onOpenFriendActivity={handleOpenFriendActivity}
+                onOpenJam={handleOpenJam}
+                onOpenChat={handleOpenChat}
+                onSelectPlaylist={handleSelectPlaylist}
+                onOpenFullPlayer={handleOpenFullPlayer}
+                onSelectAlbum={handleSelectAlbum}
+                onSelectArtist={handleSelectArtist}
+                viewingUser={viewingUser}
+                onClearViewingUser={handleClearViewingUser}
+              />
+            </View>
+          );
+        })()}
 
-        {normalizedTab === 'stats' && (
-          <View style={{ flex: 1 }}>
-            <StatsScreen />
-          </View>
-        )}
+        {normalizedTab === 'stats' && (() => {
+          const StatsScreenComp = getLazyScreen('stats', () => require('./src/native/screens/StatsScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <StatsScreenComp />
+            </View>
+          );
+        })()}
 
-        {normalizedTab === 'admin' && (
-          <View style={{ flex: 1 }}>
-            <AdminScreen />
-          </View>
-        )}
+        {normalizedTab === 'admin' && (() => {
+          const AdminScreenComp = getLazyScreen('admin', () => require('./src/native/screens/AdminScreen').default);
+          return (
+            <View style={{ flex: 1 }}>
+              <AdminScreenComp />
+            </View>
+          );
+        })()}
       </View>
 
       {/* ─────────────────────────────────────────

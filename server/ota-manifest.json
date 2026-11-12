@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.24",
+  "version": "2.4.25",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء",
-  "notesEn": "Instant OTA v2.4.24 • Removed dummy podcasts and improved low-RAM speed",
-  "bundleSize": 5222880,
+  "notes": "تحديث هوائي v2.4.25 • تسريع فائق للنيتيف وتخفيف استهلاك الذاكرة",
+  "notesEn": "Instant OTA v2.4.25 • Ultra-light lazy screens and faster startup",
+  "bundleSize": 5224811,
   "sizeMb": "4.98 MB",
-  "updatedAt": "2026-11-11T23:00:24.064Z"
+  "updatedAt": "2026-11-12T07:48:44.706Z"
 }

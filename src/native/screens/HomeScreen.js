@@ -258,6 +258,8 @@ function HomeScreen({
     }
   };
 
+  const downloadedCount = Array.isArray(downloadedTracks) ? downloadedTracks.length : 0;
+
   const renderHeader = useCallback(() => (
     <View>
       {/* ─── IN-APP UPDATE BANNER (Only shows when an update is available) ─── */}
@@ -388,20 +390,20 @@ function HomeScreen({
           </Text>
         </TouchableOpacity>
 
-        {Array.isArray(downloadedTracks) && downloadedTracks.length > 0 && (
+        {downloadedCount > 0 && (
           <TouchableOpacity
             style={[styles.filterPill, activeFilter === 'downloaded' && styles.filterPillActive]}
             onPress={() => setActiveFilter('downloaded')}
             activeOpacity={0.8}
           >
             <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive, rtlTextStyle]}>
-              {isRTL ? `المحملة (${downloadedTracks.length})` : `Downloaded (${downloadedTracks.length})`}
+              {isRTL ? `المحملة (${downloadedCount})` : `Downloaded (${downloadedCount})`}
             </Text>
           </TouchableOpacity>
         )}
       </View>
     </View>
-  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedTracks, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
+  ), [currentUser?.name, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -470,11 +472,11 @@ function HomeScreen({
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={5}
+        initialNumToRender={4}
         maxToRenderPerBatch={4}
         windowSize={3}
         updateCellsBatchingPeriod={50}
-        removeClippedSubviews={Platform.OS === 'android'}
+        removeClippedSubviews={true}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
