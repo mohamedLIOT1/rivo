@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { usePreferences, useTranslation } from '../context/PreferencesContext';
-import { Play, Plus, Disc, Sparkles } from 'lucide-react';
+import { Play, Plus, Disc } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 import ConfirmModal from '../components/ConfirmModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
 import HomeTrackCard from '../components/HomeTrackCard';
+import AiMoodMixCard from '../components/AiMoodMixCard';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { getAlbumArtwork } from './ArtistScreen';
@@ -12,6 +13,12 @@ import { sortTracksByPopularity, getGlobalTrackScore } from '../utils/trackPopul
 import { getSmartTasteAndMoodTracks, getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { getListeningStats } from '../utils/listeningTracker';
 import { handleCoverImageError } from '../utils/coverUtils';
+import {
+  get12hBucket,
+  loadCachedAiMoodMix,
+  saveCachedAiMoodMix,
+  rotateAlbumsForWindow,
+} from '../utils/aiMoodMixCache';
 
 export { getGlobalTrackScore };
 
@@ -38,6 +45,7 @@ export default function HomeScreen({
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
   const [visibleCount, setVisibleCount] = useState(36);
+  const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [aiMoodMix, setAiMoodMix] = useState([]);
 
   const isTrackActive = useCallback((tr) => {
@@ -73,10 +81,19 @@ export default function HomeScreen({
   }, [fetchedAlbums?.length]);
 
   const currentMood = getCurrentTimeMood();
+  const bucket12h = get12hBucket();
+  const cacheOwnerId = String(currentUser?.id || currentUser?._id || 'guest');
 
-  // Personalized AI Mood & Taste Recommendations
+  // Personalized AI Mood & Taste Recommendations (Persisted for 12 hours instead of resetting per reload)
   useEffect(() => {
     if (!showMusic || displayTracks.length === 0) return;
+
+    const cached = loadCachedAiMoodMix(cacheOwnerId, displayTracks);
+    if (cached) {
+      setAiMoodMix(cached);
+      return;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => {
       const token = currentUser?.token || localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
@@ -94,7 +111,7 @@ export default function HomeScreen({
         currentUser,
         followedArtists: followed,
         likedTrackIds: currentUser?.likedTrackIds || currentUser?.likedTracks || [],
-        limit: 6,
+        limit: 12,
       });
 
       fetch(`${API_BASE_URL}/api/ai/recommendations`, {
@@ -116,9 +133,26 @@ export default function HomeScreen({
         .then(r => (r.ok ? r.json() : null))
         .then(d => {
           if (controller.signal.aborted) return;
-          const recs = d?.recommendations || d?.tracks || [];
-          if (d?.success && Array.isArray(recs) && recs.length > 0) {
-            setAiMoodMix(recs.filter(tr => !isQuranContent(tr)).map(tr => ({ ...tr, isSmartMoodQueue: true, isAiSuggestion: true })));
+          const recs = (d?.recommendations || d?.tracks || []).filter(tr => !isQuranContent(tr));
+          const merged = [];
+          const seen = new Set();
+          for (const tr of [...recs, ...localSeeds]) {
+            const tid = String(tr?.id || tr?._id || '');
+            if (tid && !seen.has(tid)) {
+              seen.add(tid);
+              merged.push({ ...tr, isSmartMoodQueue: true, isAiSuggestion: true });
+            }
+            if (merged.length >= 15) break;
+          }
+          if (merged.length > 0) {
+            setAiMoodMix(merged);
+            saveCachedAiMoodMix({
+              ownerId: cacheOwnerId,
+              moodId: currentMood.id,
+              name: isRTL ? 'مُختارات لك • قائمة ذكاء ريفو' : 'Made For You • AI Mood Mix',
+              description: `${currentMood.label} • Auto-refreshes every 12h`,
+              tracks: merged,
+            });
           }
         })
         .catch(() => {});
@@ -128,13 +162,13 @@ export default function HomeScreen({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [showMusic, displayTracks.length, currentUser?.id, currentUser?._id, currentMood.id]);
+  }, [showMusic, displayTracks, cacheOwnerId, bucket12h, currentMood.id, currentMood.label, currentUser, isRTL]);
 
-  // Strictly filter out any Quran recitations/albums from Featured Albums on Home
+  // Filter out Quran albums and apply 12-hour seeded rotation so Featured Albums order stays fresh
   const displayAlbums = useMemo(() => {
     const list = (fetchedAlbums && fetchedAlbums.length > 0) ? fetchedAlbums : (albums || []);
-    return list.filter(alb => !isQuranContent(alb));
-  }, [fetchedAlbums, albums]);
+    return rotateAlbumsForWindow(list, cacheOwnerId);
+  }, [fetchedAlbums, albums, bucket12h, cacheOwnerId]);
 
   // Preset vibrant badge colors for blister packs
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];
@@ -193,11 +227,29 @@ export default function HomeScreen({
 
   const resolvedMoodLabel = getMoodLabel(currentMood.id);
 
+  const aiMoodPlaylistObj = useMemo(() => {
+    if (!aiMoodMix || aiMoodMix.length === 0) return null;
+    const artistsSummary = Array.from(
+      new Set(aiMoodMix.map(tr => tr?.artist).filter(Boolean))
+    ).slice(0, 4).join(' • ');
+    return {
+      id: 'ai-mood-mix',
+      name: isRTL ? 'مُختارات لك • قائمة ذكاء ريفو' : 'Made For You • AI Mood Mix',
+      description: artistsSummary
+        ? `${resolvedMoodLabel} — ${artistsSummary}`
+        : resolvedMoodLabel,
+      isAiMoodPlaylist: true,
+      tracks: aiMoodMix,
+      trackIds: aiMoodMix.map(tr => String(tr.id || tr._id)),
+    };
+  }, [aiMoodMix, isRTL, resolvedMoodLabel]);
+
   return (
     <div
       className={`flex-1 overflow-y-auto select-none p-3.5 sm:p-6 ${isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'}`}
       style={{ paddingBottom: 'calc(var(--player-height) + 40px)', WebkitOverflowScrolling: 'touch', willChange: 'scroll-position' }}
     >
+      <div className="max-w-[1440px] mx-auto w-full">
       {/* HERO BANNER */}
       <section className="mb-6 bg-[#082621] rounded-2xl brutal-border-thick p-5 sm:p-7 text-[#fdfbf7] brutal-shadow-teal relative overflow-hidden">
         <div className="absolute -right-6 -bottom-10 opacity-10 text-white font-display font-black text-9xl select-none pointer-events-none tracking-tighter">RIVO</div>
@@ -258,48 +310,22 @@ export default function HomeScreen({
         </div>
       </section>
 
-      {/* PERSONALIZED AI MOOD MIX */}
-      {aiMoodMix.length > 0 && (
-        <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Sparkles size={19} className="text-[#26c4b7]" />
-              <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-                {isRTL ? 'مُختارات لك • ذكاء ريفو' : 'Made For You • AI Mood Mix'}
-              </h2>
-              <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#26c4b7] px-2 py-0.5 rounded-full brutal-border">
-                {resolvedMoodLabel}
-              </span>
-            </div>
-            <button onClick={handlePlaySmartCassette} className="px-3 py-1 rounded-lg brutal-border bg-[#26c4b7] text-[#082621] font-mono font-black text-[11px] uppercase cursor-pointer">
-              {isRTL ? 'تشغيل المزيج' : 'Play Mix'}
-            </button>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
-            {aiMoodMix.slice(0, 6).map((track, index) => (
-              <HomeTrackCard
-                key={`ai-${track.id || track._id || index}`}
-                track={track}
-                index={index}
-                isActive={isTrackActive(track)}
-                isPlaying={isPlaying}
-                isDark={isDark}
-                color={badgeColors[index % badgeColors.length]}
-                onSelectTrack={() => onSelectTrack(track, aiMoodMix)}
-                toggleLike={toggleLike}
-                onOpenActionMenu={setActionMenuTrack}
-                onSelectArtist={onSelectArtist}
-                t={t}
-              />
-            ))}
-          </div>
-        </section>
-      )}
+      {/* PERSONALIZED AI MOOD MIX PLAYLIST CARD (12-HOUR REFRESH) */}
+      <AiMoodMixCard
+        playlistObj={aiMoodPlaylistObj}
+        tracks={aiMoodMix}
+        resolvedMoodLabel={resolvedMoodLabel}
+        currentTrack={currentTrack}
+        isDark={isDark}
+        isRTL={isRTL}
+        onSelectPlaylist={onSelectPlaylist}
+        onSelectTrack={onSelectTrack}
+      />
 
       {/* FEATURED ALBUMS & DISCOGRAPHY SPOTLIGHT */}
       {displayAlbums && displayAlbums.length > 0 && (
         <section className="mb-8">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-3 gap-2">
             <div className="flex items-center gap-2">
               <Disc size={20} className="text-amber-400" />
               <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">{t('home.featuredAlbums')}</h2>
@@ -307,9 +333,18 @@ export default function HomeScreen({
                 {displayAlbums.length} {displayAlbums.length === 1 ? t('home.album') : t('home.albums')}
               </span>
             </div>
+            {displayAlbums.length > 6 && (
+              <button
+                type="button"
+                onClick={() => setShowAllAlbums(prev => !prev)}
+                className="px-3 py-1 rounded-lg brutal-border bg-[#0b1110] hover:bg-[#141d1b] text-[#26c4b7] font-mono font-black text-[11px] uppercase cursor-pointer"
+              >
+                {showAllAlbums ? (isRTL ? 'إظهار أقل' : 'Show Less') : (isRTL ? `عرض الكل (${displayAlbums.length})` : `View All (${displayAlbums.length})`)}
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3.5">
-            {displayAlbums.slice(0, 6).map((alb) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3.5">
+            {(showAllAlbums ? displayAlbums : displayAlbums.slice(0, 6)).map((alb) => (
               <div
                 key={alb.id || alb._id || alb.name}
                 onClick={() => onSelectPlaylist?.(alb)}
@@ -345,7 +380,7 @@ export default function HomeScreen({
           </div>
           <span className="text-[11px] font-mono font-bold text-emerald-100/70">{t('home.tracksCount', { count: popularTracks.length })}</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
           {popularTracks.slice(0, visibleCount).map((track, index) => (
             <HomeTrackCard
               key={track.id || track._id || index}
@@ -386,6 +421,7 @@ export default function HomeScreen({
           openEditSongModal={openEditSongModal} onDeleteTrack={onDeleteTrack} currentUser={currentUser} globalTheme={globalTheme}
         />
       )}
+      </div>
     </div>
   );
 }

@@ -222,6 +222,7 @@ export default function ScreenRouter({
 
       {currentScreen === 'playlist' && selectedPlaylist && (
         <PlaylistScreen
+          key={String(selectedPlaylist.id || selectedPlaylist._id || 'playlist')}
           playlist={(() => {
             const selId = String(selectedPlaylist.id || selectedPlaylist._id || '');
             if (selectedPlaylist.isLikedSongs || selId === 'liked') {

@@ -202,7 +202,7 @@ body.rtl textarea::placeholder {
   --sp-border-subtle: rgba(11, 17, 16, 0.2);
 
   /* Layout Dimensions */
-  --nav-width: 275px;
+  --nav-width: clamp(244px, 17.5vw, 305px);
   --player-height: 96px;
   --topbar-height: 66px;
 }

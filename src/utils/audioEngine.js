@@ -201,6 +201,105 @@ export function getAudioContext() {
   return audioCtx;
 }
 
+/**
+ * Smoothstep easing t in [0, 1] -> [0, 1] with zero-derivative endpoints
+ */
+export function smoothstep01(t) {
+  const x = Math.max(0, Math.min(1, Number(t) || 0));
+  return x * x * (3 - 2 * x);
+}
+
+/**
+ * Smoothly interpolate deck volume multipliers at transition start/end
+ * to avoid abrupt volume jumps when crossfade begins or completes.
+ */
+export function computeSmoothCrossfadeVolumes(progress, masterVol, gainA, gainB, multA = 1, multB = 1) {
+  const p = Math.max(0, Math.min(1, Number(progress) || 0));
+  const mA = 1 + (multA - 1) * smoothstep01(p / 0.18);
+  const mB = multB + (1 - multB) * smoothstep01((p - 0.82) / 0.18);
+  return {
+    volA: Math.max(0, Math.min(1, masterVol * gainA * mA)),
+    volB: Math.max(0, Math.min(1, masterVol * gainB * mB)),
+  };
+}
+
+/**
+ * Prepare standby <audio> deck cleanly before starting crossfade playback:
+ * waits for metadata/seek settle + future-data readiness (with bounded timeout)
+ * so play() never re-seeks mid-playback or stalls at transition attack.
+ */
+export function prepareStandbyDeckForMix(toDeck, fullUrl, inPoint, rateB, isCancelled, timeoutMs = 850) {
+  return new Promise((resolve) => {
+    if (!toDeck || isCancelled?.()) {
+      resolve(false);
+      return;
+    }
+
+    const cueTarget = Math.max(0, Number(inPoint) || 0);
+    toDeck.volume = 0;
+    toDeck.muted = false;
+    toDeck.playbackRate = rateB;
+
+    let done = false;
+    let timer = null;
+    const listeners = [];
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      listeners.forEach(([evt, fn]) => {
+        try { toDeck.removeEventListener(evt, fn); } catch {}
+      });
+      resolve(!isCancelled?.());
+    };
+
+    const listenOnce = (evt, fn) => {
+      toDeck.addEventListener(evt, fn, { once: true });
+      listeners.push([evt, fn]);
+    };
+
+    const seekAndWaitReady = () => {
+      if (isCancelled?.()) {
+        finish();
+        return;
+      }
+      const needsSeek = cueTarget > 0 && Math.abs((toDeck.currentTime || 0) - cueTarget) > 0.25;
+      if (needsSeek) {
+        listenOnce('seeked', () => {
+          if (toDeck.readyState >= 3) finish();
+          else listenOnce('canplay', finish);
+        });
+        try {
+          toDeck.currentTime = cueTarget;
+        } catch {
+          if (toDeck.readyState >= 3) finish();
+          else listenOnce('canplay', finish);
+        }
+      } else if (toDeck.readyState >= 3) {
+        finish();
+      } else {
+        listenOnce('canplay', finish);
+      }
+    };
+
+    timer = setTimeout(finish, timeoutMs);
+
+    const sameSrc = toDeck.src === fullUrl;
+    if (!sameSrc) {
+      toDeck.preload = 'auto';
+      toDeck.src = fullUrl;
+      toDeck.load();
+    }
+
+    if (toDeck.readyState >= 1) {
+      seekAndWaitReady();
+    } else {
+      listenOnce('loadedmetadata', seekAndWaitReady);
+    }
+  });
+}
+
 export async function playTrueRivoMix({
   songUrl1,
   songUrl2,

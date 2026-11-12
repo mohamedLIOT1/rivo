@@ -62,6 +62,8 @@ export function attachQueueMeta(arr, source = null) {
   if (!source) return target;
   if (source._transitions !== undefined) target._transitions = source._transitions;
   if (source._isMix !== undefined) target._isMix = source._isMix;
+  if (source._isExplicitPlaylist !== undefined) target._isExplicitPlaylist = source._isExplicitPlaylist;
+  if (source._playlistId !== undefined) target._playlistId = source._playlistId;
   if (source._playlistName !== undefined) target._playlistName = source._playlistName;
   if (source.name !== undefined) target.name = source.name;
   if (source._contextType !== undefined) target._contextType = source._contextType;
@@ -207,7 +209,12 @@ export function resolveQueueForPlayTrack({
     .map((t) => createQueueEntry(t, true));
 
   const isExplicitPlaylist = Boolean(
-    newQueue && Array.isArray(newQueue) && newQueue.length > 1 && !sameAsCurrentQueue
+    newQueue &&
+      Array.isArray(newQueue) &&
+      (newQueue._isExplicitPlaylist ||
+        newQueue._isMix ||
+        newQueue.isMix ||
+        newQueue.length > 1)
   );
 
   if (targetKind === 'radio') {
@@ -327,6 +334,13 @@ export function resolveQueueForPlayTrack({
   if (resolvedQueue) {
     resolvedQueue._transitions = newQueue?._transitions || resolvedQueue._transitions || activeTransitions;
     resolvedQueue._isMix = isMixDetected;
+    resolvedQueue._isExplicitPlaylist = Boolean(
+      newQueue?._isExplicitPlaylist ||
+        resolvedQueue._isExplicitPlaylist ||
+        isMixDetected ||
+        (isExplicitPlaylist && !isSmartQueue)
+    );
+    resolvedQueue._playlistId = newQueue?._playlistId || resolvedQueue._playlistId;
     resolvedQueue._playlistName = newQueue?._playlistName || newQueue?.name || resolvedQueue._playlistName;
     if (resolvedQueue._playlistName && !trackToPlay.mixName) {
       trackToPlay.mixName = resolvedQueue._playlistName;

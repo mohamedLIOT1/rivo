@@ -71,10 +71,36 @@ export default function PlaylistScreen({
 
   useEffect(() => {
     const plId = initialPlaylist?.id || initialPlaylist?._id;
+    setRemotePlaylist(null);
+    setFetchedTracks([]);
     if (!plId || plId === 'liked') {
-      setRemotePlaylist(null);
       return;
     }
+
+    // Synthetic 12-hour AI Mood Mix playlist: never fetch non-existent /api/playlists/ai-mood-mix
+    if (String(plId) === 'ai-mood-mix' || initialPlaylist?.isAiMoodPlaylist) {
+      if (!Array.isArray(initialPlaylist?.tracks) || initialPlaylist.tracks.length === 0) {
+        try {
+          const raw = localStorage.getItem('rivo_ai_mood_mix_v1');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed?.tracks) && parsed.tracks.length > 0) {
+              setRemotePlaylist({
+                id: 'ai-mood-mix',
+                name: parsed.name || initialPlaylist?.name || 'Made For You • AI Mood Mix',
+                description: parsed.description || initialPlaylist?.description || '',
+                isAiMoodPlaylist: true,
+                tracks: parsed.tracks,
+                trackIds: parsed.tracks.map(t => String(t.id || t._id)),
+              });
+            }
+          }
+        } catch {}
+      }
+      return;
+    }
+
+    const controller = new AbortController();
     const hasTracks = (Array.isArray(initialPlaylist?.trackIds) && initialPlaylist.trackIds.length > 0) || (Array.isArray(initialPlaylist?.tracks) && initialPlaylist.tracks.length > 0);
     const isAlb = String(plId).startsWith('album-') || Boolean(initialPlaylist?.isAlbum);
     if (!hasTracks || isAlb || !initialPlaylist?.name || initialPlaylist.name === 'Playlist') {
@@ -83,9 +109,10 @@ export default function PlaylistScreen({
         : `${API_BASE_URL}/api/playlists/${encodeURIComponent(plId)}`;
       const token = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-      fetch(url, { headers })
+      fetch(url, { headers, signal: controller.signal })
         .then(r => r.json())
         .then(data => {
+          if (controller.signal.aborted) return;
           if (data.success) {
             const fetched = data.album || data.playlist;
             if (fetched) {
@@ -117,6 +144,7 @@ export default function PlaylistScreen({
         })
         .catch(() => {});
     }
+    return () => controller.abort();
   }, [initialPlaylist?.id, initialPlaylist?._id, initialPlaylist?.name]);
   const { currentTrack, isPlaying, isLoadingTrack, togglePlay, togglePlayPause, isMixMode, setIsMixMode, activeTransitions, setActiveTransitions, currentQueue, setCurrentQueue, addToQueue, jamSession } = useAudioPlayer();
   const downloadManager = useDownloadManager();
@@ -159,7 +187,8 @@ export default function PlaylistScreen({
   );
 
   // Ownership: can edit, delete, add/remove tracks
-  const isOwner = Boolean(
+  const isAiMoodPlaylist = Boolean(playlist?.isAiMoodPlaylist || currentPlaylistId === 'ai-mood-mix');
+  const isOwner = !isAiMoodPlaylist && Boolean(
     isAdmin ||
     playlist?.isLikedSongs ||
     isUserPlaylist ||
@@ -821,9 +850,19 @@ export default function PlaylistScreen({
     }
   };
 
-  const handlePlayPlaylistTrack = (track) => {
-    const baseQueue = filteredPlaylistTracks;
-    const fullQueue = [...baseQueue];
+  const handlePlayPlaylistTrack = (track, customQueue = null) => {
+    const baseQueue = Array.isArray(customQueue) && customQueue.length > 0 ? customQueue : filteredPlaylistTracks;
+    const isAiMix = Boolean(playlist?.isAiMoodPlaylist || String(playlist?.id || '') === 'ai-mood-mix');
+    const fullQueue = isAiMix
+      ? [...baseQueue]
+      : baseQueue.map(t => (t && (t.isAiSuggestion || t.isSmartShuffle || t.isSmartMoodQueue))
+          ? { ...t, isAiSuggestion: false, isSmartShuffle: false, isSmartMoodQueue: false }
+          : t);
+
+    fullQueue._isExplicitPlaylist = !isAiMix;
+    fullQueue._playlistId = playlist?.id || playlist?._id;
+    fullQueue._playlistName = playlist?.name;
+    fullQueue.name = playlist?.name;
 
     if (isPlaylistMixActive) {
       setIsMixMode?.(true);
@@ -832,8 +871,6 @@ export default function PlaylistScreen({
       }
       fullQueue._isMix = true;
       fullQueue._transitions = transitions;
-      fullQueue._playlistName = playlist?.name;
-      fullQueue.name = playlist?.name;
     } else {
       setIsMixMode?.(false);
       setActiveTransitions?.({});
@@ -890,6 +927,7 @@ export default function PlaylistScreen({
     <div className={`flex-1 overflow-y-auto pb-32 select-none p-3 sm:p-6 md:p-8 transition-colors ${
       isDark ? 'bg-[#0b1110] text-[#fdfbf7]' : 'bg-[#17a398] text-[#0b1110]'
     }`}>
+      <div className="max-w-[1440px] mx-auto w-full">
       {/* ── Apothecary Playlist Master Header ── */}
       <div className={`brutal-border-thick brutal-shadow-lg p-3.5 sm:p-6 md:p-8 mb-4 sm:mb-8 relative transition-colors ${
         isDark ? 'bg-[#141d1b] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-black text-[#082621]'
@@ -923,6 +961,18 @@ export default function PlaylistScreen({
               <div className="w-full h-full bg-[#dc2626] flex flex-col items-center justify-center text-[#fdfbf7] p-2 sm:p-4 text-center">
                 <Heart className="w-8 h-8 sm:w-16 sm:h-16" fill="#fdfbf7" />
                 <span className="font-mono text-[8px] sm:text-xs font-black uppercase mt-1 sm:mt-2">{isQuran ? (t?.('library.favoriteSurahs') || 'FAVORITE SURAHS') : (t?.('library.likedSongs') || 'LIKED SONGS')}</span>
+              </div>
+            ) : isAiMoodPlaylist && playlistTracks.length >= 2 && !playlist.cover ? (
+              <div className="w-full h-full grid grid-cols-2 grid-rows-2 bg-[#082621]">
+                {playlistTracks.slice(0, 4).map((tr, idx) => (
+                  <img
+                    key={`ai-cov-${tr.id || tr._id || idx}`}
+                    src={normalizeCoverUrl(tr.cover, tr)}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={handleCoverImageError}
+                  />
+                ))}
               </div>
             ) : (
               <>
@@ -1265,16 +1315,7 @@ export default function PlaylistScreen({
             onClick={() => {
               if (filteredPlaylistTracks.length === 0) return;
               const shuffled = shuffleArray(filteredPlaylistTracks);
-              if (isPlaylistMixActive) {
-                shuffled._isMix = true;
-                shuffled._transitions = transitions;
-                shuffled._playlistName = playlist?.name;
-                shuffled.name = playlist?.name;
-              } else {
-                shuffled._isMix = false;
-                shuffled._transitions = {};
-              }
-              handlePlayPlaylistTrack(shuffled[0]);
+              handlePlayPlaylistTrack(shuffled[0], shuffled);
             }}
             className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
               filteredPlaylistTracks.length > 0
@@ -2134,6 +2175,7 @@ export default function PlaylistScreen({
         onPlayWithoutMix={handlePlayWithoutMixMode}
         globalTheme={globalTheme}
       />
+      </div>
     </div>
   );
 }

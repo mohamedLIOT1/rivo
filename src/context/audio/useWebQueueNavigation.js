@@ -28,6 +28,7 @@ export function useWebQueueNavigation({
   setCurrentQueue,
   setCurrentQueueIndex,
   isOfflineMode,
+  isMixModeRef,
   isShuffleRef,
   repeatModeRef,
   isRepeatRef,
@@ -156,7 +157,16 @@ export function useWebQueueNavigation({
         }
       };
 
-      const isSmartQueue = isSmartMoodQueueRef.current || activeList.some((t) => t.isSmartMoodQueue);
+      const isLockedPlaylistOrMix = Boolean(
+        isMixModeRef?.current ||
+          rawQueue?._isMix ||
+          rawQueue?.isMix ||
+          rawQueue?._isExplicitPlaylist
+      );
+
+      const isSmartQueue =
+        !isLockedPlaylistOrMix &&
+        (isSmartMoodQueueRef.current || activeList.some((t) => t.isSmartMoodQueue));
       if (isSmartQueue) {
         if (curIdx >= 0 && curIdx < activeList.length - 1) {
           const nextIdx = curIdx + 1;
@@ -169,7 +179,7 @@ export function useWebQueueNavigation({
         return;
       }
 
-      if (isShuffleRef.current === 'smart') {
+      if (isShuffleRef.current === 'smart' && !isLockedPlaylistOrMix) {
         const { chosen, candidatesCount } = pickSmartShuffleNext(activeList, cur);
         if (candidatesCount <= 3 && cur) fetchSmartShuffleTracks(cur, activeList);
         const chosenIdx = Math.max(0, activeList.indexOf(chosen));
@@ -180,21 +190,26 @@ export function useWebQueueNavigation({
 
       if (isShuffleRef.current) {
         const nextIdx = curIdx + 1;
-        if ((nextIdx >= activeList.length - 2 || activeList.length <= 3) && cur) {
+        if (!isLockedPlaylistOrMix && (nextIdx >= activeList.length - 2 || activeList.length <= 3) && cur) {
           fetchSmartShuffleTracks(cur, activeList);
         }
         if (nextIdx >= activeList.length) {
           const isExplicitPlaylistQueue =
-            !isSmartMoodQueueRef.current && !activeList.some((t) => t.isSmartMoodQueue || t.isAiSuggestion);
-          if ((repeatModeRef.current === 'all' || isRepeatRef.current) && isExplicitPlaylistQueue) {
-            const contextTracks = activeList.filter((t) => !t._isUserQueued);
-            const reshuffled = attachQueueMeta(
-              shuffleArray(contextTracks.length > 0 ? contextTracks : activeList),
-              activeList
-            );
-            setCurrentQueue(reshuffled);
-            setCurrentQueueIndex(0);
-            playTrackRef.current?.(reshuffled[0], reshuffled, false, 0, false, isAutoAdvance, navOpts);
+            isLockedPlaylistOrMix ||
+            (!isSmartMoodQueueRef.current && !activeList.some((t) => t.isSmartMoodQueue || t.isAiSuggestion));
+          if (isExplicitPlaylistQueue) {
+            if (repeatModeRef.current === 'all' || isRepeatRef.current || !isAutoAdvance) {
+              const contextTracks = activeList.filter((t) => !t._isUserQueued);
+              const reshuffled = attachQueueMeta(
+                shuffleArray(contextTracks.length > 0 ? contextTracks : activeList),
+                activeList
+              );
+              setCurrentQueue(reshuffled);
+              setCurrentQueueIndex(0);
+              playTrackRef.current?.(reshuffled[0], reshuffled, false, 0, false, isAutoAdvance, navOpts);
+            } else {
+              setIsPlaying(false);
+            }
             return;
           }
           appendSmartBatchAndPlay(true);
@@ -217,16 +232,21 @@ export function useWebQueueNavigation({
 
       const normalTracks = activeList.filter((t) => !t.isAiSuggestion && !t.isSmartShuffle && !t._isUserQueued);
       const isExplicitPlaylistQueue =
-        !isSmartMoodQueueRef.current && !activeList.some((t) => t.isSmartMoodQueue || t.isAiSuggestion);
+        isLockedPlaylistOrMix ||
+        (!isSmartMoodQueueRef.current && !activeList.some((t) => t.isSmartMoodQueue || t.isAiSuggestion));
 
       if (curIdx >= activeList.length - 1) {
-        if ((repeatModeRef.current === 'all' || isRepeatRef.current) && normalTracks.length > 0 && isExplicitPlaylistQueue) {
-          const firstNormalIdx = activeList.findIndex(
-            (t) => !t.isAiSuggestion && !t.isSmartShuffle && !t._isUserQueued
-          );
-          const nextIdx = firstNormalIdx >= 0 ? firstNormalIdx : 0;
-          setCurrentQueueIndex(nextIdx);
-          playTrackRef.current?.(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance, navOpts);
+        if (isExplicitPlaylistQueue) {
+          if ((repeatModeRef.current === 'all' || isRepeatRef.current || !isAutoAdvance) && normalTracks.length > 0) {
+            const firstNormalIdx = activeList.findIndex(
+              (t) => !t.isAiSuggestion && !t.isSmartShuffle && !t._isUserQueued
+            );
+            const nextIdx = firstNormalIdx >= 0 ? firstNormalIdx : 0;
+            setCurrentQueueIndex(nextIdx);
+            playTrackRef.current?.(activeList[nextIdx], activeList, false, nextIdx, false, isAutoAdvance, navOpts);
+          } else {
+            setIsPlaying(false);
+          }
           return;
         }
         appendSmartBatchAndPlay(false);
@@ -239,6 +259,7 @@ export function useWebQueueNavigation({
     },
     [
       isOfflineMode,
+      isMixModeRef,
       fetchSmartShuffleTracks,
       setCurrentQueue,
       setCurrentQueueIndex,

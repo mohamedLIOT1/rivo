@@ -6,7 +6,6 @@ import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
 import { isPodcastContent } from '../utils/podcastUtils';
 import { buildUrl } from '../utils/router';
-import { FULL_VERSION, APP_VERSION } from '../version';
 import RivoLogo from './RivoLogo';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
@@ -111,19 +110,19 @@ function Navigation({
           DESKTOP LEFT APOTHECARY SIDEBAR
           ============================================= */}
       <aside 
-        className={`hidden md:flex flex-col h-full shrink-0 brutal-border border-y-0 border-l-0 p-3.5 justify-between select-none overflow-hidden transition-colors ${
+        className={`hidden md:flex flex-col h-full shrink-0 brutal-border border-y-0 border-l-0 p-3 justify-between select-none overflow-hidden transition-colors ${
           isDark 
             ? 'bg-[#101716] border-zinc-800 text-white' 
             : 'bg-[#fdfbf7] border-[#0b1110] text-[#0b1110]'
         }`} 
         style={{ width: 'var(--nav-width)' }}
       >
-        <div className="flex flex-col h-full space-y-3.5 overflow-hidden">
+        <div className="flex flex-col h-full gap-2.5 overflow-hidden">
           
 
 
           {/* ── Primary Navigation: Discover ── */}
-          <div className="space-y-1">
+          <div className="space-y-0.5 shrink-0">
             <div className={`text-[10px] font-mono font-black uppercase px-2 mb-1 tracking-wider ${
               isDark ? 'text-zinc-500' : 'text-zinc-500'
             }`}>
@@ -142,7 +141,7 @@ function Navigation({
                     e.preventDefault();
                     setCurrentScreen(item.id);
                   }}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg font-display font-bold text-xs transition-all brutal-btn cursor-pointer ${
+                  className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg font-display font-bold text-xs transition-all brutal-btn cursor-pointer ${
                     active 
                       ? (isAdminItem ? 'bg-[#f59e0b] text-[#0b1110] brutal-shadow-sm brutal-border font-black' : 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm brutal-border font-black')
                       : isDark
@@ -164,7 +163,7 @@ function Navigation({
           {/* ── Prominent Live Jam Button ── */}
           <button
             onClick={openJamModal}
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl brutal-border font-display font-black text-xs cursor-pointer transition brutal-shadow-sm ${
+            className={`w-full shrink-0 flex items-center justify-between px-3 py-2 rounded-xl brutal-border font-display font-black text-xs cursor-pointer transition brutal-shadow-sm ${
               isDark 
                 ? 'bg-[#17a398]/15 border-[#17a398] text-[#26c4b7] hover:bg-[#17a398]/30' 
                 : 'bg-[#17a398]/20 border-[#0b1110] text-[#082621] hover:bg-[#17a398]/35'
@@ -259,7 +258,7 @@ function Navigation({
             </div>
 
             {/* Playlists List */}
-            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 text-xs font-bold">
+            <div className="flex-1 min-h-[160px] overflow-y-auto space-y-1.5 pr-1 pb-1 text-xs font-bold">
               {/* Liked Songs / Favorite Surahs */}
               {libraryFilter !== 'artists' && (
                 <div
@@ -388,27 +387,6 @@ function Navigation({
                   </button>
                 </div>
               )}
-            </div>
-
-            {/* Quality Guarantee Badge */}
-            <div className={`mt-2 p-2.5 rounded-xl brutal-border text-center shrink-0 ${
-              isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-[#ded2bb] border-[#0b1110]'
-            }`}>
-              <div className={`text-[10px] font-display font-black tracking-wide ${
-                isDark ? 'text-zinc-200' : 'text-[#0b1110]'
-              }`}>
-                HI-FI AUDIO QUALITY
-              </div>
-              <p className={`text-[9px] leading-snug mt-0.5 font-medium ${
-                isDark ? 'text-zinc-400' : 'text-zinc-700'
-              }`}>
-                High fidelity • Seamless streaming
-              </p>
-              <div className={`text-[9px] font-mono font-black pt-1 tracking-wider ${
-                isDark ? 'text-[#17a398]' : 'text-[#0f756d]'
-              }`}>
-                RIVO {FULL_VERSION}
-              </div>
             </div>
 
           </div>

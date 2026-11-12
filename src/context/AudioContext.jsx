@@ -1,6 +1,13 @@
 import { webSleepTimerSignal } from './SleepTimerContext';
 import React, { createContext, useContext, useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { initAudioEngine, setMasterVolume, resumeAudioContext, calculateCrossfadeGains } from '../utils/audioEngine';
+import {
+  initAudioEngine,
+  setMasterVolume,
+  resumeAudioContext,
+  calculateCrossfadeGains,
+  prepareStandbyDeckForMix,
+  computeSmoothCrossfadeVolumes,
+} from '../utils/audioEngine';
 import { QURAN_LIVE_STATIONS } from '../data/quranLiveStations';
 import { isRadioTrack, isQuranContent } from '../utils/quranUtils';
 import { isPodcastContent } from '../utils/podcastUtils';
@@ -342,6 +349,7 @@ export function AudioProvider({ children, tracks, setTracks }) {
     activeTransRef,
     isOfflineMode,
     isPlaying,
+    isMixModeRef,
     jamSessionRef,
     socketRef,
     canControlJam,
@@ -526,12 +534,12 @@ export function AudioProvider({ children, tracks, setTracks }) {
       fromDeck.volume = masterVol;
       fromDeck.muted = false;
 
-      // Apply initial playback speed
+      // Apply initial playback speed smoothly
       const rateA = (!isNaN(Number(speedA)) && Number(speedA) >= 0.85 && Number(speedA) <= 1.15) ? Number(Number(speedA).toFixed(2)) : 1.0;
       const rateB = (!isNaN(Number(speedB)) && Number(speedB) >= 0.85 && Number(speedB) <= 1.15) ? Number(Number(speedB).toFixed(2)) : 1.0;
       fromDeck.playbackRate = rateA;
 
-      resolvePlayableAudioStream(toTrack).then((res) => {
+      resolvePlayableAudioStream(toTrack).then(async (res) => {
         if (!isTransitionRunningRef.current) return;
         if (!res?.url) {
           isTransitionRunningRef.current = false;
@@ -547,35 +555,21 @@ export function AudioProvider({ children, tracks, setTracks }) {
         const fullUrl = res.url.startsWith('/') ? `${API_BASE_URL}${res.url}` : res.url;
         const inPoint = Math.max(0, Number(mixInPoint) || 0);
 
-        const setDeckCueIn = () => {
-          try {
-            toDeck.currentTime = inPoint;
-          } catch {}
-        };
-
-        if (toDeck.src !== fullUrl) {
-          toDeck.src = fullUrl;
-          if (toDeck.readyState >= 1) {
-            setDeckCueIn();
-          } else {
-            toDeck.addEventListener('loadedmetadata', setDeckCueIn, { once: true });
-          }
-        } else {
-          setDeckCueIn();
-        }
-
-        toDeck.volume = 0;
-        toDeck.muted = false;
-        toDeck.playbackRate = rateB;
+        // Pre-seek & wait for future data BEFORE calling play() so we never re-seek or stutter mid-attack
+        const readyOk = await prepareStandbyDeckForMix(
+          toDeck,
+          fullUrl,
+          inPoint,
+          rateB,
+          () => !isTransitionRunningRef.current || isChangingTrackRef.current
+        );
+        if (!readyOk || !isTransitionRunningRef.current || isChangingTrackRef.current) return;
 
         // Transition runs for at least 3 seconds, up to transDur seconds
         const totalFadeMs = Math.max(3000, transDur * 1000);
 
         const startCrossfade = () => {
-          if (!isTransitionRunningRef.current) return;
-
-          // Accurately apply mixInPoint cue-in position
-          try { toDeck.currentTime = inPoint; } catch {}
+          if (!isTransitionRunningRef.current || isChangingTrackRef.current) return;
 
           const startTime = performance.now();
           let totalPausedMs = 0;
@@ -600,41 +594,60 @@ export function AudioProvider({ children, tracks, setTracks }) {
             const elapsed = performance.now() - startTime - totalPausedMs;
             const progress = Math.min(1.0, Math.max(0.0, elapsed / totalFadeMs));
 
-            // Accurate non-linear DJ volume gains strictly matching the interactive curve
+            // Accurate non-linear DJ volume gains with smooth endpoint envelope (zero steps at start/end)
             const { gainA, gainB } = calculateCrossfadeGains(progress, transStyle, crossoverBias);
+            const liveMaster = volumeRef.current;
+            const { volA: outVolA, volB: outVolB } = computeSmoothCrossfadeVolumes(
+              progress, liveMaster, gainA, gainB, multA, multB
+            );
 
-            if (fromDeck) {
-              fromDeck.volume = Math.max(0.0, Math.min(1.0, masterVol * gainA * multA));
-            }
-            if (toDeck) {
-              toDeck.volume = Math.max(0.0, Math.min(1.0, masterVol * gainB * multB));
-            }
+            if (fromDeck) fromDeck.volume = outVolA;
+            if (toDeck) toDeck.volume = outVolB;
 
             if (progress < 1.0 && !isChangingTrackRef.current && isTransitionRunningRef.current) {
               transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
             } else if (isTransitionRunningRef.current && !isChangingTrackRef.current) {
-              // ── Transition Finished: Swap Decks! ──
-              if (fromDeck) {
-                fromDeck.pause();
-                fromDeck.currentTime = 0;
-                fromDeck.volume = masterVol;
-                fromDeck.playbackRate = 1.0;
-              }
+              // ── Transition Finished: Smooth Swap Decks! ──
               if (toDeck) {
-                toDeck.volume = masterVol;
+                toDeck.volume = liveMaster;
                 toDeck.muted = false;
-                toDeck.playbackRate = 1.0;
               }
 
-              // Reference swap: audioRef.current always points to active playing deck!
+              // Reference swap first so all deck listeners track the new active deck immediately
               const temp = audioRef.current;
               audioRef.current = secondaryAudioRef.current;
               secondaryAudioRef.current = temp;
 
-              if (audioRef.current) {
-                audioRef.current.volume = masterVol;
-                audioRef.current.muted = false;
-                audioRef.current.playbackRate = 1.0;
+              if (fromDeck) {
+                fromDeck.volume = 0;
+                fromDeck.muted = true;
+                // Delay pause slightly so Chromium audio pipeline flushes zero gain without a click
+                setTimeout(() => {
+                  try {
+                    if (secondaryAudioRef.current === fromDeck && !isTransitionRunningRef.current) {
+                      fromDeck.pause();
+                      fromDeck.currentTime = 0;
+                      fromDeck.volume = volumeRef.current;
+                      fromDeck.muted = false;
+                      fromDeck.playbackRate = 1.0;
+                    }
+                  } catch {}
+                }, 60);
+              }
+
+              // Gradually restore playbackRate -> 1.0 instead of snapping pitch abruptly on transition end
+              if (toDeck && Math.abs((toDeck.playbackRate || 1) - 1.0) > 0.005) {
+                const startRate = toDeck.playbackRate;
+                const rampStart = performance.now();
+                const rampRate = () => {
+                  if (audioRef.current !== toDeck || isChangingTrackRef.current) return;
+                  const t = Math.min(1, (performance.now() - rampStart) / 1400);
+                  toDeck.playbackRate = Number((startRate + (1.0 - startRate) * t).toFixed(3));
+                  if (t < 1) requestAnimationFrame(rampRate);
+                };
+                requestAnimationFrame(rampRate);
+              } else if (toDeck) {
+                toDeck.playbackRate = 1.0;
               }
 
               isTransitionRunningRef.current = false;
@@ -642,10 +655,14 @@ export function AudioProvider({ children, tracks, setTracks }) {
               setIsTransitioning(false);
               standbyPreloadedIdRef.current = null;
 
-              currentQueueIndexRef.current = nextIdx;
-              currentTrackRef.current = toTrack;
+              // Guard against main [currentTrack] effect re-resolving or reloading the already-playing swapped deck
+              shouldPlayRef.current = false;
+              isPlayingRef.current = true;
               lastLoadedIdRef.current = String(toTrack.id || toTrack._id || '');
               lastLoadedStreamUrlRef.current = fullUrl;
+
+              currentQueueIndexRef.current = nextIdx;
+              currentTrackRef.current = toTrack;
               setCurrentQueueIndex(nextIdx);
               setCurrentTrack(toTrack);
               const targetDur = toDeck.duration && !isNaN(toDeck.duration) && isFinite(toDeck.duration)
@@ -662,19 +679,18 @@ export function AudioProvider({ children, tracks, setTracks }) {
           transitionAnimFrameRef.current = requestAnimationFrame(runFrame);
         };
 
-        try { toDeck.currentTime = inPoint; } catch {}
         const playPromise = toDeck.play();
         if (playPromise !== undefined) {
           playPromise.then(() => {
-            try { toDeck.currentTime = inPoint; } catch {}
+            if (inPoint > 0.5 && (toDeck.currentTime || 0) < 0.1) {
+              try { toDeck.currentTime = inPoint; } catch {}
+            }
             startCrossfade();
           }).catch((e) => {
             console.warn('[RivoMix] Standby play notice:', e);
-            try { toDeck.currentTime = inPoint; } catch {}
             startCrossfade();
           });
         } else {
-          try { toDeck.currentTime = inPoint; } catch {}
           startCrossfade();
         }
       }).catch((err) => {
@@ -2027,8 +2043,22 @@ export function AudioProvider({ children, tracks, setTracks }) {
         });
         setCurrentQueue(qRes.resolvedQueue);
         setCurrentQueueIndex(qRes.resolvedIndex);
+        isSmartMoodQueueRef.current = qRes.isSmartQueue;
         if (qRes.unshuffledBase) unshuffledQueueRef.current = qRes.unshuffledBase;
         if (qRes.nextContext) setQueueContext(qRes.nextContext);
+        if (!preserveQueue && !isExplicitQueueNav) {
+          if (qRes.isMixDetected) {
+            setIsMixMode(true);
+            isMixModeRef.current = true;
+            if (newQueue?._transitions && Object.keys(newQueue._transitions).length > 0) {
+              setActiveTransitions(newQueue._transitions);
+              activeTransRef.current = newQueue._transitions;
+            }
+          } else {
+            setIsMixMode(false);
+            isMixModeRef.current = false;
+          }
+        }
       } else if (
         queueIndex !== null &&
         queueIndex !== undefined &&

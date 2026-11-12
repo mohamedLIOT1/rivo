@@ -110,10 +110,11 @@ export function computeToggledShuffleQueue({
   let nextIndex = null;
   let nextUnshuffled = null;
   let shouldFetchSmart = false;
+  const isLockedPlaylist = Boolean(curList?._isMix || curList?.isMix || curList?._isExplicitPlaylist);
 
   if (nextMode === 'shuffle') {
     nextUnshuffled = attachQueueMeta([...curList], curList);
-    if (curList.length <= 3 && curTrack) shouldFetchSmart = true;
+    if (!isLockedPlaylist && curList.length <= 3 && curTrack) shouldFetchSmart = true;
     if (curList.length > 1) {
       const playedAndCurrent = curList.slice(0, Math.max(0, curIdx + 1));
       const upcoming = curList.slice(Math.max(0, curIdx + 1));
@@ -149,7 +150,7 @@ export function computeToggledShuffleQueue({
     }
     nextIndex = origIdx;
   } else if (nextMode === 'smart' && curTrack) {
-    shouldFetchSmart = true;
+    if (!isLockedPlaylist) shouldFetchSmart = true;
   }
 
   return { curList, nextQueue, nextIndex, nextUnshuffled, shouldFetchSmart };

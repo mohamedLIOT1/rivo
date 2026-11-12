@@ -151,8 +151,11 @@ function FullPlayerModal({
 
   const jamSession = propJamSession || ctxJamSession;
 
-  const nextMixTrack = isMixMode && currentQueue && currentQueue.length > 1
-    ? currentQueue[((ctxQueueIndex >= 0 ? ctxQueueIndex : 0) + 1) % currentQueue.length]
+  const resolvedRepeatMode = propRepeatMode || ctxRepeatMode || (propIsRepeat || ctxIsRepeat ? 'all' : 'off');
+  const activeQueuePos = ctxQueueIndex >= 0 ? ctxQueueIndex : 0;
+  const hasNextInMix = isMixMode && currentQueue && currentQueue.length > 1 && (activeQueuePos + 1 < currentQueue.length || resolvedRepeatMode !== 'off');
+  const nextMixTrack = hasNextInMix
+    ? currentQueue[(activeQueuePos + 1) % currentQueue.length]
     : null;
 
   const { toggleLike: ctxToggleLike } = useUser() || {};
@@ -1444,7 +1447,14 @@ function FullPlayerModal({
                   <span>COMING UP NEXT</span>
                 </div>
                 <div className="text-[8px] font-mono font-bold text-[#17a398] border border-[#17a398]/40 px-1.5 py-0.2 rounded">
-                  EQUAL POWER • 8s
+                  {(() => {
+                    const tAId = String(currentTrack?.id || currentTrack?._id || '');
+                    const tBId = String(nextMixTrack?.id || nextMixTrack?._id || '');
+                    const cfg = activeTransitions?.[`${tAId}___${tBId}`] || activeTransitions?.[`${tAId}_${tBId}`];
+                    const styleTxt = String(cfg?.style || 'equal_power').replace(/_/g, ' ').toUpperCase();
+                    const durTxt = cfg?.bars ? `${cfg.bars} BARS` : `${cfg?.duration || 8}s`;
+                    return `${styleTxt} • ${durTxt}`;
+                  })()}
                 </div>
               </div>
               <div className="flex items-center gap-2">

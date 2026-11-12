@@ -25,6 +25,7 @@ export function useWebQueue({
   activeTransRef,
   isOfflineMode,
   isPlaying,
+  isMixModeRef,
   jamSessionRef,
   socketRef,
   canControlJam,
@@ -134,6 +135,10 @@ export function useWebQueue({
 
   const fetchSmartShuffleTracks = useCallback(
     async (seedTrack, currentList = [], signal = null) => {
+      const q = currentQueueRef.current;
+      if (isMixModeRef?.current || q?._isMix || q?.isMix || q?._isExplicitPlaylist) {
+        return [];
+      }
       if (!seedTrack || isFetchingAiShuffleRef.current || signal?.aborted) return [];
       let effectiveSignal = signal;
       if (!effectiveSignal) {
@@ -334,6 +339,7 @@ export function useWebQueue({
     setCurrentQueue,
     setCurrentQueueIndex,
     isOfflineMode,
+    isMixModeRef,
     isShuffleRef,
     repeatModeRef,
     isRepeatRef,
