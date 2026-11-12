@@ -50,13 +50,17 @@ export const handlePlaybackStatusUpdate = ({
   const notifyMediaState = (playing) => {
     if (typeof updateMediaNotification !== 'function') return;
     const cur = currentTrackRef.current;
-    const isLikedTrack = cur ? likedTrackIds.some(id => String(id) === String(cur._id || cur.id)) : false;
+    if (!cur) return;
+    const isLikedTrack = likedTrackIds.some(id => String(id) === String(cur._id || cur.id));
+    const isLive = Boolean(isRadioTrack(cur) || cur.isLive);
+    const curTime = isLive ? 0 : Math.max(0, Math.round(Number(playbackStatusRef.current?.currentTime || 0)));
+    const curDur = isLive ? 0 : Math.max(0, Math.round(Number(playbackStatusRef.current?.duration || cur.duration || 0)));
     updateMediaNotification(
       playing,
       repeatModeRef?.current || 'off',
       isShuffleRef?.current || false,
       isLikedTrack,
-      cur
+      { ...cur, currentTime: curTime, duration: curDur }
     );
   };
 

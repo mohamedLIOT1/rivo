@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.27",
+  "version": "2.4.28",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "Fix SongItem like & pause toggles, ultra-fast track start & cloud pre-warm, massive mobile lag elimination & smoother UX",
-  "notesEn": "Instant in-app OTA update (5.00 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5247859,
-  "sizeMb": "5.00 MB",
-  "updatedAt": "2026-11-12T08:45:37.127Z"
+  "notes": "تحديث هوائي فوري v2.4.28 • تسريع فائق وتوحيد قائمة الذكاء وإصلاح مشغل القفل",
+  "notesEn": "Instant OTA v2.4.28 • Snappy UI, unified 12h AI Mood Mix & responsive lock-screen sync",
+  "bundleSize": 5251574,
+  "sizeMb": "5.01 MB",
+  "updatedAt": "2026-11-12T09:58:10.427Z"
 }

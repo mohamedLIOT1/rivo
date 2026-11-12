@@ -120,7 +120,7 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
 
   useEffect(() => {
     let anim;
-    if (isPlaying && Platform.OS !== 'android') {
+    if (visible && isPlaying && Platform.OS !== 'android') {
       anim = Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
@@ -133,7 +133,7 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
       spinValue.setValue(0);
     }
     return () => anim?.stop();
-  }, [isPlaying, spinValue]);
+  }, [visible, isPlaying, spinValue]);
 
   const spin = spinValue.interpolate({
     inputRange: [0, 1],

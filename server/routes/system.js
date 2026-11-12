@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.14',
+      version: '2.4.18',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي والاقتصار على البودكاست الحقيقي مع تسريع الأداء.'
+      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي كل 12 ساعة وتسريع تشغيل السحابة وتنعيم شاشة القفل.'
     },
     windows: {
-      version: '2.4.14',
-      displayVersion: '2.4.14',
+      version: '2.4.18',
+      displayVersion: '2.4.18',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.14.exe',
+      directFile: 'Rivo-v2.4.18.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي مع تسريع التنقل واستقرار السحابة.'
+      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي وتسريع تشغيل السحابة الفوري.'
     },
     android: {
-      version: '2.4.14',
-      build: 144,
+      version: '2.4.18',
+      build: 148,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.14.apk',
+      directFile: 'Rivo-v2.4.18.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتفريغ الذاكرة لتسريع فوري على الأجهزة الضعيفة.',
-      notesEn: 'Update v2.4.14 • Removed dummy hardcoded podcasts; shows live catalog only with faster low-RAM switching.',
+      notes: 'تحديث v2.4.18 • استجابة فورية للأزرار وتقليص الصف إلى 40 أغنية وإصلاح تزامن الإشعارات.',
+      notesEn: 'Update v2.4.18 • Snappier UI, 40-track smart queue slice, locked-screen media sync & instant cloud start.',
       ota: {
         enabled: true,
-        version: '2.4.24',
+        version: '2.4.28',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء',
-        notesEn: 'Instant OTA v2.4.24 • Removed dummy podcasts for cleaner UX and lower RAM footprint',
-        bundleSize: 5239331,
+        notes: 'تحديث هوائي فوري v2.4.28 • تسريع فائق وتوحيد قائمة الذكاء وإصلاح مشغل القفل',
+        notesEn: 'Instant OTA v2.4.28 • Snappy UI, unified 12h AI Mood Mix & responsive lock-screen sync',
+        bundleSize: 5247859,
         sizeMb: '5.00 MB'
       }
     },
     ios: {
-      version: '2.4.14',
-      build: 144,
+      version: '2.4.18',
+      build: 148,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.14.ipa',
+      directFile: 'Rivo-v2.4.18.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتحسين التنقل وإصلاح قائمة الثلاث نقاط.'
+      notes: 'تحديث v2.4.18 • إصلاح تعليق مشغل شاشة القفل على الآيفون وتقليل اللاج وتسريع تشغيل الأغاني.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.14',
+      version: '2.4.18',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.'
+      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي كل 12 ساعة وتسريع تشغيل السحابة.'
     },
     windows: {
-      version: '2.4.14',
-      displayVersion: '2.4.14',
+      version: '2.4.18',
+      displayVersion: '2.4.18',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.14.exe',
+      directFile: 'Rivo-v2.4.18.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.'
+      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي وتسريع التشغيل.'
     },
     android: {
-      version: '2.4.14',
-      build: 144,
+      version: '2.4.18',
+      build: 148,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.14.apk',
+      directFile: 'Rivo-v2.4.18.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتسريع التنقل.',
-      notesEn: 'Update v2.4.14 • Removed dummy hardcoded podcasts and faster low-RAM switching.',
+      notes: 'تحديث v2.4.18 • استجابة أسرع وإصلاح تزامن الإشعارات وتقليص الصف.',
+      notesEn: 'Update v2.4.18 • Snappy UI, 40-track smart queue, lock-screen media sync & fast cloud stream.',
       ota: {
         enabled: true,
-        version: '2.4.24',
+        version: '2.4.28',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.24 • إزالة البودكاست الوهمي وتسريع إضافي للأداء',
-        notesEn: 'Instant OTA v2.4.24 • Removed dummy podcasts for cleaner UX and lower RAM footprint',
-        bundleSize: 5239331,
+        notes: 'تحديث هوائي فوري v2.4.28 • تسريع فائق وتوحيد قائمة الذكاء وإصلاح مشغل القفل',
+        notesEn: 'Instant OTA v2.4.28 • Snappy UI, unified 12h AI Mood Mix & responsive lock-screen sync',
+        bundleSize: 5247859,
         sizeMb: '5.00 MB'
       }
     },
     ios: {
-      version: '2.4.14',
-      build: 144,
+      version: '2.4.18',
+      build: 148,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.14.ipa',
+      directFile: 'Rivo-v2.4.18.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.14 • إزالة البودكاست الوهمي وتحسين التنقل وإصلاح قائمة الثلاث نقاط.'
+      notes: 'تحديث v2.4.18 • إصلاح تعليق مشغل شاشة القفل على الآيفون وتقليل اللاج وتسريع تشغيل الأغاني.'
     }
   }
 };

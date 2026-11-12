@@ -6,14 +6,16 @@ const { Track } = require('../models');
 const { uploadsDir } = require('../middleware/upload');
 const { isAudioFileValid } = require('./audioCacheUtils');
 const {
-  fetchTelegramFileDownloadUrl,
+  fetchTelegramDownloadResponse,
   fetchB2DownloadResponse,
-  buildCombinedSignal
+  buildCombinedSignal,
+  sleepWithAbort
 } = require('./cloudStorageClient');
 
 const cloudCacheDir = path.join(uploadsDir, 'cloud-cache');
 const inflightDownloads = new Map();
 let cacheCleanupRunning = false;
+let cacheWarmupScheduled = false;
 
 function ensureCloudCacheDir() {
   if (!fs.existsSync(cloudCacheDir)) {
@@ -22,8 +24,8 @@ function ensureCloudCacheDir() {
 }
 
 function getMaxCacheBytes() {
-  const mb = Number(process.env.CLOUD_CACHE_MAX_MB || 1536);
-  return Math.max(256, Number.isFinite(mb) ? mb : 1536) * 1024 * 1024;
+  const mb = Number(process.env.CLOUD_CACHE_MAX_MB || 3584);
+  return Math.max(256, Number.isFinite(mb) ? mb : 3584) * 1024 * 1024;
 }
 
 function findCachedCloudFile(trackId, preferredExt = '') {
@@ -157,8 +159,7 @@ async function ensureCloudFileCached(track) {
 
     try {
       if (cs.provider === 'telegram') {
-        const dlUrl = await fetchTelegramFileDownloadUrl(cs.botIndex, cs.fileId, signal);
-        const res = await fetch(dlUrl, { signal });
+        const res = await fetchTelegramDownloadResponse(cs, null, signal);
         if (!res.ok || !res.body) {
           throw new Error(`Telegram file download HTTP ${res.status}`);
         }
@@ -185,7 +186,17 @@ async function ensureCloudFileCached(track) {
   return job;
 }
 
-async function streamLargeB2WithRange(track, req, res) {
+async function fetchCloudRangeUpstream(cs, rangeHeader, signal) {
+  if (cs.provider === 'telegram') {
+    return fetchTelegramDownloadResponse(cs, rangeHeader, signal);
+  }
+  if (cs.provider === 'b2') {
+    return fetchB2DownloadResponse(cs, rangeHeader, signal);
+  }
+  throw new Error('Unsupported cloudStorage provider');
+}
+
+async function streamCloudWithRange(track, req, res) {
   const controller = new AbortController();
   let nodeStream = null;
   const abortAll = () => {
@@ -197,7 +208,7 @@ async function streamLargeB2WithRange(track, req, res) {
 
   const { signal, cleanup } = buildCombinedSignal(120000, controller.signal);
   try {
-    const upstream = await fetchB2DownloadResponse(track.cloudStorage, req.headers.range, signal);
+    const upstream = await fetchCloudRangeUpstream(track.cloudStorage, req.headers.range, signal);
     if (!upstream.ok && upstream.status !== 206 && upstream.status !== 416) {
       cleanup();
       if (!res.headersSent) return res.status(502).send('Upstream storage error');
@@ -227,7 +238,7 @@ async function streamLargeB2WithRange(track, req, res) {
     nodeStream.pipe(res);
   } catch {
     cleanup();
-    if (!res.headersSent) res.status(502).send('Failed to stream from Backblaze B2');
+    if (!res.headersSent) res.status(502).send('Failed to stream cloud media');
   }
 }
 
@@ -262,19 +273,13 @@ async function handleCloudMediaRequest(req, res) {
       return res.status(404).send('Cloud media not found');
     }
 
-    // Stream large Backblaze files (>25MB) directly with byte-range seeking
-    if (track.cloudStorage.provider === 'b2' && Number(track.cloudStorage.fileSize || 0) > 25 * 1024 * 1024) {
-      return streamLargeB2WithRange(track, req, res);
+    const fileSize = Number(track.cloudStorage.fileSize || 0);
+    // Warm NVMe SSD cache in background for fast tracks <= 25MB without blocking byte 1
+    if (!(track.cloudStorage.provider === 'b2' && fileSize > 25 * 1024 * 1024)) {
+      ensureCloudFileCached(track).catch(() => {});
     }
 
-    const filePath = await ensureCloudFileCached(track);
-    if (req.aborted || res.writableEnded) return;
-
-    const ext = path.extname(filePath).toLowerCase();
-    res.setHeader('Content-Type', ext === '.mp3' ? 'audio/mpeg' : 'audio/mp4');
-    res.setHeader('Cache-Control', 'public, max-age=604800');
-    res.setHeader('Accept-Ranges', 'bytes');
-    return res.sendFile(filePath);
+    return streamCloudWithRange(track, req, res);
   } catch (err) {
     console.warn('[CloudMedia] Stream error:', err.message);
     if (!res.headersSent) res.status(502).send('Cloud audio stream unavailable');
@@ -319,11 +324,61 @@ async function serveCloudDownload(track, cleanFilename, req, res) {
   return true;
 }
 
+/**
+ * Gently warms the NVMe cloud cache with popular music tracks (<= 25MB) in the background.
+ */
+function scheduleCloudCacheWarmup({ limit = 450 } = {}) {
+  if (cacheWarmupScheduled) return;
+  cacheWarmupScheduled = true;
+
+  const timer = setTimeout(async () => {
+    try {
+      if (mongoose.connection.readyState !== 1) return;
+      ensureCloudCacheDir();
+      const maxBytes = Math.floor(getMaxCacheBytes() * 0.85);
+      const tracks = await Track.find({
+        'cloudStorage.provider': { $in: ['telegram', 'b2'] },
+        $or: [
+          { 'cloudStorage.fileSize': { $lte: 25 * 1024 * 1024 } },
+          { 'cloudStorage.fileSize': { $exists: false } }
+        ]
+      })
+        .sort({ plays: -1 })
+        .limit(limit)
+        .select('cloudStorage')
+        .lean();
+
+      for (const track of tracks) {
+        if (mongoose.connection.readyState !== 1) break;
+        const ext = (track.cloudStorage?.ext || 'm4a').toLowerCase();
+        if (findCachedCloudFile(String(track._id), ext)) continue;
+
+        let currentSize = 0;
+        try {
+          const names = fs.readdirSync(cloudCacheDir);
+          for (const n of names) {
+            if (n.endsWith('.tmp')) continue;
+            try { currentSize += fs.statSync(path.join(cloudCacheDir, n)).size; } catch {}
+          }
+        } catch {}
+        if (currentSize >= maxBytes) break;
+
+        try {
+          await ensureCloudFileCached(track);
+        } catch {}
+        await sleepWithAbort(120);
+      }
+    } catch {}
+  }, 8000);
+  if (typeof timer.unref === 'function') timer.unref();
+}
+
 module.exports = {
   cloudCacheDir,
   findCachedCloudFile,
   seedCloudCache,
   ensureCloudFileCached,
   handleCloudMediaRequest,
-  serveCloudDownload
+  serveCloudDownload,
+  scheduleCloudCacheWarmup
 };

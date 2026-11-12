@@ -370,11 +370,17 @@ export const useAudioPlaybackCore = ({
     setVocalIsolationStatus(null);
 
     const isLikedTrack = (likedTrackIdsRef.current || []).some(id => String(id) === nextId);
-    updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
-      ...cleanTrack,
-      currentTime: safeTargetSec,
-      duration: isLiveStream ? 0 : sanitizedDur,
-    });
+    updateMediaNotification(
+      Boolean(autoPlay && shouldBePlayingRef.current),
+      repeatModeRef.current,
+      isShuffleRef.current,
+      isLikedTrack,
+      {
+        ...cleanTrack,
+        currentTime: safeTargetSec,
+        duration: isLiveStream ? 0 : sanitizedDur,
+      }
+    );
 
     if (autoPlay && typeof broadcastListeningActivity === 'function') {
       broadcastListeningActivity(cleanTrack, true, safeTargetSec);
@@ -693,6 +699,18 @@ export const useAudioPlaybackCore = ({
         shouldBePlayingRef.current = true;
         isPlayingRef.current = true;
         setIsPlaying(true);
+      }
+      const curTr = currentTrackRef.current;
+      if (curTr) {
+        const isLikedTrack = (likedTrackIdsRef.current || []).some(id => String(id) === String(curTr._id || curTr.id));
+        const curDur = isRadioTrack(curTr) || curTr.isLive
+          ? 0
+          : (playbackStatusRef.current.duration || sanitizeDuration(curTr.duration, 0));
+        updateMediaNotification(wasPlaying, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+          ...curTr,
+          currentTime: safeSecs,
+          duration: curDur,
+        });
       }
       if (jamSyncRef?.current?.jamSession && canControlJam()) {
         jamSyncRef.current.broadcastPlayState?.(wasPlaying, currentTrackRef.current, safeSecs, true);

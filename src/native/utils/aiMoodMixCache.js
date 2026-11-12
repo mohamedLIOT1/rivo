@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isQuranContent } from '../../utils/quranUtils';
 
-export const AI_MIX_CACHE_KEY = '@rivo_native_ai_mood_mix_v1';
+export const AI_MIX_CACHE_KEY = '@rivo_native_ai_mood_mix_v2';
 export const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
 
 let memoryCache = null;
@@ -39,14 +39,13 @@ function slimAiTrack(tr) {
 
 function hydrateFromPayload(parsed, ownerId, displayTracks, now) {
   if (!parsed) return null;
+  const currentBucket = get12hBucket(now);
   const expiresAt = Number(parsed?.expiresAt || ((Number(parsed?.savedAt || 0) || 0) + TWELVE_HOURS_MS));
-  const ownerMatches =
-    !parsed.ownerId ||
-    parsed.ownerId === ownerId ||
-    parsed.ownerId === 'guest' ||
-    ownerId === 'guest';
+  const bucketMatches = Number(parsed?.bucket12h) === currentBucket;
+  const ownerMatches = parsed.ownerId === ownerId;
   if (
     !ownerMatches ||
+    !bucketMatches ||
     now >= expiresAt ||
     !Array.isArray(parsed.tracks) ||
     parsed.tracks.length === 0
@@ -68,7 +67,11 @@ function hydrateFromPayload(parsed, ownerId, displayTracks, now) {
     .filter((tr) => tr && !isQuranContent(tr))
     .map((tr) => ({ ...tr, isSmartMoodQueue: true, isAiSuggestion: true }));
 
-  return hydrated.length > 0 ? hydrated : null;
+  if (hydrated.length === 0) return null;
+  try {
+    Object.defineProperty(hydrated, '__source', { value: parsed.source || 'server', enumerable: false });
+  } catch {}
+  return hydrated;
 }
 
 export function getMemoryCachedAiMoodMix(ownerId, displayTracks, now = Date.now()) {
@@ -93,11 +96,12 @@ export async function loadCachedAiMoodMix(ownerId, displayTracks, now = Date.now
   }
 }
 
-export function saveCachedAiMoodMix({ ownerId, moodId, name, description, tracks, now = Date.now() }) {
+export function saveCachedAiMoodMix({ ownerId, moodId, name, description, tracks, bucket12h, source = 'server', now = Date.now() }) {
   const slimTracks = (Array.isArray(tracks) ? tracks : []).slice(0, 15).map(slimAiTrack);
   const payload = {
     ownerId: ownerId || 'guest',
-    bucket12h: get12hBucket(now),
+    bucket12h: Number.isFinite(Number(bucket12h)) ? Number(bucket12h) : get12hBucket(now),
+    source,
     savedAt: now,
     expiresAt: now + TWELVE_HOURS_MS,
     moodId,

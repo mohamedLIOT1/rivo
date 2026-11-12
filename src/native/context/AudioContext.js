@@ -237,11 +237,12 @@ export const AudioProvider = ({ children }) => {
   }, [queue.queue, playback.currentTrack]);
 
   const stopPlaybackForSleepTimer = useCallback(async () => {
-    if (playback.soundRef.current) {
-      await playback.soundRef.current.pauseAsync().catch(() => {});
-      playback.setIsPlaying(false);
+    const pb = playbackRef.current;
+    if (pb?.soundRef?.current) {
+      await pb.soundRef.current.pauseAsync().catch(() => {});
+      pb.setIsPlaying?.(false);
     }
-  }, [playback]);
+  }, []);
 
   const startSleepTimer = useCallback((minutes) => {
     // Sleep timer integration
@@ -252,8 +253,9 @@ export const AudioProvider = ({ children }) => {
   }, []);
 
   const previewDjTransitionCallback = useCallback((tA, tB, cfg) => {
-    return dj.previewDjTransition(tA, tB, cfg, playback.seekTo, playback.playTrack);
-  }, [dj, playback.seekTo, playback.playTrack]);
+    const pb = playbackRef.current;
+    return dj.previewDjTransition(tA, tB, cfg, pb?.seekTo, pb?.playTrack);
+  }, [dj.previewDjTransition]);
 
   // Memoized Context value
   const controls = useMemo(() => {

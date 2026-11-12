@@ -51,6 +51,12 @@ const UserSchema = new mongoose.Schema({
     playedAt: { type: Date, default: Date.now }
   }],
   topGenres: { type: Object, default: {} },
+  aiMoodMixCache: {
+    bucket12h: { type: Number, default: 0 },
+    moodId: { type: String, default: '' },
+    savedAt: { type: Date, default: null },
+    trackIds: [{ type: String }]
+  },
   preferences: {
     language: { type: String, enum: ['ar', 'en'], default: 'ar' },
     contentModes: {

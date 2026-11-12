@@ -343,6 +343,8 @@ export const UserProvider = ({ children }) => {
     throw new Error(data.error || 'Failed to update profile');
   }, []);
 
+  const likePersistTimerRef = useRef(null);
+
   const toggleLikeTrack = useCallback(async (trackId) => {
     const idStr = String(trackId);
     const safeLiked = Array.isArray(likedTrackIdsRef.current) ? likedTrackIdsRef.current : [];
@@ -350,14 +352,26 @@ export const UserProvider = ({ children }) => {
     const updated = isLiked ? safeLiked.filter(id => id !== idStr) : [...safeLiked, idStr];
     setLikedTrackIds(updated);
 
+    if (likePersistTimerRef.current) clearTimeout(likePersistTimerRef.current);
+    likePersistTimerRef.current = setTimeout(() => {
+      AsyncStorage.getItem(USER_KEY).then((raw) => {
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          parsed.likedTracks = updated;
+          AsyncStorage.setItem(USER_KEY, JSON.stringify(parsed)).catch(() => {});
+        }
+      }).catch(() => {});
+    }, 1500);
+
     const t = tokenRef.current;
     if (t) {
       fetch(`${API_BASE_URL}/api/tracks/${idStr}/like`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${t}` },
-      }).then(() => syncUserData()).catch(() => {});
+      }).catch(() => {});
     }
-  }, [syncUserData]);
+  }, []);
 
   const createPlaylist = useCallback(async (name) => {
     const t = tokenRef.current;
@@ -652,6 +666,10 @@ export const UserProvider = ({ children }) => {
     });
     if (res.ok) await syncUserData();
   }, [syncUserData]);
+
+  useEffect(() => () => {
+    if (likePersistTimerRef.current) clearTimeout(likePersistTimerRef.current);
+  }, []);
 
   const value = useMemo(() => ({
     currentUser,

@@ -4,10 +4,13 @@ const crypto = require('crypto');
 
 const TELEGRAM_MAX_BYTES = Math.floor(19.5 * 1024 * 1024); // Safe margin under 20MB getFile cap
 const B2_AUTH_TTL_MS = 12 * 3600 * 1000;
+const TELEGRAM_FILE_URL_TTL_MS = 40 * 60 * 1000;
+const TELEGRAM_URL_CACHE_MAX = 1500;
 
 let telegramRoundRobin = 0;
 const botCooldownUntil = new Map();
 const b2AuthCache = new Map();
+const telegramFileUrlCache = new Map();
 
 function sleepWithAbort(ms, signal) {
   if (signal?.aborted) return Promise.reject(new Error('Aborted'));
@@ -191,14 +194,28 @@ async function uploadAudioToTelegram(filePath, { title = 'Track', artist = 'Arti
   throw lastErr || new Error('All Telegram bots failed upload');
 }
 
+function getTelegramCacheKey(botIndex, fileId) {
+  return `${Number.isInteger(botIndex) ? botIndex : 0}:${String(fileId || '')}`;
+}
+
+function invalidateTelegramFileDownloadUrl(botIndex, fileId) {
+  telegramFileUrlCache.delete(getTelegramCacheKey(botIndex, fileId));
+}
+
 /**
- * Resolves a fresh temporary download URL from Telegram Bot API getFile.
+ * Resolves a temporary download URL from Telegram Bot API getFile (cached 40m).
  */
-async function fetchTelegramFileDownloadUrl(botIndex, fileId, signal) {
+async function fetchTelegramFileDownloadUrl(botIndex, fileId, signal, { forceRefresh = false } = {}) {
   const bots = getTelegramBots();
   const idx = Number.isInteger(botIndex) && bots[botIndex] ? botIndex : 0;
   const token = bots[idx];
   if (!token || !fileId) throw new Error('Missing Telegram bot token or fileId');
+
+  const cacheKey = getTelegramCacheKey(idx, fileId);
+  const cached = telegramFileUrlCache.get(cacheKey);
+  if (!forceRefresh && cached && (Date.now() - cached.fetchedAt < TELEGRAM_FILE_URL_TTL_MS)) {
+    return cached.url;
+  }
 
   const { signal: reqSignal, cleanup } = buildCombinedSignal(15000, signal);
   try {
@@ -210,10 +227,33 @@ async function fetchTelegramFileDownloadUrl(botIndex, fileId, signal) {
     if (!data.ok || !data.result?.file_path) {
       throw new Error(data.description || `Telegram getFile failed (${res.status})`);
     }
-    return `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
+    const url = `https://api.telegram.org/file/bot${token}/${data.result.file_path}`;
+    if (telegramFileUrlCache.size >= TELEGRAM_URL_CACHE_MAX) {
+      const oldestKey = telegramFileUrlCache.keys().next().value;
+      if (oldestKey) telegramFileUrlCache.delete(oldestKey);
+    }
+    telegramFileUrlCache.set(cacheKey, { url, fetchedAt: Date.now() });
+    return url;
   } finally {
     cleanup();
   }
+}
+
+/**
+ * Fetches a Telegram Bot file Response supporting HTTP Range headers, refreshing cached URL on 400/404.
+ */
+async function fetchTelegramDownloadResponse(cloudStorage, rangeHeader, signal) {
+  const attempt = async (forceRefresh) => {
+    const dlUrl = await fetchTelegramFileDownloadUrl(cloudStorage?.botIndex, cloudStorage?.fileId, signal, { forceRefresh });
+    const headers = rangeHeader ? { Range: rangeHeader } : undefined;
+    return fetch(dlUrl, { headers, signal });
+  };
+  let res = await attempt(false);
+  if (res.status === 400 || res.status === 404) {
+    invalidateTelegramFileDownloadUrl(cloudStorage?.botIndex, cloudStorage?.fileId);
+    res = await attempt(true);
+  }
+  return res;
 }
 
 /**
@@ -373,6 +413,8 @@ module.exports = {
   selectB2Account,
   uploadAudioToTelegram,
   fetchTelegramFileDownloadUrl,
+  invalidateTelegramFileDownloadUrl,
+  fetchTelegramDownloadResponse,
   authorizeB2,
   uploadAudioToB2,
   fetchB2DownloadResponse,

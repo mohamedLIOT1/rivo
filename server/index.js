@@ -23,7 +23,7 @@ const { User, Track, Album } = require('./models');
 const { auth, adminAuth, optionalAuth } = require('./middleware/auth');
 const { uploadsDir } = require('./middleware/upload');
 const { validateSafeUrl } = require('./utils/security');
-const { handleCloudMediaRequest } = require('./utils/cloudMediaServer');
+const { handleCloudMediaRequest, scheduleCloudCacheWarmup } = require('./utils/cloudMediaServer');
 const { searchTracksInternal, isQuranContent, ensureYtDlpBinary, initWarmYtWorker } = require('./utils/helpers');
 const { syncUserLikedTracks } = require('./utils/likedTracksSync');
 
@@ -510,6 +510,7 @@ server.listen(PORT, '0.0.0.0', () => {
   ensureYtDlpBinary().then(() => {
     try { initWarmYtWorker(); } catch {}
   }).catch((err) => console.warn('[yt-dlp] startup check notice:', err.message));
+  try { scheduleCloudCacheWarmup(); } catch {}
 });
 
 module.exports = { app, server, io };

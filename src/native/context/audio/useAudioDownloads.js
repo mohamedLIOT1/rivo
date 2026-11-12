@@ -283,7 +283,13 @@ export const useAudioDownloads = ({
       } else if (currentTrackRef.current) {
         const cur = currentTrackRef.current;
         const isLikedTrack = likedTrackIds.some(id => String(id) === String(cur._id || cur.id));
-        updateMediaNotification(isPlayingRef.current, repeatModeRef.current, isShuffleRef.current, isLikedTrack, cur);
+        updateMediaNotification(
+          isPlayingRef.current,
+          repeatModeRef.current,
+          isShuffleRef.current,
+          isLikedTrack,
+          { ...cur, currentTime: cur.currentTime ?? 0 }
+        );
       }
     }
   }, [
@@ -291,7 +297,7 @@ export const useAudioDownloads = ({
     likedTrackIds, repeatModeRef, isShuffleRef
   ]);
 
-  return {
+  return useMemo(() => ({
     downloadedTracks,
     downloadedTracksRef,
     downloadedTrackIds,
@@ -307,5 +313,17 @@ export const useAudioDownloads = ({
     removeDownloadedTrack,
     handleDownloadTrack,
     handleDownloadPlaylist,
-  };
+  }), [
+    downloadedTracks,
+    downloadedTrackIds,
+    autoDownloadFinished,
+    queueAutoDownloadTrack,
+    toggleAutoDownloadFinished,
+    refreshDownloadedTracks,
+    isTrackDownloaded,
+    removeDownloadedTracksBatch,
+    removeDownloadedTrack,
+    handleDownloadTrack,
+    handleDownloadPlaylist,
+  ]);
 };

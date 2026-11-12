@@ -104,10 +104,8 @@ export default function HomeScreen({
     const cached = loadCachedAiMoodMix(cacheOwnerId, displayTracks);
     if (cached) {
       setAiMoodMix(cached);
-      return;
+      if (cached.__source === 'server') return;
     }
-
-    if (displayTracks.length === 0) return;
 
     const controller = new AbortController();
     const timer = setTimeout(() => {
@@ -117,19 +115,17 @@ export default function HomeScreen({
         const raw = localStorage.getItem('rivo_followed_artists') || localStorage.getItem('liofy_followed_artists');
         if (raw) followed = JSON.parse(raw);
       } catch {}
-      let recentTracks = [];
-      try {
-        recentTracks = (getListeningStats()?.history || []).filter(h => !isQuranContent(h)).slice(0, 10);
-      } catch {}
-      const localSeeds = getSmartTasteAndMoodTracks({
-        allTracks: displayTracks,
-        currentUser,
-        followedArtists: followed,
-        likedTrackIds: currentUser?.likedTrackIds || currentUser?.likedTracks || [],
-        limit: 12,
-      });
+      const localSeeds = displayTracks.length > 0
+        ? getSmartTasteAndMoodTracks({
+            allTracks: displayTracks,
+            currentUser,
+            followedArtists: followed,
+            likedTrackIds: currentUser?.likedTrackIds || currentUser?.likedTracks || [],
+            limit: 12,
+          })
+        : [];
 
-      fetch(`${API_BASE_URL}/api/ai/recommendations`, {
+      fetch(`${API_BASE_URL}/api/ai/mood-mix`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,9 +134,9 @@ export default function HomeScreen({
         body: JSON.stringify({
           mood: currentMood.id,
           timeOfDay: currentMood.id,
-          name: currentMood.label,
-          recentTracks,
           seedTracks: localSeeds.slice(0, 5),
+          followedArtists: followed,
+          limit: 15,
           isQuran: false,
         }),
         signal: controller.signal,
@@ -148,10 +144,11 @@ export default function HomeScreen({
         .then(r => (r.ok ? r.json() : null))
         .then(d => {
           if (controller.signal.aborted) return;
-          const recs = (d?.recommendations || d?.tracks || []).filter(tr => !isQuranContent(tr));
+          const recs = (d?.tracks || d?.recommendations || []).filter(tr => !isQuranContent(tr));
+          const pool = recs.length > 0 ? recs : localSeeds;
           const merged = [];
           const seen = new Set();
-          for (const tr of [...recs, ...localSeeds]) {
+          for (const tr of pool) {
             const tid = String(tr?.id || tr?._id || '');
             if (tid && !seen.has(tid)) {
               seen.add(tid);
@@ -163,7 +160,9 @@ export default function HomeScreen({
             setAiMoodMix(merged);
             saveCachedAiMoodMix({
               ownerId: cacheOwnerId,
-              moodId: currentMood.id,
+              moodId: d?.mood || currentMood.id,
+              bucket12h: d?.bucket12h,
+              source: recs.length > 0 ? 'server' : 'local',
               name: isRTL ? 'مُختارات لك • قائمة ذكاء ريفو' : 'Made For You • AI Mood Mix',
               description: `${currentMood.label} • Auto-refreshes every 12h`,
               tracks: merged,
@@ -171,7 +170,7 @@ export default function HomeScreen({
           }
         })
         .catch(() => {});
-    }, 250);
+    }, 80);
 
     return () => {
       clearTimeout(timer);

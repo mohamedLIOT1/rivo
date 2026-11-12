@@ -187,9 +187,9 @@ function HomeScreen({
       if (!mounted) return;
       if (cached && cached.length > 0) {
         setAiMoodMix(cached);
-        return;
+        if (cached.__source === 'server' || isOffline) return;
       }
-      if (displayTracks.length === 0) return;
+      if (displayTracks.length === 0 && !(!isOffline && API_BASE_URL)) return;
 
       const localStats = getListeningStats?.() || {};
       const statTracks = Object.values(localStats.trackStats || {}).slice(0, 10);
@@ -204,17 +204,19 @@ function HomeScreen({
         genre: tr.genre || '',
       }));
 
-      const localSeeds = getSmartTasteAndMoodTracks({
-        allTracks: displayTracks,
-        currentUser,
-        followedArtists: currentUser?.following || [],
-        likedTrackIds,
-        listeningStats: { ...localStats, history: recentTracks },
-        currentTrack,
-        limit: 12,
-      });
+      const localSeeds = displayTracks.length > 0
+        ? getSmartTasteAndMoodTracks({
+            allTracks: displayTracks,
+            currentUser,
+            followedArtists: currentUser?.following || [],
+            likedTrackIds,
+            listeningStats: { ...localStats, history: recentTracks },
+            currentTrack,
+            limit: 12,
+          })
+        : [];
 
-      const commitMix = (list) => {
+      const commitMix = (list, { bucket12h, source = 'server', moodId } = {}) => {
         const merged = [];
         const seen = new Set();
         for (const tr of list) {
@@ -229,7 +231,9 @@ function HomeScreen({
           setAiMoodMix(merged);
           saveCachedAiMoodMix({
             ownerId: cacheOwnerId,
-            moodId: currentMood?.id || 'evening',
+            moodId: moodId || currentMood?.id || 'evening',
+            bucket12h,
+            source,
             name: isRTL ? 'مُختارات لك • قائمة ذكاء ريفو' : 'Made For You • AI Mood Mix',
             description: `${currentMood?.label || 'Music Flow'} • 12h Mix`,
             tracks: merged,
@@ -238,18 +242,18 @@ function HomeScreen({
       };
 
       if (isOffline || !API_BASE_URL) {
-        commitMix(localSeeds);
+        if (!cached) commitMix(localSeeds, { source: 'local' });
         return;
       }
 
       const timeoutId = setTimeout(() => {
         try { controller.abort(); } catch {}
-      }, 4500);
+      }, 6000);
 
       try {
         const authToken = token || (await AsyncStorage.getItem('@rivo_auth_token_v2').catch(() => null));
         if (controller.signal.aborted) return;
-        const res = await fetch(`${API_BASE_URL}/api/ai/recommendations`, {
+        const res = await fetch(`${API_BASE_URL}/api/ai/mood-mix`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -258,25 +262,26 @@ function HomeScreen({
           body: JSON.stringify({
             mood: currentMood?.id || 'neutral',
             timeOfDay: currentMood?.id || 'evening',
-            recentTracks,
             seedTracks: localSeeds.slice(0, 5),
-            likedTrackIds: Array.isArray(likedTrackIds) ? likedTrackIds.slice(0, 50) : [],
             followedArtists: currentUser?.following || [],
+            limit: 15,
             isQuran: false,
           }),
           signal: controller.signal,
         });
         if (res.ok && !controller.signal.aborted) {
           const data = await res.json();
-          const rawRecs = data?.recommendations || data?.tracks || [];
-          commitMix([...rawRecs, ...localSeeds]);
-          return;
+          const rawRecs = data?.tracks || data?.recommendations || [];
+          if (rawRecs.length > 0) {
+            commitMix(rawRecs, { bucket12h: data?.bucket12h, source: 'server', moodId: data?.mood });
+            return;
+          }
         }
       } catch {} finally {
         clearTimeout(timeoutId);
       }
 
-      if (mounted) commitMix(localSeeds);
+      if (mounted && !cached) commitMix(localSeeds, { source: 'local' });
     })();
 
     return () => {
@@ -525,7 +530,18 @@ function HomeScreen({
       togglePlay?.();
       return;
     }
-    playTrack(track, displayTracksRef.current);
+    const pool = Array.isArray(displayTracksRef.current) ? displayTracksRef.current : [];
+    const idx = pool.findIndex((t) => String(t?._id || t?.id || '') === tId);
+    const maxWindow = 40;
+    let queueSlice;
+    if (idx < 0 || pool.length <= maxWindow) {
+      queueSlice = pool.length > 0 ? pool : [track];
+    } else {
+      const tail = pool.slice(idx, idx + maxWindow);
+      const wrapCount = Math.max(0, maxWindow - tail.length);
+      queueSlice = wrapCount > 0 ? [...tail, ...pool.slice(0, Math.min(idx, wrapCount))] : tail;
+    }
+    playTrack(track, queueSlice);
   }, [playTrack, togglePlay]);
 
   const handleMoreSong = useCallback((track) => {

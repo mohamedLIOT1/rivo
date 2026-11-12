@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { AppState } from 'react-native';
 import { applyStandardAudioMode } from './audioModeConfig';
 import {
   subscribeToMediaActions,
@@ -34,7 +35,7 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
     updateLockScreenLyrics(lyrics);
   }, [lyrics]);
 
-  const syncNotificationMetadata = useCallback(() => {
+  const syncNotificationMetadata = useCallback((forceSync = false) => {
     try {
       const pb = playbackRef?.current;
       if (!pb) return;
@@ -50,8 +51,11 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
       const trackDur = sanitizeDuration(cur.duration, 0);
       const curPos = Math.max(0, Math.round(Number(pb.playbackStatusRef?.current?.currentTime || 0)));
       const now = Date.now();
+      const repeatMode = queueRef?.current?.repeatMode || 'off';
+      const isShuffle = Boolean(queueRef?.current?.isShuffleRef?.current ?? queueRef?.current?.isShuffle);
 
-      if (syncStateRef.current.trackKey !== trackKey) {
+      const isTrackSwitch = syncStateRef.current.trackKey !== trackKey;
+      if (isTrackSwitch) {
         syncStateRef.current = {
           trackKey,
           duration: isLive ? 0 : trackDur,
@@ -64,13 +68,12 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
         };
       }
 
-      const repeatMode = queueRef?.current?.repeatMode || 'off';
-      const isShuffle = Boolean(queueRef?.current?.isShuffleRef?.current ?? queueRef?.current?.isShuffle);
-
       if (isLive) {
-        if (!syncStateRef.current.isLive) {
+        if (forceSync === true || isTrackSwitch || !syncStateRef.current.isLive || syncStateRef.current.isPlaying !== isPlaying) {
           syncStateRef.current.isLive = true;
           syncStateRef.current.duration = 0;
+          syncStateRef.current.isPlaying = isPlaying;
+          syncStateRef.current.lastSyncTs = now;
           updateMediaNotification(isPlaying, repeatMode, isShuffle, undefined, {
             ...cur,
             isLive: true,
@@ -123,14 +126,17 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
         });
       }
 
+      // Compare live position against the clock last sent to MPNowPlayingInfoCenter (do NOT reset baseline on skipped ticks!)
       const elapsedSec = Math.max(0, (now - syncStateRef.current.lastSyncTs) / 1000);
       const expectedPos = syncStateRef.current.isPlaying
         ? (syncStateRef.current.lastPos + elapsedSec)
         : syncStateRef.current.lastPos;
+      const playStateChanged = syncStateRef.current.isPlaying !== isPlaying;
       const durationChanged = bestDur > 5 && Math.abs(bestDur - syncStateRef.current.duration) > 2;
-      const positionJumped = Math.abs(curPos - expectedPos) >= 5;
+      const positionDrifted = Math.abs(curPos - expectedPos) >= 2.5;
+      const heartbeatDue = isPlaying && (now - syncStateRef.current.lastSyncTs >= 10000);
 
-      if (durationChanged || positionJumped) {
+      if (forceSync === true || isTrackSwitch || playStateChanged || durationChanged || positionDrifted || heartbeatDue) {
         const syncDur = bestDur > 0 ? bestDur : syncStateRef.current.duration;
         syncStateRef.current.duration = syncDur;
         syncStateRef.current.lastPos = curPos;
@@ -141,10 +147,6 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
           duration: syncDur,
           currentTime: curPos,
         });
-      } else {
-        syncStateRef.current.lastPos = curPos;
-        syncStateRef.current.lastSyncTs = now;
-        syncStateRef.current.isPlaying = isPlaying;
       }
     } catch (_err) {}
   }, [playbackRef, queueRef]);
@@ -168,6 +170,11 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
     }).catch(() => {});
 
     const syncTimer = setInterval(syncNotificationMetadata, 1000);
+    const appStateSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        syncNotificationMetadata(true);
+      }
+    });
 
     const handleMediaAction = (action, payload) => {
       try {
@@ -256,6 +263,7 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
 
     return () => {
       clearInterval(syncTimer);
+      try { appStateSub?.remove?.(); } catch (_e) {}
       try {
         if (typeof sub === 'function') {
           sub();

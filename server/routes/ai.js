@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const { adminAuth, optionalAuth } = require('../middleware/auth');
-const { Track, SongLyrics } = require('../models');
+const { Track, SongLyrics, User } = require('../models');
 const { fetchLrclibLyrics, fetchGeniusLyrics, cleanLyricsMetadata, getTrackKey } = require('../utils/helpers');
 const { generateAiJson, generateAiText, QURAN_REGEX } = require('./ai/aiHelpers');
 const { fetchUserTasteProfile } = require('./ai/userTasteHelper');
@@ -86,31 +86,124 @@ router.post('/smart-shuffle', optionalAuth, async (req, res) => {
   }
 });
 
-// Personalized Mood Mix (GET & POST)
+const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+const guestMoodMixCache = new Map();
+const moodMixInflight = new Map();
+
+function getServer12hBucket(now = Date.now()) {
+  return Math.floor(now / TWELVE_HOURS_MS);
+}
+
+async function hydrateTracksByIds(trackIds = []) {
+  const validIds = (Array.isArray(trackIds) ? trackIds : [])
+    .map(String)
+    .filter((id) => mongoose.isValidObjectId(id));
+  if (validIds.length === 0) return [];
+  const docs = await Track.find({ _id: { $in: validIds } }).lean();
+  const byId = new Map(docs.map((doc) => [String(doc._id), { ...doc, id: String(doc._id) }]));
+  return validIds.map((id) => byId.get(id)).filter(Boolean);
+}
+
+function setGuestMoodMixCache(key, value) {
+  if (guestMoodMixCache.size >= 24) {
+    const oldest = guestMoodMixCache.keys().next().value;
+    if (oldest) guestMoodMixCache.delete(oldest);
+  }
+  guestMoodMixCache.set(key, value);
+}
+
+// Personalized Mood Mix (GET & POST — synced across Web & Mobile for each 12h window)
 const moodMixHandler = async (req, res) => {
   const { signal, cleanup } = createRequestAbortSignal(res);
   try {
     const params = { ...(req.query || {}), ...(req.body || {}) };
-    const { mood = '', timeOfDay = '', limit = 15, isQuran, refresh = true, seedTracks = [], followedArtists = [] } = params;
+    const { mood = '', timeOfDay = '', limit = 15, isQuran, forceRefresh = false, seedTracks = [], followedArtists = [] } = params;
     const excludeTrackIds = parseIdList(params.excludeTrackIds);
-    const userTaste = req.user?.id ? await fetchUserTasteProfile(req.user.id, { followedArtists }) : null;
+    const bucket12h = getServer12hBucket();
+    const userId = req.user?.id ? String(req.user.id) : '';
+    const userTaste = userId ? await fetchUserTasteProfile(userId, { followedArtists }) : null;
     const isMixQuran = resolveQuranModeFlag(isQuran, userTaste, String(mood || ''));
+    const shouldForce = forceRefresh === true || forceRefresh === 'true';
 
-    const result = await getPersonalizedMoodMix({
-      mood, timeOfDay, userTaste,
-      seedTracks: Array.isArray(seedTracks) ? seedTracks : [],
-      excludeTrackIds,
-      isQuran: isMixQuran,
-      limit,
-      refresh: refresh !== false && refresh !== 'false',
-      signal
-    });
+    // 1. Check persisted canonical 12-hour mix so Web, Desktop, iOS & Android show the exact same playlist
+    if (!shouldForce && !isMixQuran) {
+      if (userId) {
+        const userDoc = await User.findById(userId).select('aiMoodMixCache').lean();
+        const cachedMix = userDoc?.aiMoodMixCache;
+        if (cachedMix?.bucket12h === bucket12h && Array.isArray(cachedMix.trackIds) && cachedMix.trackIds.length >= 10) {
+          const hydrated = await hydrateTracksByIds(cachedMix.trackIds);
+          if (hydrated.length >= 10) {
+            return res.json({
+              success: true,
+              mood: cachedMix.moodId || 'balanced',
+              bucket12h,
+              personalized: true,
+              cached: true,
+              tracks: hydrated,
+              recommendations: hydrated
+            });
+          }
+        }
+      } else {
+        const guestHit = guestMoodMixCache.get(`${bucket12h}:music`);
+        if (guestHit && Array.isArray(guestHit.tracks) && guestHit.tracks.length >= 10) {
+          return res.json({
+            success: true,
+            mood: guestHit.mood || 'balanced',
+            bucket12h,
+            personalized: false,
+            cached: true,
+            tracks: guestHit.tracks,
+            recommendations: guestHit.tracks
+          });
+        }
+      }
+    }
+
+    // 2. Deduplicate simultaneous generation across devices of the same user
+    const inflightKey = `${userId || 'guest'}:${bucket12h}:${isMixQuran ? 'quran' : 'music'}`;
+    let generator = !shouldForce ? moodMixInflight.get(inflightKey) : null;
+    if (!generator) {
+      generator = (async () => {
+        const result = await getPersonalizedMoodMix({
+          mood, timeOfDay, userTaste,
+          seedTracks: Array.isArray(seedTracks) ? seedTracks : [],
+          excludeTrackIds,
+          isQuran: isMixQuran,
+          limit,
+          refresh: true,
+          signal
+        });
+        const formatted = (result.tracks || []).map((t) => ({ ...t, id: String(t._id || t.id) }));
+        if (!isMixQuran && formatted.length > 0) {
+          const trackIds = formatted.map((t) => String(t._id || t.id)).filter(Boolean);
+          if (userId) {
+            await User.updateOne(
+              { _id: userId },
+              { $set: { aiMoodMixCache: { bucket12h, moodId: result.mood, savedAt: new Date(), trackIds } } }
+            ).catch(() => {});
+          } else {
+            setGuestMoodMixCache(`${bucket12h}:music`, { mood: result.mood, tracks: formatted });
+          }
+        }
+        return { mood: result.mood, tracks: formatted };
+      })().finally(() => {
+        if (moodMixInflight.get(inflightKey) === generator) {
+          moodMixInflight.delete(inflightKey);
+        }
+      });
+      if (!shouldForce) moodMixInflight.set(inflightKey, generator);
+    }
+
+    const generated = await generator;
     res.json({
       success: true,
-      mood: result.mood,
-      personalized: Boolean(userTaste?.userId),
-      tracks: result.tracks,
-      recommendations: result.tracks
+      mood: generated.mood,
+      bucket12h,
+      personalized: Boolean(userId),
+      cached: false,
+      tracks: generated.tracks,
+      recommendations: generated.tracks
     });
   } catch (err) {
     console.warn('[AI Mood Mix]', err.message);
