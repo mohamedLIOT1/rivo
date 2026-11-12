@@ -3,8 +3,9 @@ import {
   ShieldCheck, Users, Music2, FileText, CheckCircle2, XCircle, Search, 
   Trash2, Edit, RefreshCw, Loader2, UserCheck, Check, ArrowLeft, Disc,
   Calendar, Mail, ShieldAlert, Sparkles, ExternalLink, ListMusic, Eye,
-  Lock, Globe, Play, Plus, BarChart2, Radio, Send
+  Lock, Globe, Play, Plus, BarChart2, Radio, Send, Cloud
 } from 'lucide-react';
+import AdminCloudPanel from '../components/admin/AdminCloudPanel';
 import { API_BASE_URL } from '../config';
 import { isUserAdmin } from '../utils/adminUtils';
 import { isQuranContent } from '../utils/quranUtils';
@@ -559,6 +560,20 @@ export default function AdminScreen({
         >
           <BarChart2 size={14} />
           <span>{t('admin.tabAnalytics')}</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('cloud')}
+          className={`px-4 py-2 rounded-xl font-mono text-xs font-black uppercase brutal-border transition-all cursor-pointer flex items-center gap-2 whitespace-nowrap ${
+            isRTL ? '' : 'tracking-wider'
+          } ${
+            activeTab === 'cloud'
+              ? 'bg-[#17a398] text-[#0b1110] brutal-shadow-sm'
+              : isDark ? 'bg-[#182320] text-zinc-300 border-zinc-700 hover:bg-[#22332e]' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-white'
+          }`}
+        >
+          <Cloud size={14} />
+          <span>{isRTL ? 'السحابات' : 'Cloud Storage'}</span>
         </button>
       </div>
 
@@ -1451,6 +1466,11 @@ export default function AdminScreen({
             <p className="text-center font-mono text-xs text-zinc-400 py-6">No analytics available yet.</p>
           )}
         </div>
+      )}
+
+      {/* ── TAB 8: CLOUD STORAGE ── */}
+      {activeTab === 'cloud' && (
+        <AdminCloudPanel isDark={isDark} isRTL={isRTL} />
       )}
 
       {/* Edit Artist Modal */}

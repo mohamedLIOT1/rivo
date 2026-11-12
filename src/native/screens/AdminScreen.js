@@ -30,7 +30,9 @@ import {
   BarChart2,
   Send,
   Sparkles,
+  Cloud,
 } from 'lucide-react-native';
+import AdminCloudPanel from '../components/admin/AdminCloudPanel';
 import { useUser } from '../context/UserContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
@@ -458,6 +460,7 @@ export default function AdminScreen() {
     { id: 'artists', label: isRTL ? 'الفنانون' : 'ARTISTS', count: artists.length, icon: UserCheck },
     { id: 'playlists', label: isRTL ? 'القوائم' : 'PLAYLISTS', count: adminPlaylists.length, icon: ListMusic },
     { id: 'analytics', label: isRTL ? 'الإحصائيات' : 'ANALYTICS', count: null, icon: BarChart2 },
+    { id: 'cloud', label: isRTL ? 'السحابات' : 'CLOUD', count: null, icon: Cloud },
   ];
 
   return (
@@ -1011,6 +1014,11 @@ export default function AdminScreen() {
               <Text style={styles.emptyNotice}>No analytics data available.</Text>
             )}
           </View>
+        )}
+
+        {/* ═══════════ CLOUD STORAGE TAB ═══════════ */}
+        {activeTab === 'cloud' && (
+          <AdminCloudPanel token={token} isDark={isDark} isRTL={isRTL} rtlTextStyle={rtlTextStyle} />
         )}
       </ScrollView>
     </View>

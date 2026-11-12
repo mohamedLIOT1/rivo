@@ -57,7 +57,7 @@ import { colors } from '../theme/colors';
 import { API_BASE_URL } from '../config';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { isQuranContent } from '../../utils/quranUtils';
-import { deduplicateTrackList, getDownloadedTracks } from '../services/downloadManager';
+import { deduplicateTrackList, getDownloadedTracks, getTrackDedupeKey } from '../services/downloadManager';
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import MiniMixerModal from '../components/MiniMixerModal';
@@ -330,23 +330,47 @@ function LibraryScreen({
   const [isLoadingAi, setIsLoadingAi] = useState(false);
   const [justAddedSongId, setJustAddedSongId] = useState(null);
 
-  const allTracks = isOffline
-    ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
-    : ((userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []));
+  // Preserve cached catalog metadata even when offline so playlist IDs map to Vault files via youtubeId / dedupeKey
+  const allTracks = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
   const safeLikedIds = useMemo(() => (Array.isArray(likedTrackIds) ? likedTrackIds : []), [likedTrackIds]);
+
+  const downloadedLookup = useMemo(() => {
+    const byId = new Map();
+    const byYoutubeId = new Map();
+    const byKey = new Map();
+    for (const dt of (downloadedTracks || [])) {
+      if (!dt) continue;
+      const dtId = String(dt._id || dt.id || '');
+      if (dtId) byId.set(dtId, dt);
+      if (dt.youtubeId) byYoutubeId.set(String(dt.youtubeId), dt);
+      const dk = getTrackDedupeKey(dt);
+      if (dk) byKey.set(dk, dt);
+    }
+    return { byId, byYoutubeId, byKey };
+  }, [downloadedTracks]);
+
+  const findDownloadedMatch = useCallback((trackOrId, catalogMeta = null) => {
+    const idStr = typeof trackOrId === 'object' ? String(trackOrId?._id || trackOrId?.id || '') : String(trackOrId || '');
+    if (idStr && downloadedLookup.byId.has(idStr)) return downloadedLookup.byId.get(idStr);
+    const yt = catalogMeta?.youtubeId || (typeof trackOrId === 'object' ? trackOrId?.youtubeId : '');
+    if (yt && downloadedLookup.byYoutubeId.has(String(yt))) return downloadedLookup.byYoutubeId.get(String(yt));
+    const dk = catalogMeta ? getTrackDedupeKey(catalogMeta) : (typeof trackOrId === 'object' ? getTrackDedupeKey(trackOrId) : '');
+    if (dk && downloadedLookup.byKey.has(dk)) return downloadedLookup.byKey.get(dk);
+    return null;
+  }, [downloadedLookup]);
 
   // Unified track pool (declared before fetchLikedPlaylist to avoid TDZ reference)
   const trackPoolMap = useMemo(() => {
-    const list = [...(allTracks || []), ...(fetchedTracks || []), ...(fetchedLikedTracks || [])];
+    const list = [...(downloadedTracks || []), ...(allTracks || []), ...(fetchedTracks || []), ...(fetchedLikedTracks || [])];
     const map = new Map();
     for (const t of list) {
       if (t) {
         const id = String(t._id || t.id || '');
-        if (id) map.set(id, t);
+        if (id && !map.has(id)) map.set(id, t);
       }
     }
     return map;
-  }, [allTracks, fetchedTracks, fetchedLikedTracks]);
+  }, [downloadedTracks, allTracks, fetchedTracks, fetchedLikedTracks]);
 
   // Hardware Back button returns to library main view instead of closing app
   useEffect(() => {
@@ -462,7 +486,7 @@ function LibraryScreen({
 
   // Fetch tracks for currently selected playlist if they aren't in trackPoolMap
   useEffect(() => {
-    if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
+    if (isOffline || !selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return;
 
     const rawItems = selectedView.tracks || selectedView.trackIds || [];
     if (rawItems.length === 0) return;
@@ -497,7 +521,7 @@ function LibraryScreen({
     }
   }, [selectedView]);
 
-  // Real tracks list for currently selected playlist
+  // Real tracks list for currently selected playlist (resolves Vault files offline by id, youtubeId & dedupeKey)
   const activePlaylistTracks = useMemo(() => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return [];
     const plId = String(selectedView.id || selectedView._id || '');
@@ -505,12 +529,30 @@ function LibraryScreen({
     const rawItems = currentPl.tracks || currentPl.trackIds || [];
     return rawItems.map(item => {
       const idStr = String(typeof item === 'object' ? (item._id || item.id) : item);
-      const found = trackPoolMap.get(idStr);
-      if (found) return found;
-      if (typeof item === 'object' && item.title) return item;
-      return null;
+      const catalogMeta = trackPoolMap.get(idStr) || (typeof item === 'object' && item.title ? item : null);
+      const dlMatch = findDownloadedMatch(item, catalogMeta);
+      if (isOffline) {
+        if (dlMatch) {
+          return {
+            ...dlMatch,
+            _id: idStr || dlMatch._id,
+            id: idStr || dlMatch.id,
+            isDownloaded: true,
+          };
+        }
+        return null;
+      }
+      if (dlMatch) {
+        return {
+          ...(catalogMeta || dlMatch),
+          localAudioUri: dlMatch.localAudioUri || dlMatch.nativeAudioUri,
+          nativeAudioUri: dlMatch.nativeAudioUri || dlMatch.localAudioUri,
+          isDownloaded: true,
+        };
+      }
+      return catalogMeta || null;
     }).filter(Boolean);
-  }, [selectedView, playlists, trackPoolMap]);
+  }, [selectedView, playlists, trackPoolMap, findDownloadedMatch, isOffline]);
 
   // Detect whether current open playlist is a Quran playlist
   const isSelectedPlQuran = useMemo(() => {
@@ -714,8 +756,7 @@ function LibraryScreen({
       showToast('No tracks in crate to download', 'warning');
       return;
     }
-    const downloadedSet = new Set((downloadedTracks || []).map(t => String(t._id || t.id)));
-    const toDownload = activePlaylistTracks.filter(t => !downloadedSet.has(String(t._id || t.id)));
+    const toDownload = activePlaylistTracks.filter(t => !findDownloadedMatch(t, t));
 
     if (toDownload.length === 0) {
       showToast('All tracks are already saved in Offline Vault!', 'info');

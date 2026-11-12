@@ -40,47 +40,47 @@ const APP_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.18',
+      version: '2.4.19',
       name: 'Rivo Web',
-      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي كل 12 ساعة وتسريع تشغيل السحابة وتنعيم شاشة القفل.'
+      notes: 'تحديث v2.4.19 • لوحة مراقبة السحابات وتقدم القرآن والتحويل التلقائي لسحابة القرآن الثانية.'
     },
     windows: {
-      version: '2.4.18',
-      displayVersion: '2.4.18',
+      version: '2.4.19',
+      displayVersion: '2.4.19',
       name: 'Rivo Desktop for Windows (EXE)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.18.exe',
+      directFile: 'Rivo-v2.4.19.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي وتسريع تشغيل السحابة الفوري.'
+      notes: 'تحديث v2.4.19 • لوحة مراقبة السحابات وتقدم رفع القرآن في لوحة المشرف.'
     },
     android: {
-      version: '2.4.18',
-      build: 148,
+      version: '2.4.19',
+      build: 149,
       name: 'Rivo for Android (APK)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.18.apk',
+      directFile: 'Rivo-v2.4.19.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • استجابة فورية للأزرار وتقليص الصف إلى 40 أغنية وإصلاح تزامن الإشعارات.',
-      notesEn: 'Update v2.4.18 • Snappier UI, 40-track smart queue slice, locked-screen media sync & instant cloud start.',
+      notes: 'تحديث v2.4.19 • إظهار قوائم التشغيل المحملة بدون نت كاملة ولوحة مراقبة السحابات.',
+      notesEn: 'Update v2.4.19 • Full offline playlist vault matching & Admin Cloud Storage monitor.',
       ota: {
         enabled: true,
-        version: '2.4.28',
+        version: '2.4.29',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.28 • تسريع فائق وتوحيد قائمة الذكاء وإصلاح مشغل القفل',
-        notesEn: 'Instant OTA v2.4.28 • Snappy UI, unified 12h AI Mood Mix & responsive lock-screen sync',
-        bundleSize: 5247859,
-        sizeMb: '5.00 MB'
+        notes: 'تحديث هوائي فوري v2.4.29 • حل مشكلة قوائم التشغيل بدون إنترنت ولوحة السحابات',
+        notesEn: 'Instant OTA v2.4.29 • Fix offline downloaded playlists & Admin Cloud Storage dashboard',
+        bundleSize: 5251574,
+        sizeMb: '5.01 MB'
       }
     },
     ios: {
-      version: '2.4.18',
-      build: 148,
+      version: '2.4.19',
+      build: 149,
       name: 'Rivo for iOS (IPA)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.18.ipa',
+      directFile: 'Rivo-v2.4.19.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • إصلاح تعليق مشغل شاشة القفل على الآيفون وتقليل اللاج وتسريع تشغيل الأغاني.'
+      notes: 'تحديث v2.4.19 • إصلاح ظهور قوائم التشغيل المحملة بدون نت ولوحة مراقبة السحابات.'
     }
   }
 };
@@ -96,47 +96,47 @@ const BETA_VERSIONS_DATA = {
   channel: 'stable',
   platforms: {
     web: {
-      version: '2.4.18',
+      version: '2.4.19',
       name: 'Rivo Web (Beta)',
-      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي كل 12 ساعة وتسريع تشغيل السحابة.'
+      notes: 'تحديث v2.4.19 • لوحة مراقبة السحابات والتحويل التلقائي لسحابة القرآن.'
     },
     windows: {
-      version: '2.4.18',
-      displayVersion: '2.4.18',
+      version: '2.4.19',
+      displayVersion: '2.4.19',
       name: 'Rivo Desktop for Windows (Beta)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.exe',
-      directFile: 'Rivo-v2.4.18.exe',
+      directFile: 'Rivo-v2.4.19.exe',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • توحيد قائمة الذكاء الاصطناعي وتسريع التشغيل.'
+      notes: 'تحديث v2.4.19 • لوحة مراقبة السحابات.'
     },
     android: {
-      version: '2.4.18',
-      build: 148,
+      version: '2.4.19',
+      build: 149,
       name: 'Rivo for Android (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.apk',
-      directFile: 'Rivo-v2.4.18.apk',
+      directFile: 'Rivo-v2.4.19.apk',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • استجابة أسرع وإصلاح تزامن الإشعارات وتقليص الصف.',
-      notesEn: 'Update v2.4.18 • Snappy UI, 40-track smart queue, lock-screen media sync & fast cloud stream.',
+      notes: 'تحديث v2.4.19 • حل مشكلة قوائم التشغيل بدون إنترنت ولوحة السحابات.',
+      notesEn: 'Update v2.4.19 • Offline playlist matching & Cloud Storage monitor.',
       ota: {
         enabled: true,
-        version: '2.4.28',
+        version: '2.4.29',
         bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.28 • تسريع فائق وتوحيد قائمة الذكاء وإصلاح مشغل القفل',
-        notesEn: 'Instant OTA v2.4.28 • Snappy UI, unified 12h AI Mood Mix & responsive lock-screen sync',
-        bundleSize: 5247859,
-        sizeMb: '5.00 MB'
+        notes: 'تحديث هوائي فوري v2.4.29 • حل مشكلة قوائم التشغيل بدون إنترنت ولوحة السحابات',
+        notesEn: 'Instant OTA v2.4.29 • Offline playlist fix & Cloud Storage dashboard',
+        bundleSize: 5251574,
+        sizeMb: '5.01 MB'
       }
     },
     ios: {
-      version: '2.4.18',
-      build: 148,
+      version: '2.4.19',
+      build: 149,
       name: 'Rivo for iOS (Beta Testing)',
       downloadUrl: 'https://rivo-m.duckdns.org/downloads/Rivo.ipa',
-      directFile: 'Rivo-v2.4.18.ipa',
+      directFile: 'Rivo-v2.4.19.ipa',
       mandatory: false,
-      notes: 'تحديث v2.4.18 • إصلاح تعليق مشغل شاشة القفل على الآيفون وتقليل اللاج وتسريع تشغيل الأغاني.'
+      notes: 'تحديث v2.4.19 • حل مشكلة قوائم التشغيل بدون إنترنت ولوحة السحابات.'
     }
   }
 };

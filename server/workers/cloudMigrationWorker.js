@@ -19,6 +19,7 @@ const {
   sleepWithAbort
 } = require('../utils/cloudStorageClient');
 const { seedCloudCache } = require('../utils/cloudMediaServer');
+const { resolveQuranB2AccountForUpload } = require('../utils/cloudUsageHelper');
 const { classifyTrackBeforeMigration } = require('../utils/trackContentClassifier');
 const { downloadAudioWithPlanB } = require('../utils/cloudDownloadHelper');
 
@@ -68,7 +69,7 @@ function buildMigrationQuery(allowedCategories, targetCategory = null) {
   }
   const query = {
     'cloudStorage.provider': { $exists: false },
-    audioUrl: { $not: /^\/?uploads\//i },
+    audioUrl: { $not: /^\/?uploads\/cloud\//i },
     $and: andClauses,
     contentType: { $nin: ['audiobook', ...(!allowedCategories.has('quran') ? ['quran'] : []), ...(!allowedCategories.has('podcast') ? ['podcast'] : [])] }
   };
@@ -187,8 +188,20 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
     return { status: 'skipped', reason: 'live_radio', label };
   }
 
+  // Detect local user-uploaded audio files in /uploads/<file> so they also migrate seamlessly to cloud
+  const rawAudioUrl = String(track.audioUrl || '').trim();
+  let localUploadPath = null;
+  if (/^\/?uploads\//i.test(rawAudioUrl) && !/^\/?uploads\/cloud\//i.test(rawAudioUrl)) {
+    const rel = rawAudioUrl.replace(/^\/?uploads\//i, '').split('?')[0];
+    const resolved = path.resolve(uploadsDir, rel);
+    const uploadsRoot = path.resolve(uploadsDir) + path.sep;
+    if (resolved.startsWith(uploadsRoot) && fs.existsSync(resolved) && isAudioFileValid(resolved)) {
+      localUploadPath = resolved;
+    }
+  }
+
   let videoId = extractYouTubeId(track.youtubeId) || extractYouTubeId(track.audioUrl) || extractYouTubeId(track.id);
-  if (!videoId && track.title) {
+  if (!localUploadPath && !videoId && track.title) {
     try {
       const sr = await searchYouTubeId({ artist: track.artist, title: track.title, targetDuration: track.duration });
       videoId = typeof sr === 'string' ? sr : sr?.videoId || null;
@@ -221,7 +234,7 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
     return { status: 'deferred', category, reason: cls.reason, source: cls.source, label };
   }
 
-  if (!videoId) {
+  if (!localUploadPath && !videoId) {
     if (!dryRun) {
       await Track.updateOne({ _id: track._id }, {
         $inc: { 'migration.attempts': 1 },
@@ -231,24 +244,29 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
     return { status: 'failed', reason: 'no_video_id', label };
   }
 
-  if (dryRun) return { status: 'dry_run_ok', category, genre: verifiedGenre || cls.genre, videoId, source: cls.source, label };
+  if (dryRun) return { status: 'dry_run_ok', category, genre: verifiedGenre || cls.genre, videoId, source: localUploadPath ? 'local_upload' : cls.source, label };
 
-  const dlResult = await downloadAudioWithPlanB({
-    videoId, title: track.title, artist: track.artist,
-    duration: track.duration || cls.ytMeta?.ytDuration, workDir: tempWorkDir, signal
-  });
-  const localFile = dlResult.filePath;
-  const downloadedFresh = Boolean(dlResult.downloadedFresh);
-  const usedVideoId = dlResult.usedVideoId || videoId;
+  let localFile = localUploadPath;
+  let downloadedFresh = false;
+  let usedVideoId = videoId;
+  if (!localFile) {
+    const dlResult = await downloadAudioWithPlanB({
+      videoId, title: track.title, artist: track.artist,
+      duration: track.duration || cls.ytMeta?.ytDuration, workDir: tempWorkDir, signal
+    });
+    localFile = dlResult.filePath;
+    downloadedFresh = Boolean(dlResult.downloadedFresh);
+    usedVideoId = dlResult.usedVideoId || videoId;
 
-  if (!localFile || !isAudioFileValid(localFile)) {
-    if (downloadedFresh && localFile && fs.existsSync(localFile)) try { fs.unlinkSync(localFile); } catch {}
-    await recordDownloadFailure(track, dlResult);
-    return {
-      status: dlResult.permanentError ? 'skipped' : 'failed',
-      reason: dlResult.errorReason || 'download_failed',
-      banDetected: Boolean(dlResult.banDetected), videoId, label
-    };
+    if (!localFile || !isAudioFileValid(localFile)) {
+      if (downloadedFresh && localFile && fs.existsSync(localFile)) try { fs.unlinkSync(localFile); } catch {}
+      await recordDownloadFailure(track, dlResult);
+      return {
+        status: dlResult.permanentError ? 'skipped' : 'failed',
+        reason: dlResult.errorReason || 'download_failed',
+        banDetected: Boolean(dlResult.banDetected), videoId, label
+      };
+    }
   }
 
   let uploadFile = localFile;
@@ -268,23 +286,31 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
 
     const ext = path.extname(uploadFile).replace('.', '').toLowerCase() || 'm4a';
     const b2Cat = category === 'quran' ? 'quran' : (category === 'podcast' ? 'podcast' : 'heavy_music');
+    let b2Override = null;
+    if (b2Cat === 'quran') {
+      const qTarget = await resolveQuranB2AccountForUpload();
+      b2Override = qTarget.account;
+      if (qTarget.switched) {
+        console.log(`[CloudBot] 🔄 Primary Quran bucket reached threshold — routing to ${b2Override?.bucketName}`);
+      }
+    }
     const cloudMeta = (category === 'music' && fileStat.size <= TELEGRAM_MAX_BYTES)
       ? await uploadAudioToTelegram(uploadFile, { title: track.title, artist: track.artist, duration: verifiedDuration, category: 'music', signal })
-      : await uploadAudioToB2(uploadFile, `${b2Cat}/${trackId}.${ext}`, { category: b2Cat, contentType: ext === 'mp3' ? 'audio/mpeg' : 'audio/mp4', signal });
+      : await uploadAudioToB2(uploadFile, `${b2Cat}/${trackId}.${ext}`, { category: b2Cat, accountOverride: b2Override, contentType: ext === 'mp3' ? 'audio/mpeg' : 'audio/mp4', signal });
 
     await seedCloudCache(trackId, cloudMeta.ext || ext, uploadFile);
     const extraMeta = await enrichCoverAndLyrics(track, usedVideoId);
     const updateDoc = {
       ...flagUpdates,
       ...extraMeta,
-      legacyAudioUrl: track.legacyAudioUrl || track.audioUrl || `https://www.youtube.com/watch?v=${usedVideoId}`,
-      youtubeId: track.youtubeId || usedVideoId,
+      legacyAudioUrl: track.legacyAudioUrl || track.audioUrl || (usedVideoId ? `https://www.youtube.com/watch?v=${usedVideoId}` : ''),
+      ...(usedVideoId && !track.youtubeId ? { youtubeId: usedVideoId } : {}),
       audioUrl: `/uploads/cloud/${trackId}.${cloudMeta.ext || ext}`,
       duration: verifiedDuration,
       cloudStorage: cloudMeta,
       migration: {
         status: 'migrated',
-        reason: `${cloudMeta.provider}:${cls.reason}`,
+        reason: `${cloudMeta.provider}:${cloudMeta.bucketName || cls.reason}`,
         category,
         updatedAt: new Date(),
         attempts: (track.migration?.attempts || 0) + 1
@@ -292,6 +318,9 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
     };
 
     await Track.updateOne({ _id: track._id }, { $set: updateDoc });
+    if (localUploadPath && fs.existsSync(localUploadPath)) {
+      try { fs.unlinkSync(localUploadPath); } catch {}
+    }
     await notifyServerCacheInvalidated(trackId, signal);
     return {
       status: 'migrated', provider: cloudMeta.provider, botIndex: cloudMeta.botIndex,

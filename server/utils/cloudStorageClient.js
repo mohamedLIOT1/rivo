@@ -82,9 +82,10 @@ function getB2Accounts() {
 
   const accounts = [];
   const specs = [
-    { prefix: 'B2_HEAVY_MUSIC', category: 'heavy_music' },
-    { prefix: 'B2_QURAN', category: 'quran' },
-    { prefix: 'B2_PODCAST', category: 'podcast' }
+    { prefix: 'B2_HEAVY_MUSIC', category: 'heavy_music', slot: 'primary' },
+    { prefix: 'B2_QURAN', category: 'quran', slot: 'primary' },
+    { prefix: 'B2_PODCAST', category: 'podcast', slot: 'primary' },
+    { prefix: 'B2_QURAN_ALT', category: 'quran', slot: 'alt' }
   ];
   for (const spec of specs) {
     const keyId = (process.env[`${spec.prefix}_KEY_ID`] || '').trim();
@@ -92,22 +93,28 @@ function getB2Accounts() {
     const bucketName = (process.env[`${spec.prefix}_BUCKET`] || '').trim();
     const bucketId = (process.env[`${spec.prefix}_BUCKET_ID`] || '').trim();
     if (keyId && appKey && bucketName) {
-      accounts.push({ index: accounts.length, category: spec.category, keyId, appKey, bucketName, bucketId });
+      accounts.push({ index: accounts.length, category: spec.category, slot: spec.slot, keyId, appKey, bucketName, bucketId });
     }
   }
   return accounts;
 }
 
-function selectB2Account(category = 'heavy_music', preferredIndex = null) {
+function selectB2Account(category = 'heavy_music', preferredIndex = null, preferredBucketName = null) {
   const accounts = getB2Accounts();
   if (accounts.length === 0) return null;
+  if (preferredBucketName) {
+    const byBucket = accounts.find(acc => acc.bucketName === preferredBucketName);
+    if (byBucket) return byBucket;
+  }
   if (preferredIndex !== null && preferredIndex !== undefined && accounts[preferredIndex]) {
     return { ...accounts[preferredIndex], index: preferredIndex };
   }
   const matching = accounts
     .map((acc, idx) => ({ ...acc, index: idx }))
-    .filter(acc => acc.category === category);
+    .filter(acc => acc.category === category && acc.slot !== 'alt');
   if (matching.length > 0) return matching[0];
+  const anyMatching = accounts.find(acc => acc.category === category);
+  if (anyMatching) return anyMatching;
   return { ...accounts[0], index: 0 };
 }
 
@@ -319,8 +326,8 @@ async function computeFileSha1(filePath) {
 /**
  * Uploads an audio file to Backblaze B2 private bucket.
  */
-async function uploadAudioToB2(filePath, remoteFileName, { category = 'heavy_music', contentType = 'audio/mp4', signal } = {}) {
-  const account = selectB2Account(category);
+async function uploadAudioToB2(filePath, remoteFileName, { category = 'heavy_music', accountOverride = null, contentType = 'audio/mp4', signal } = {}) {
+  const account = accountOverride || selectB2Account(category);
   if (!account) throw new Error(`No B2 account configured for ${category}`);
 
   const stats = fs.statSync(filePath);
@@ -383,7 +390,7 @@ async function uploadAudioToB2(filePath, remoteFileName, { category = 'heavy_mus
  * Fetches an authenticated Backblaze B2 file download Response (supports Range header).
  */
 async function fetchB2DownloadResponse(cloudStorage, rangeHeader, signal) {
-  const account = selectB2Account(cloudStorage?.category || 'heavy_music', cloudStorage?.accountIndex);
+  const account = selectB2Account(cloudStorage?.category || 'heavy_music', cloudStorage?.accountIndex, cloudStorage?.bucketName);
   if (!account) throw new Error('No B2 account found for playback');
 
   const attemptFetch = async (forceRefresh) => {

@@ -3,6 +3,7 @@ const router = express.Router();
 const mongoose = require('mongoose');
 const { User, Track, Album, Message } = require('../models');
 const { adminAuth, isAdminUser, isVerifiedUser } = require('../middleware/auth');
+const { getCloudStorageTelemetry } = require('../utils/cloudUsageHelper');
 
 // Analytics Endpoint
 router.get('/analytics', adminAuth, async (req, res) => {
@@ -140,6 +141,16 @@ router.get('/playlists', adminAuth, async (req, res) => {
       }
     }
     res.json({ success: true, playlists: allPlaylists });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// Cloud Storage, Quran Migration Progress & Capacity Telemetry
+router.get('/cloud-status', adminAuth, async (req, res) => {
+  try {
+    const data = await getCloudStorageTelemetry({ bypassCache: req.query.refresh === '1' });
+    res.json({ success: true, data });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

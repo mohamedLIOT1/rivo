@@ -49,13 +49,14 @@ export const useAudioDownloads = ({
   }, []);
 
   useEffect(() => {
+    refreshDownloadedTracks();
     const unsub = subscribeToDownloadedTracks((updated) => {
       const cleaned = deduplicateTrackList(updated || []);
       setDownloadedTracks(cleaned);
       downloadedTracksRef.current = cleaned;
     });
     return unsub;
-  }, []);
+  }, [refreshDownloadedTracks]);
 
   const refreshDownloadedTracks = useCallback(async () => {
     try {
