@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,8 @@ import {
   BackHandler,
   RefreshControl,
   Platform,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -45,6 +47,8 @@ import {
   Sliders,
   Zap,
   Wand2,
+  MoreVertical,
+  GripVertical,
 } from 'lucide-react-native';
 import { getRecommendedTransition, calculateBarsDuration } from '../utils/musicAnalysis';
 import { useAudioPlayer } from '../context/AudioContext';
@@ -61,6 +65,7 @@ import { deduplicateTrackList, getDownloadedTracks, getTrackDedupeKey } from '..
 import CassetteTag from '../ui/CassetteTag';
 import SongItem from '../ui/SongItem';
 import MiniMixerModal from '../components/MiniMixerModal';
+import PlaylistHeaderActionMenu from '../components/playlist/PlaylistHeaderActionMenu';
 
 const { width } = Dimensions.get('window');
 
@@ -82,6 +87,7 @@ const QuickAddRecommendationRow = React.memo(function QuickAddRecommendationRow(
         <Image
           source={{ uri: normalizeCoverUri(track.cover || track.coverUrl) }}
           style={styles.recItemCover}
+          resizeMode="cover"
           fadeDuration={0}
         />
         <View style={{ flex: 1, marginLeft: 10 }}>
@@ -131,6 +137,7 @@ const CoverPickerThumb = React.memo(function CoverPickerThumb({ track, selected,
       <Image
         source={{ uri: normalizeCoverUri(tCover, track) }}
         style={{ width: 44, height: 44, borderRadius: 6 }}
+        resizeMode="cover"
         fadeDuration={0}
       />
     </TouchableOpacity>
@@ -285,32 +292,21 @@ function LibraryScreen({
     }
   }, [playlists]);
 
-  const handleMoveTrack = async (index, direction) => {
-    if (!selectedView || selectedView === 'liked') return;
-    const plId = String(selectedView.id || selectedView._id);
-    const currentTracks = [...activePlaylistTracks];
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= currentTracks.length) return;
-
-    const temp = currentTracks[index];
-    currentTracks[index] = currentTracks[targetIndex];
-    currentTracks[targetIndex] = temp;
-
-    const newTrackIds = currentTracks.map(t => String(t._id || t.id));
-    if (updatePlaylist) {
-      await updatePlaylist(plId, { trackIds: newTrackIds });
-    }
-    showToast('Playlist reordered ✨', 'success');
-  };
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [localActivePlaylistTracks, setLocalActivePlaylistTracks] = useState(null);
+  const setActivePlaylistTracks = setLocalActivePlaylistTracks;
 
   const handleRemoveTrackDirect = async (track, index) => {
     if (!selectedView || selectedView === 'liked' || !track) return;
     const plId = String(selectedView.id || selectedView._id);
     const trackId = String(track._id || track.id);
+    if (localActivePlaylistTracks) {
+      setLocalActivePlaylistTracks(prev => prev ? prev.filter((_, i) => i !== index) : null);
+    }
     if (removeTrackFromPlaylist) {
       await removeTrackFromPlaylist(plId, trackId);
     }
-    showToast(`Removed "${track.title}" from playlist`, 'info');
+    showToast(isRTL ? `تمت إزالة "${track.title}" من القائمة` : `Removed "${track.title}" from playlist`, 'info');
   };
   const [fetchedTracks, setFetchedTracks] = useState([]);
   const [isLoadingTracks, setIsLoadingTracks] = useState(false);
@@ -521,8 +517,20 @@ function LibraryScreen({
     }
   }, [selectedView]);
 
+  useEffect(() => {
+    setLocalActivePlaylistTracks(null);
+    setIsReordering(false);
+    setIsActionMenuOpen(false);
+  }, [selectedView]);
+
+  useEffect(() => {
+    if (!isReordering) {
+      setLocalActivePlaylistTracks(null);
+    }
+  }, [playlists, isReordering]);
+
   // Real tracks list for currently selected playlist (resolves Vault files offline by id, youtubeId & dedupeKey)
-  const activePlaylistTracks = useMemo(() => {
+  const computedPlaylistTracks = useMemo(() => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return [];
     const plId = String(selectedView.id || selectedView._id || '');
     const currentPl = (playlists || []).find(p => String(p.id || p._id) === plId) || selectedView;
@@ -554,6 +562,8 @@ function LibraryScreen({
     }).filter(Boolean);
   }, [selectedView, playlists, trackPoolMap, findDownloadedMatch, isOffline]);
 
+  const activePlaylistTracks = localActivePlaylistTracks || computedPlaylistTracks;
+
   // Detect whether current open playlist is a Quran playlist
   const isSelectedPlQuran = useMemo(() => {
     if (!selectedView || typeof selectedView !== 'object' || selectedView === 'liked') return false;
@@ -563,6 +573,79 @@ function LibraryScreen({
       (activePlaylistTracks && activePlaylistTracks.length > 0 && activePlaylistTracks.some(isQuranContent))
     );
   }, [selectedView, activePlaylistTracks]);
+
+  // PanResponder drag-and-drop reorder state & responders (FullPlayerQueueView parity)
+  const draggingIdxRef = useRef(null);
+  const hoverIdxRef = useRef(null);
+  const [draggingIdx, setDraggingIdx] = useState(null);
+  const [hoverIdx, setHoverIdx] = useState(null);
+  const panY = useRef(new Animated.Value(0)).current;
+
+  const handleReorderPlaylistTracks = useCallback(async (fromIndex, toIndex) => {
+    if (!selectedView || selectedView === 'liked') return;
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const plId = String(selectedView.id || selectedView._id);
+    const updated = [...activePlaylistTracks];
+    const [moved] = updated.splice(fromIndex, 1);
+    updated.splice(toIndex, 0, moved);
+    setActivePlaylistTracks(updated);
+    const newTrackIds = updated.map(t => String(t._id || t.id));
+    if (updatePlaylist) {
+      await updatePlaylist(plId, { trackIds: newTrackIds });
+    }
+    showToast(isRTL ? 'تم تحديث ترتيب القائمة' : 'Playlist reordered ✨', 'success');
+  }, [selectedView, activePlaylistTracks, updatePlaylist, showToast, isRTL]);
+
+  const handleMoveTrack = useCallback(async (index, direction) => {
+    handleReorderPlaylistTracks(index, index + direction);
+  }, [handleReorderPlaylistTracks]);
+
+  const createPanResponder = useCallback((index) => {
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        draggingIdxRef.current = index;
+        hoverIdxRef.current = index;
+        setDraggingIdx(index);
+        setHoverIdx(index);
+        panY.setValue(0);
+      },
+      onPanResponderMove: (_, gestureState) => {
+        panY.setValue(gestureState.dy);
+        const deltaSlots = Math.round(gestureState.dy / 60);
+        const maxIdx = Math.max(0, activePlaylistTracks.length - 1);
+        const nextHover = Math.max(0, Math.min(maxIdx, index + deltaSlots));
+        if (hoverIdxRef.current !== nextHover) {
+          hoverIdxRef.current = nextHover;
+          setHoverIdx(nextHover);
+        }
+      },
+      onPanResponderRelease: () => {
+        const from = index;
+        const to = hoverIdxRef.current;
+        if (to !== null && to !== undefined && to !== from) {
+          handleReorderPlaylistTracks(from, to);
+        }
+        draggingIdxRef.current = null;
+        hoverIdxRef.current = null;
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        panY.setValue(0);
+      },
+      onPanResponderTerminate: () => {
+        draggingIdxRef.current = null;
+        hoverIdxRef.current = null;
+        setDraggingIdx(null);
+        setHoverIdx(null);
+        panY.setValue(0);
+      },
+    });
+  }, [activePlaylistTracks.length, handleReorderPlaylistTracks, panY]);
+
+  const panResponders = useMemo(() => {
+    return activePlaylistTracks.map((_, i) => createPanResponder(i));
+  }, [activePlaylistTracks.length, createPanResponder]);
 
   // AI & Smart recommendations for filling the playlist
   const fetchAiRecommendations = async () => {
@@ -795,7 +878,7 @@ function LibraryScreen({
 
     if (nextState) {
       if (typeof setIsMixMode === 'function') setIsMixMode(true);
-      if (Object.keys(playlistTransitions || {}).length === 0 && activePlaylistTracks.length > 1) {
+      if ((!selectedView?.isMix || Object.keys(playlistTransitions || {}).length === 0) && activePlaylistTracks.length > 1) {
         await handleAutoMixAll();
         return;
       } else {
@@ -1099,14 +1182,48 @@ function LibraryScreen({
 
   const renderTrackItem = useCallback(({ item, index }) => {
     if (isReordering && selectedView !== 'liked') {
+      const isDragging = draggingIdx === index;
+      const isTargetSlot = hoverIdx === index && draggingIdx !== null && draggingIdx !== index;
+      const isAboveTarget = hoverIdx !== null && draggingIdx !== null && hoverIdx < draggingIdx;
+
       return (
-        <View style={[styles.reorderRow, !isDark && styles.reorderRowLight]}>
+        <Animated.View
+          key={item._id || item.id || String(index)}
+          style={[
+            styles.reorderRow,
+            !isDark && styles.reorderRowLight,
+            {
+              backgroundColor: isDragging
+                ? (isDark ? '#19332b' : '#c8f2e9')
+                : isTargetSlot
+                ? (isDark ? '#152520' : '#e6f7f3')
+                : (isDark ? '#0c1815' : '#f8fafc'),
+              borderColor: (isDragging || isTargetSlot) ? colors.mint : 'transparent',
+              transform: [
+                { translateY: isDragging ? panY : 0 },
+                { scale: isDragging ? 1.03 : 1 }
+              ],
+              zIndex: isDragging ? 9999 : 1,
+              elevation: isDragging && Platform.OS !== 'android' ? 24 : 0,
+            },
+          ]}
+        >
+          {isTargetSlot && (
+            <View
+              style={[
+                styles.dropIndicatorBar,
+                isAboveTarget ? { top: -2 } : { bottom: -2 },
+                { backgroundColor: colors.mint }
+              ]}
+            />
+          )}
           <View style={{ width: 26, alignItems: 'center' }}>
             <Text style={{ fontSize: 11, fontWeight: '800', color: '#94a3b8' }}>{index + 1}</Text>
           </View>
           <Image
             source={{ uri: normalizeCoverUri(item.cover || item.coverUrl) }}
             style={{ width: 40, height: 40, borderRadius: 6, marginHorizontal: 8, backgroundColor: '#1f2e2a' }}
+            resizeMode="cover"
             fadeDuration={0}
           />
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -1117,32 +1234,27 @@ function LibraryScreen({
               {item.artist || 'Unknown Artist'}
             </Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <TouchableOpacity
-              onPress={() => handleMoveTrack(index, -1)}
-              disabled={index === 0}
-              style={[styles.reorderBtn, index === 0 && { opacity: 0.25 }]}
-              activeOpacity={0.7}
-            >
-              <ArrowUp size={16} color={isDark ? '#ffffff' : '#000000'} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => handleMoveTrack(index, 1)}
-              disabled={index === activePlaylistTracks.length - 1}
-              style={[styles.reorderBtn, index === activePlaylistTracks.length - 1 && { opacity: 0.25 }]}
-              activeOpacity={0.7}
-            >
-              <ArrowDown size={16} color={isDark ? '#ffffff' : '#000000'} />
-            </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <TouchableOpacity
               onPress={() => handleRemoveTrackDirect(item, index)}
-              style={[styles.reorderBtn, { backgroundColor: '#fee2e2', borderColor: '#ef4444' }]}
+              style={[styles.reorderBtn, { backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#fee2e2', borderColor: '#ef4444' }]}
               activeOpacity={0.7}
             >
-              <Trash2 size={16} color="#dc2626" />
+              <Trash2 size={15} color="#ef4444" />
             </TouchableOpacity>
+
+            <View
+              {...(panResponders[index] ? panResponders[index].panHandlers : {})}
+              style={[
+                styles.dragHandle,
+                { backgroundColor: isDragging ? colors.mint + '44' : (isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)') }
+              ]}
+              hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+            >
+              <GripVertical size={18} color={isDragging ? colors.mint : (isDark ? '#94a3b8' : '#64748b')} />
+            </View>
           </View>
-        </View>
+        </Animated.View>
       );
     }
     const nextTrack = activePlaylistTracks[index + 1];
@@ -1207,9 +1319,12 @@ function LibraryScreen({
   }, [
     isReordering,
     selectedView,
+    draggingIdx,
+    hoverIdx,
+    panResponders,
+    panY,
     isDark,
     activePlaylistTracks,
-    handleMoveTrack,
     handleRemoveTrackDirect,
     isSelectedPlQuran,
     playlistTransitions,
@@ -1244,7 +1359,7 @@ function LibraryScreen({
         activeOpacity={0.9}
         onPress={() => setSelectedView('liked')}
       >
-        {!isLiteMode && <View style={styles.cardShadow} />}
+        {!isLiteMode && Platform.OS !== 'android' && <View style={styles.cardShadow} />}
         <View style={[styles.likedBanner, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}>
           <View style={styles.likedBannerIcon}>
             <Heart size={28} color={colors.rust} fill={colors.rust} />
@@ -1270,7 +1385,7 @@ function LibraryScreen({
         activeOpacity={0.9}
         onPress={onNavigateOffline}
       >
-        {!isLiteMode && <View style={styles.cardShadow} />}
+        {!isLiteMode && Platform.OS !== 'android' && <View style={styles.cardShadow} />}
         <View style={[styles.likedBanner, !isDark ? { backgroundColor: '#ede5d3', borderColor: '#0b1110' } : { backgroundColor: '#162e2a' }]}>
           <View style={[styles.likedBannerIcon, { backgroundColor: colors.teal }]}>
             <Download size={24} color={colors.ink} />
@@ -1318,8 +1433,17 @@ function LibraryScreen({
       <View style={[styles.header, !isDark && styles.headerLight]}>
         {selectedView ? (
           <View style={styles.detailHeaderRow}>
-            <TouchableOpacity onPress={() => setSelectedView(null)} style={styles.backBtn}>
-              <ArrowLeft size={18} color={colors.ink} />
+            <TouchableOpacity
+              onPress={() => setSelectedView(null)}
+              style={[
+                styles.backBtn,
+                {
+                  backgroundColor: isDark ? '#141d1b' : '#ede5d3',
+                  borderColor: isDark ? '#27272a' : colors.ink,
+                }
+              ]}
+            >
+              <ArrowLeft size={18} color={isDark ? '#e4e4e7' : colors.ink} />
             </TouchableOpacity>
             <View style={{ flex: 1, marginLeft: 10 }}>
               <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]} numberOfLines={1}>
@@ -1356,11 +1480,13 @@ function LibraryScreen({
           data={selectedView === 'liked' ? likedTracks : activePlaylistTracks}
           keyExtractor={(item, idx) => String(item._id || item.id || idx)}
           renderItem={renderTrackItem}
+          scrollEnabled={isReordering ? draggingIdx === null : true}
+          extraData={[isReordering, draggingIdx, hoverIdx]}
           ListHeaderComponent={
             selectedView === 'liked' ? (
               <View>
                 <View style={styles.likedHeroCard}>
-                  {!isLiteMode && <View style={styles.hardShadow} />}
+                  {!isLiteMode && Platform.OS !== 'android' && <View style={styles.hardShadow} />}
                   <View style={[styles.likedHero, !isDark && styles.likedHeroLight]}>
                     <View style={styles.heartBigBox}>
                       <Heart size={32} color={colors.rust} fill={colors.rust} />
@@ -1414,7 +1540,7 @@ function LibraryScreen({
             ) : (
               <View>
                 <View style={styles.playlistHeroCard}>
-                  {!isLiteMode && <View style={styles.hardShadow} />}
+                  {!isLiteMode && Platform.OS !== 'android' && <View style={styles.hardShadow} />}
                   <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
                     <View style={styles.playlistBigBox}>
                       <View style={StyleSheet.absoluteFillObject}>
@@ -1437,89 +1563,20 @@ function LibraryScreen({
                       ) : null}
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <CassetteTag
-                            label={(!isSelectedPlQuran && isMixActive) ? (isRTL ? "🎛️ مكس DJ" : "🎛️ DJ MIX") : (isSelectedPlQuran ? (isRTL ? "قائمة قرآن" : "QURAN PLAYLIST") : (isRTL ? "قائمة تشغيل" : "CRATE PLAYLIST"))}
-                            bg={!isDark ? '#0b1110' : colors.ink}
-                            textColor={(!isSelectedPlQuran && isMixActive) ? '#f59e0b' : colors.tealLight}
-                          />
-                          <TouchableOpacity
-                            style={[
-                              styles.visibilityHeroPill,
-                              selectedView.isPublic !== false ? styles.visibilityHeroPillPublic : styles.visibilityHeroPillPrivate
-                            ]}
-                            onPress={handleToggleCurrentPlaylistVisibility}
-                            disabled={isTogglingVisibility}
-                            activeOpacity={0.7}
-                          >
-                            {isTogglingVisibility ? (
-                              <ActivityIndicator size="small" color={selectedView.isPublic !== false ? '#17a398' : '#9ca3af'} />
-                            ) : selectedView.isPublic !== false ? (
-                              <>
-                                <Globe size={11} color="#17a398" />
-                                <Text style={[styles.visibilityHeroPillText, { color: '#17a398' }]}>
-                                  {isRTL ? 'عام' : 'PUBLIC'}
-                                </Text>
-                              </>
-                            ) : (
-                              <>
-                                <Lock size={11} color="#9ca3af" />
-                                <Text style={[styles.visibilityHeroPillText, { color: '#9ca3af' }]}>
-                                  {isRTL ? 'خاص' : 'PRIVATE'}
-                                </Text>
-                              </>
-                            )}
-                          </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity
-                          style={[styles.editHeroPill, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}
-                          onPress={() => openEditPlaylist(selectedView)}
-                          activeOpacity={0.7}
-                        >
-                          <Edit3 size={11} color={!isDark ? '#082621' : colors.mint} />
-                          <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>
-                            {isRTL ? 'تعديل' : 'EDIT'}
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[
-                            styles.editHeroPill,
-                            !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' },
-                            isReordering && { backgroundColor: '#f59e0b', borderColor: '#000000' }
-                          ]}
-                          onPress={() => setIsReordering(!isReordering)}
-                          activeOpacity={0.7}
-                        >
-                          {isReordering ? (
-                            <>
-                              <Check size={11} color="#000000" />
-                              <Text style={[styles.editHeroPillText, { color: '#000000', fontWeight: 'bold' }]}>
-                                {isRTL ? 'تم' : 'DONE'}
-                              </Text>
-                            </>
-                          ) : (
-                            <>
-                              <Sliders size={11} color={!isDark ? '#082621' : colors.mint} />
-                              <Text style={[styles.editHeroPillText, !isDark && { color: '#082621' }]}>
-                                {isRTL ? 'ترتيب' : 'REORDER'}
-                              </Text>
-                            </>
-                          )}
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.editHeroPill, { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)' }]}
-                          onPress={() => handleDeleteCurrentPlaylist(selectedView)}
-                          activeOpacity={0.7}
-                        >
-                          <Trash2 size={11} color="#ef4444" />
-                          <Text style={[styles.editHeroPillText, { color: '#ef4444' }]}>
-                            {isRTL ? 'حذف' : 'DELETE'}
-                          </Text>
-                        </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <CassetteTag
+                          label={(!isSelectedPlQuran && isMixActive) ? (isRTL ? "🎛️ مكس DJ" : "🎛️ DJ MIX") : (isSelectedPlQuran ? (isRTL ? "قائمة قرآن" : "QURAN PLAYLIST") : (isRTL ? "قائمة تشغيل" : "PLAYLIST"))}
+                          bg={!isDark ? '#0b1110' : colors.ink}
+                          textColor={(!isSelectedPlQuran && isMixActive) ? '#f59e0b' : colors.tealLight}
+                        />
+                        {selectedView.isPublic === false ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }}>
+                            <Lock size={10} color={isDark ? '#9ca3af' : '#6b7280'} />
+                            <Text style={{ fontSize: 9, fontFamily: 'monospace', fontWeight: '700', color: isDark ? '#9ca3af' : '#6b7280' }}>
+                              {isRTL ? 'خاص' : 'PRIVATE'}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text style={[styles.playlistHeroTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }]}>{selectedView.name}</Text>
                       <Text style={[styles.playlistHeroSub, !isDark && { color: '#57534e' }, isRTL && { textAlign: 'right' }]}>
@@ -1532,41 +1589,26 @@ function LibraryScreen({
                         >
                           <Play size={14} color={colors.ink} fill={colors.ink} />
                           <Text style={styles.playHeroBtnText}>
-                            {(!isSelectedPlQuran && selectedView.isMix) ? (isRTL ? "تشغيل مكس DJ" : "PLAY DJ MIX") : (isRTL ? "تشغيل" : "PLAY")}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.shuffleHeroBtn}
-                          onPress={() => handlePlayPlaylist(selectedView, true)}
-                        >
-                          <Shuffle size={14} color={colors.paper} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.queueHeroBtn, !isDark && { backgroundColor: '#e6f7f5', borderColor: '#17a398' }]}
-                          onPress={handleSetPlaylistAsQueue}
-                          activeOpacity={0.8}
-                        >
-                          <ListPlus size={13} color="#17a398" />
-                          <Text style={styles.queueHeroBtnText}>{isRTL ? 'إضافة للانتظار' : 'QUEUE'}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.downloadHeroBtn, isDownloadingAll && { opacity: 0.7 }]}
-                          onPress={handleDownloadAllPlaylist}
-                          disabled={isDownloadingAll}
-                          activeOpacity={0.8}
-                        >
-                          {isDownloadingAll ? (
-                            <ActivityIndicator size="small" color={colors.ink} />
-                          ) : (
-                            <Download size={13} color={colors.ink} />
-                          )}
-                          <Text style={styles.downloadHeroBtnText}>
-                            {isDownloadingAll ? `${downloadProgress.done}/${downloadProgress.total}` : (isRTL ? 'تنزيل الكل' : 'DOWNLOAD ALL')}
+                            {(!isSelectedPlQuran && (selectedView.isMix || isMixActive)) ? (isRTL ? "تشغيل مكس DJ" : "PLAY DJ MIX") : (isRTL ? "تشغيل" : "PLAY")}
                           </Text>
                         </TouchableOpacity>
 
-                        {/* Mix Toggle Button (Web Parity) */}
-                        {!isSelectedPlQuran && activePlaylistTracks.length > 1 && (
+                        <TouchableOpacity
+                          style={[
+                            styles.moreHeroBtn,
+                            {
+                              backgroundColor: isDark ? '#141d1b' : '#ede5d3',
+                              borderColor: isDark ? '#27272a' : colors.ink,
+                            }
+                          ]}
+                          onPress={() => setIsActionMenuOpen(true)}
+                          activeOpacity={0.7}
+                        >
+                          <MoreVertical size={16} color={isDark ? '#e4e4e7' : colors.ink} />
+                        </TouchableOpacity>
+
+                        {/* Mix Toggle Button (Only when playlist is DJ MIX or mix active) */}
+                        {!isSelectedPlQuran && (selectedView.isMix || isMixActive) && activePlaylistTracks.length > 1 && (
                           <TouchableOpacity
                             style={[
                               styles.mixHeroBtn,
@@ -1585,21 +1627,26 @@ function LibraryScreen({
                           </TouchableOpacity>
                         )}
 
-                        {/* Auto-Mix All Button (Web Parity) */}
-                        {!isSelectedPlQuran && isMixActive && activePlaylistTracks.length > 1 && (
+                        {/* Downloading Progress Indicator */}
+                        {isDownloadingAll && (
+                          <View style={[styles.downloadProgressBadge, { backgroundColor: isDark ? '#141d1b' : '#ede5d3', borderColor: isDark ? '#27272a' : colors.ink }]}>
+                            <ActivityIndicator size="small" color="#17a398" />
+                            <Text style={[styles.downloadProgressText, { color: isDark ? '#17a398' : '#0f756d' }]}>
+                              {downloadProgress.done}/{downloadProgress.total}
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* Reordering Done Button */}
+                        {isReordering && (
                           <TouchableOpacity
-                            style={styles.autoMixHeroBtn}
-                            onPress={handleAutoMixAll}
-                            disabled={isAutoMixingAll}
-                            activeOpacity={0.8}
+                            style={styles.reorderDoneBtn}
+                            onPress={() => setIsReordering(false)}
+                            activeOpacity={0.7}
                           >
-                            {isAutoMixingAll ? (
-                              <ActivityIndicator size="small" color="#10b981" />
-                            ) : (
-                              <Wand2 size={11} color="#10b981" />
-                            )}
-                            <Text style={styles.autoMixHeroBtnText}>
-                              {isAutoMixingAll ? (isRTL ? 'جاري الدمج...' : 'Mixing...') : (isRTL ? 'دمج تلقائي للكل' : 'Auto-Mix All')}
+                            <Check size={12} color="#000000" strokeWidth={3} />
+                            <Text style={styles.reorderDoneBtnText}>
+                              {isRTL ? 'تم' : 'DONE'}
                             </Text>
                           </TouchableOpacity>
                         )}
@@ -1619,7 +1666,7 @@ function LibraryScreen({
                   <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { paddingVertical: 24 }]}>
                     <Disc size={36} color={colors.mint} />
                     <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }]}>
-                      {isRTL ? 'قائمة التشغيل هذه فارغة' : 'This crate is empty'}
+                      {isRTL ? 'قائمة التشغيل هذه فارغة' : 'This playlist is empty'}
                     </Text>
                     <Text style={[styles.emptySub, !isDark && { color: '#57534e' }, isRTL && { textAlign: 'center' }]}>
                       {isRTL ? 'ابحث أدناه أو اختر من ترشيحات الذكاء الاصطناعي لإضافة أغانٍ فوراً!' : 'Search below or pick from AI recommendations to add songs instantly!'}
@@ -1666,7 +1713,7 @@ function LibraryScreen({
                   <Search size={14} color="#6b7280" />
                   <TextInput
                     style={[styles.searchAddInput, rtlTextStyle]}
-                    placeholder={isRTL ? 'ابحث عن مقاطع لإضافتها للقائمة...' : 'Search songs to add to this crate...'}
+                    placeholder={isRTL ? 'ابحث عن مقاطع لإضافتها للقائمة...' : 'Search songs to add to this playlist...'}
                     placeholderTextColor="#6b7280"
                     value={songSearchQuery}
                     onChangeText={setSongSearchQuery}
@@ -1697,10 +1744,10 @@ function LibraryScreen({
               </View>
             ) : <View style={{ height: 32 }} />
           }
-          initialNumToRender={isLiteMode ? 6 : 8}
-          maxToRenderPerBatch={isLiteMode ? 4 : 6}
-          windowSize={5}
-          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          updateCellsBatchingPeriod={30}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -1725,10 +1772,10 @@ function LibraryScreen({
           columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={isLiteMode ? 6 : 8}
-          maxToRenderPerBatch={isLiteMode ? 4 : 6}
-          windowSize={5}
-          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          updateCellsBatchingPeriod={30}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             <RefreshControl
@@ -1750,10 +1797,13 @@ function LibraryScreen({
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: isDark ? '#111a18' : '#fdfbf7' }]}>
-            <View style={styles.modalHeaderRow}>
+          <View
+            style={[styles.modalContent, { backgroundColor: isDark ? '#111a18' : '#fdfbf7', borderColor: isDark ? '#27272a' : colors.ink }]}
+            renderToHardwareTextureAndroid={true}
+          >
+            <View style={[styles.modalHeaderRow, { borderBottomColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
               <Text style={[styles.modalTitle, { color: isDark ? colors.paper : colors.ink }, rtlTextStyle]}>
-                {isRTL ? 'تعديل قائمة التشغيل' : 'EDIT CRATE'}
+                {isRTL ? 'تعديل قائمة التشغيل' : 'EDIT PLAYLIST'}
               </Text>
               <TouchableOpacity onPress={() => setIsEditModalOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                 <X size={20} color={isDark ? colors.paper : colors.ink} />
@@ -1762,13 +1812,14 @@ function LibraryScreen({
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
               {/* Cover Preview & Pick Row */}
-              <View style={styles.editCoverRow}>
-                <View style={styles.editCoverPreview}>
+              <View style={[styles.editCoverRow, { backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.04)', borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
+                <View style={[styles.editCoverPreview, { backgroundColor: isDark ? '#0c1815' : '#ede5d3', borderColor: isDark ? '#27272a' : colors.ink }]}>
                   {editCover ? (
                     <Image
                       source={{ uri: normalizeCoverUri(editCover) }}
                       style={{ width: '100%', height: '100%', borderRadius: 8 }}
                       resizeMode="cover"
+                      fadeDuration={0}
                     />
                   ) : (
                     <Disc size={30} color={colors.mint} />
@@ -1827,8 +1878,17 @@ function LibraryScreen({
                   value={editName}
                   onChangeText={setEditName}
                   placeholder={isRTL ? 'مثال: أغانيا المفضلة' : 'e.g. My Favorite Tracks'}
-                  placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, isRTL && { textAlign: 'right' }, rtlTextStyle]}
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: isDark ? '#08110f' : '#ffffff',
+                      color: isDark ? colors.paper : colors.ink,
+                      borderColor: isDark ? '#27272a' : '#d1d5db',
+                    },
+                    isRTL && { textAlign: 'right' },
+                    rtlTextStyle,
+                  ]}
                 />
               </View>
 
@@ -1841,8 +1901,17 @@ function LibraryScreen({
                   value={editDesc}
                   onChangeText={setEditDesc}
                   placeholder={isRTL ? 'اكتب وصفاً لهذه القائمة...' : 'Describe this collection...'}
-                  placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, isRTL && { textAlign: 'right' }, rtlTextStyle]}
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: isDark ? '#08110f' : '#ffffff',
+                      color: isDark ? colors.paper : colors.ink,
+                      borderColor: isDark ? '#27272a' : '#d1d5db',
+                    },
+                    isRTL && { textAlign: 'right' },
+                    rtlTextStyle,
+                  ]}
                 />
               </View>
 
@@ -1855,8 +1924,16 @@ function LibraryScreen({
                   value={editCover.startsWith('file://') ? '' : editCover}
                   onChangeText={setEditCover}
                   placeholder="https://images... / direct image link"
-                  placeholderTextColor="#6b7280"
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#08110f' : '#ffffff', color: isDark ? colors.paper : colors.ink }, rtlTextStyle]}
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                  style={[
+                    styles.modalInput,
+                    {
+                      backgroundColor: isDark ? '#08110f' : '#ffffff',
+                      color: isDark ? colors.paper : colors.ink,
+                      borderColor: isDark ? '#27272a' : '#d1d5db',
+                    },
+                    rtlTextStyle,
+                  ]}
                   autoCapitalize="none"
                 />
               </View>
@@ -1874,8 +1951,8 @@ function LibraryScreen({
                     padding: 12,
                     borderRadius: 8,
                     borderWidth: 1.5,
-                    borderColor: editIsPublic ? '#17a398' : '#374151',
-                    backgroundColor: editIsPublic ? 'rgba(23,163,152,0.12)' : 'rgba(55,65,81,0.2)',
+                    borderColor: editIsPublic ? '#17a398' : (isDark ? '#374151' : '#d1d5db'),
+                    backgroundColor: editIsPublic ? 'rgba(23,163,152,0.12)' : (isDark ? 'rgba(55,65,81,0.2)' : 'rgba(0,0,0,0.04)'),
                   }}
                   onPress={() => setEditIsPublic(!editIsPublic)}
                   activeOpacity={0.8}
@@ -1884,13 +1961,13 @@ function LibraryScreen({
                     {editIsPublic ? (
                       <Globe size={18} color="#17a398" />
                     ) : (
-                      <Lock size={18} color="#9ca3af" />
+                      <Lock size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
                     )}
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontWeight: '900', color: editIsPublic ? '#17a398' : '#e2e8f0', fontSize: 13, fontFamily: 'monospace' }}>
+                      <Text style={{ fontWeight: '900', color: editIsPublic ? '#17a398' : (isDark ? '#e2e8f0' : colors.ink), fontSize: 13, fontFamily: 'monospace' }}>
                         {isRTL ? (editIsPublic ? 'قائمة عامة' : 'قائمة خاصة') : (editIsPublic ? 'PUBLIC PLAYLIST' : 'PRIVATE PLAYLIST')}
                       </Text>
-                      <Text style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
+                      <Text style={{ fontSize: 10, color: isDark ? '#9ca3af' : '#6b7280', marginTop: 2 }}>
                         {isRTL
                           ? (editIsPublic ? 'مرئية للمستمعين الآخرين وتظهر في البحث' : 'مرئية لك فقط في مكتبتك')
                           : (editIsPublic ? 'Visible to other listeners & appears in search' : 'Only visible to you in your library')}
@@ -1899,7 +1976,7 @@ function LibraryScreen({
                   </View>
                   <View style={{
                     width: 22, height: 22, borderRadius: 11, borderWidth: 2,
-                    borderColor: editIsPublic ? '#17a398' : '#6b7280',
+                    borderColor: editIsPublic ? '#17a398' : (isDark ? '#6b7280' : '#9ca3af'),
                     backgroundColor: editIsPublic ? '#17a398' : 'transparent',
                     alignItems: 'center', justifyContent: 'center'
                   }}>
@@ -1910,7 +1987,7 @@ function LibraryScreen({
             </ScrollView>
 
             {/* Modal Actions */}
-            <View style={styles.modalActionsRow}>
+            <View style={[styles.modalActionsRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}>
               <TouchableOpacity
                 style={[styles.modalCancelBtn, { borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                 onPress={() => handleDeleteCurrentPlaylist(selectedView)}
@@ -1923,11 +2000,17 @@ function LibraryScreen({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.modalCancelBtn}
+                style={[
+                  styles.modalCancelBtn,
+                  {
+                    backgroundColor: isDark ? '#1f2937' : '#ede5d3',
+                    borderColor: isDark ? '#27272a' : colors.ink,
+                  }
+                ]}
                 onPress={() => setIsEditModalOpen(false)}
                 activeOpacity={0.8}
               >
-                <Text style={styles.modalCancelBtnText}>
+                <Text style={[styles.modalCancelBtnText, { color: isDark ? colors.paper : colors.ink }]}>
                   {isRTL ? 'إلغاء' : 'CANCEL'}
                 </Text>
               </TouchableOpacity>
@@ -1944,7 +2027,7 @@ function LibraryScreen({
                   <>
                     <Check size={14} color={colors.ink} strokeWidth={2.5} />
                     <Text style={styles.modalSaveBtnText}>
-                      {isRTL ? 'حفظ التعديلات' : 'SAVE CRATE'}
+                      {isRTL ? 'حفظ التعديلات' : 'SAVE PLAYLIST'}
                     </Text>
                   </>
                 )}
@@ -1954,6 +2037,42 @@ function LibraryScreen({
         </View>
       </Modal>
       )}
+
+      {/* Playlist Header 3-Dots Action Menu */}
+      <PlaylistHeaderActionMenu
+        visible={isActionMenuOpen}
+        onClose={() => setIsActionMenuOpen(false)}
+        playlist={selectedView}
+        isOwner={true}
+        onEdit={() => {
+          setIsActionMenuOpen(false);
+          openEditPlaylist(selectedView);
+        }}
+        onDelete={() => {
+          setIsActionMenuOpen(false);
+          handleDeleteCurrentPlaylist(selectedView);
+        }}
+        onTogglePrivacy={handleToggleCurrentPlaylistVisibility}
+        isTogglingPrivacy={isTogglingVisibility}
+        onQueueAll={() => {
+          setIsActionMenuOpen(false);
+          handleSetPlaylistAsQueue();
+        }}
+        onDownloadAll={() => {
+          setIsActionMenuOpen(false);
+          handleDownloadAllPlaylist();
+        }}
+        isDownloadingAll={isDownloadingAll}
+        downloadStats={downloadProgress}
+        canBeMix={!isSelectedPlQuran && activePlaylistTracks.length > 1}
+        isMixActive={isMixActive}
+        onToggleMix={handleToggleMix}
+        isReordering={isReordering}
+        onToggleReorder={() => {
+          setIsActionMenuOpen(false);
+          setIsReordering(prev => !prev);
+        }}
+      />
       {/* Rivo MiniMixer Sheet Modal */}
       {Boolean(activeMixerPair) && (
       <MiniMixerModal
@@ -2112,6 +2231,7 @@ const styles = StyleSheet.create({
     bottom: -4,
     backgroundColor: colors.tealDark,
     borderRadius: 10,
+    ...(Platform.OS === 'android' ? { display: 'none' } : {}),
   },
   likedBanner: {
     flexDirection: 'row',
@@ -2246,6 +2366,7 @@ const styles = StyleSheet.create({
     bottom: -4,
     backgroundColor: colors.tealDark,
     borderRadius: 10,
+    ...(Platform.OS === 'android' ? { display: 'none' } : {}),
   },
   likedHero: {
     flexDirection: 'row',
@@ -2472,6 +2593,60 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontSize: 10,
     color: '#10b981',
+  },
+  moreHeroBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1.5,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  downloadProgressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderWidth: 1.5,
+    borderRadius: 6,
+    gap: 6,
+  },
+  downloadProgressText: {
+    fontFamily: 'monospace',
+    fontWeight: '800',
+    fontSize: 10,
+  },
+  reorderDoneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f59e0b',
+    borderWidth: 1.5,
+    borderColor: '#000000',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 4,
+  },
+  reorderDoneBtnText: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 10,
+    color: '#000000',
+  },
+  dragHandle: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dropIndicatorBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 3,
+    borderRadius: 1.5,
+    zIndex: 10,
   },
   modalOverlay: {
     flex: 1,

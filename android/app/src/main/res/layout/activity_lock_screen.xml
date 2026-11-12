@@ -106,10 +106,13 @@
 
         <!-- Center Viewport: Album Artwork with CardView -->
         <FrameLayout
+            android:id="@+id/lock_cover_container"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:gravity="center">
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true">
 
             <androidx.cardview.widget.CardView
                 android:layout_width="240dp"
@@ -355,7 +358,7 @@
                     android:text="LYRICS"
                     android:textSize="13sp"
                     android:textStyle="bold"
-                    android:textColor="#2DD4BF"
+                    android:textColor="#10B981"
                     android:letterSpacing="0.08" />
 
                 <TextView

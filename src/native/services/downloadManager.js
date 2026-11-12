@@ -31,6 +31,7 @@ export {
   getStorageLocationInfo,
   updateDownloadedTrackLyrics,
   exportTrackAudioFile,
+  exportTracksBatch,
   importAudioFolderFromDevice,
   importLocalAudioFiles,
   TRACKS_DIR,
@@ -437,3 +438,4 @@ export const removeDownloadedTracksBatch = async (tracksOrIds = []) => {
   await saveDownloadedTracks(remaining);
   return remaining;
 };
+

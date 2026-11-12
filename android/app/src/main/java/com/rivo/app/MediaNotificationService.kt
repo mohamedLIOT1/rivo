@@ -20,6 +20,7 @@ import android.os.PowerManager
 import android.os.SystemClock
 import android.provider.Settings
 import android.support.v4.media.session.MediaSessionCompat
+import android.view.KeyEvent
 
 class MediaNotificationService : Service() {
 
@@ -247,10 +248,28 @@ class MediaNotificationService : Service() {
                     MediaControlsModule.sendEvent("seek:${pos / 1000.0}")
                     notifyLockScreen()
                 }
+                override fun onMediaButtonEvent(mediaButtonEvent: Intent?): Boolean {
+                    val keyEvent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        mediaButtonEvent?.getParcelableExtra(Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        mediaButtonEvent?.getParcelableExtra(Intent.EXTRA_KEY_EVENT)
+                    }
+                    if (keyEvent != null && keyEvent.action == KeyEvent.ACTION_DOWN) {
+                        when (keyEvent.keyCode) {
+                            KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_HEADSETHOOK -> {
+                                dispatchMediaAction("play_pause")
+                                return true
+                            }
+                        }
+                    }
+                    return super.onMediaButtonEvent(mediaButtonEvent)
+                }
                 override fun onCustomAction(action: String?, extras: Bundle?) {
                     when (action) {
                         ACTION_LIKE, "like" -> dispatchMediaAction("like")
                         ACTION_REPEAT, "repeat" -> dispatchMediaAction("repeat")
+                        ACTION_PLAY_PAUSE, "play_pause", "toggle" -> dispatchMediaAction("play_pause")
                         else -> if (!action.isNullOrBlank()) dispatchMediaAction(action)
                     }
                 }
@@ -285,7 +304,7 @@ class MediaNotificationService : Service() {
             }
             ACTION_PLAY -> dispatchMediaAction("play")
             ACTION_PAUSE -> dispatchMediaAction("pause")
-            ACTION_PLAY_PAUSE -> dispatchMediaAction(if (isPlaying) "pause" else "play")
+            ACTION_PLAY_PAUSE -> dispatchMediaAction("play_pause")
             ACTION_PREV -> dispatchMediaAction("prev")
             ACTION_NEXT -> dispatchMediaAction("next")
             ACTION_REPEAT -> dispatchMediaAction("repeat")
@@ -371,6 +390,21 @@ class MediaNotificationService : Service() {
                 isPlaying = false
                 wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
                 releasePlaybackLocks()
+            }
+            "play_pause", "toggle" -> {
+                val willPlay = !isPlaying
+                isPlaying = willPlay
+                if (willPlay) {
+                    lastPositionUpdateElapsedRealtime = now
+                    wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
+                    acquirePlaybackLocks()
+                    startForegroundWithNotification()
+                } else {
+                    currentPositionMs = getEstimatedPositionMs()
+                    lastPositionUpdateElapsedRealtime = now
+                    wakeLockHandler.removeCallbacks(wakeLockReleaseRunnable)
+                    releasePlaybackLocks()
+                }
             }
             "repeat" -> {
                 repeatMode = when (repeatMode) { "off" -> "all"; "all" -> "one"; else -> "off" }

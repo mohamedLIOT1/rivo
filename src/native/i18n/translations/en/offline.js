@@ -36,6 +36,7 @@ export default {
   selectAll: 'Select All',
   deselectAll: 'Deselect All',
   queueSelected: 'Queue',
+  exportSelected: 'Export',
   deleteSelected: 'Delete',
   deleteConfirmTitle: 'Delete Offline Tracks',
   deleteConfirmDesc: 'Delete {count} selected tracks from device storage?',

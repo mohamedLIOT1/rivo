@@ -32,6 +32,7 @@ class LockScreenActivity : Activity() {
             activeInstance?.runOnUiThread {
                 activeInstance?.updateLyricsUi()
                 activeInstance?.lyricsSheet?.refresh()
+                activeInstance?.updateLyricsButtonState()
             }
         }
 
@@ -190,6 +191,7 @@ class LockScreenActivity : Activity() {
 
         txtTitle?.isSelected = true
 
+        // Vertical swipe anywhere to dismiss/unlock
         gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onDown(e: MotionEvent): Boolean = true
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
@@ -204,13 +206,115 @@ class LockScreenActivity : Activity() {
                 return false
             }
         })
+
+        // Horizontal swipe on cover art area:
+        // Swipe Left -> Full Lyrics Sheet
+        // Swipe Right -> Upcoming Queue Sheet
+        val coverContainer = findViewById<View>(R.id.lock_cover_container) ?: imgCoverArt
+
+        var coverTouchDownX = 0f
+        var coverTouchDownY = 0f
+        var flingHandled = false
+
+        val coverGestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 70
+            private val SWIPE_VELOCITY_THRESHOLD = 100
+
+            override fun onDown(e: MotionEvent): Boolean = true
+
+            override fun onFling(
+                e1: MotionEvent?,
+                e2: MotionEvent,
+                velocityX: Float,
+                velocityY: Float
+            ): Boolean {
+                if (e1 == null) return false
+                val diffX = e2.x - e1.x
+                val diffY = e2.y - e1.y
+
+                if (abs(diffX) > abs(diffY) && abs(diffX) > SWIPE_THRESHOLD && abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    flingHandled = true
+                    if (diffX < 0) {
+                        // Swipe Left: Show Lyrics
+                        queueSheet?.hide()
+                        lyricsSheet?.show()
+                    } else {
+                        // Swipe Right: Show Queue
+                        lyricsSheet?.hide()
+                        queueSheet?.show()
+                    }
+                    return true
+                } else if (abs(diffY) > abs(diffX) && abs(diffY) > SWIPE_THRESHOLD && abs(velocityY) > SWIPE_VELOCITY_THRESHOLD) {
+                    flingHandled = true
+                    dismissAndUnlock()
+                    return true
+                }
+                return false
+            }
+        })
+
+        val coverTouchListener = View.OnTouchListener { v, event ->
+            if (queueSheet?.isOpen() == true || lyricsSheet?.isOpen() == true) {
+                return@OnTouchListener false
+            }
+            coverGestureDetector.onTouchEvent(event)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    flingHandled = false
+                    coverTouchDownX = event.x
+                    coverTouchDownY = event.y
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!flingHandled) {
+                        val diffX = event.x - coverTouchDownX
+                        val diffY = event.y - coverTouchDownY
+                        if (abs(diffX) > abs(diffY) * 1.3f && abs(diffX) > 80f) {
+                            if (diffX < 0) {
+                                queueSheet?.hide()
+                                lyricsSheet?.show()
+                            } else {
+                                lyricsSheet?.hide()
+                                queueSheet?.show()
+                            }
+                        } else if (diffY < -150f && abs(diffY) > abs(diffX) * 1.3f) {
+                            dismissAndUnlock()
+                        } else {
+                            v.performClick()
+                        }
+                    }
+                    true
+                }
+                else -> true
+            }
+        }
+
+        coverContainer?.setOnTouchListener(coverTouchListener)
+        imgCoverArt?.setOnTouchListener(coverTouchListener)
     }
 
     private fun setupListeners() {
         btnClose?.setOnClickListener { dismissAndUnlock() }
-        btnQueue?.setOnClickListener { lyricsSheet?.hide(); queueSheet?.show() }
-        btnLyrics?.setOnClickListener { queueSheet?.hide(); lyricsSheet?.show() }
-        txtLyrics?.setOnClickListener { queueSheet?.hide(); lyricsSheet?.show() }
+        btnQueue?.setOnClickListener {
+            lyricsSheet?.hide()
+            if (queueSheet?.isOpen() == true) {
+                queueSheet?.hide()
+            } else {
+                queueSheet?.show()
+            }
+        }
+        btnLyrics?.setOnClickListener {
+            queueSheet?.hide()
+            if (lyricsSheet?.isOpen() == true) {
+                lyricsSheet?.hide()
+            } else {
+                lyricsSheet?.show()
+            }
+        }
+        txtLyrics?.setOnClickListener {
+            queueSheet?.hide()
+            lyricsSheet?.show()
+        }
 
         btnPlayPause?.setOnClickListener {
             MediaNotificationService.dispatchMediaActionStatic(
@@ -258,6 +362,13 @@ class LockScreenActivity : Activity() {
         finish()
     }
 
+    private fun updateLyricsButtonState() {
+        val hasLyrics = LockScreenLyricsStore.currentLyrics.isNotEmpty()
+        btnLyrics?.setColorFilter(
+            if (hasLyrics) 0xFF10B981.toInt() else 0xCCFFFFFF.toInt()
+        )
+    }
+
     fun updateUi() {
         txtTitle?.text = MediaNotificationService.currentTitle
         txtArtist?.text = MediaNotificationService.currentArtist
@@ -288,6 +399,8 @@ class LockScreenActivity : Activity() {
             imgBgArt?.setImageResource(R.drawable.logo)
         }
 
+        lastLyricLine = null
+        updateLyricsButtonState()
         queueSheet?.refresh()
         lyricsSheet?.refresh()
         updateProgressUi()
@@ -311,13 +424,40 @@ class LockScreenActivity : Activity() {
     fun updateLyricsUi(pos: Long = MediaNotificationService.getEstimatedPositionMs()) {
         lyricsSheet?.updateActivePosition(pos)
 
-        // Keep lockscreen main view clean without cluttering inline lyrics under Artist Name;
-        // full synced lyrics open strictly on demand via top-right btn_lock_lyrics -> LockScreenLyricsSheet.
         val lyricView = txtLyrics ?: return
-        if (lyricView.visibility != View.GONE) {
-            lyricView.visibility = View.GONE
-            lyricView.text = ""
-            lastLyricLine = null
+        val activeLine = if (LockScreenLyricsStore.hasSyncedLyrics()) {
+            LockScreenLyricsStore.getActiveLyric(pos)
+        } else if (LockScreenLyricsStore.currentLyrics.isNotEmpty()) {
+            "Lyrics available • Tap to view"
+        } else {
+            null
+        }
+
+        if (activeLine.isNullOrBlank()) {
+            if (lyricView.visibility != View.GONE) {
+                lyricView.animate().cancel()
+                lyricView.animate()
+                    .alpha(0f)
+                    .setDuration(180L)
+                    .withEndAction {
+                        lyricView.visibility = View.GONE
+                        lyricView.text = ""
+                    }
+                    .start()
+                lastLyricLine = null
+            }
+            return
+        }
+
+        if (activeLine != lastLyricLine) {
+            lastLyricLine = activeLine
+            lyricView.text = activeLine
+            if (lyricView.visibility != View.VISIBLE) {
+                lyricView.alpha = 0f
+                lyricView.visibility = View.VISIBLE
+                lyricView.animate().cancel()
+                lyricView.animate().alpha(1f).setDuration(220L).start()
+            }
         }
     }
 

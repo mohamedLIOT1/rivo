@@ -554,6 +554,7 @@ export default function AlbumDetailModal({
           transform: [{ translateY: slideAnim }],
         },
       ]}
+      renderToHardwareTextureAndroid={true}
     >
       <View style={[styles.container, !isDark && styles.containerLight]}>
         {/* Top Header Bar matching Image 3 */}
@@ -578,10 +579,10 @@ export default function AlbumDetailModal({
           showsVerticalScrollIndicator={false}
           data={filteredTracks}
           keyExtractor={(t, idx) => String(t._id || t.id || idx)}
-          initialNumToRender={Platform.OS === 'android' ? 5 : 8}
-          maxToRenderPerBatch={Platform.OS === 'android' ? 3 : 6}
-          windowSize={Platform.OS === 'android' ? 3 : 5}
-          updateCellsBatchingPeriod={50}
+          initialNumToRender={10}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          updateCellsBatchingPeriod={30}
           removeClippedSubviews={Platform.OS === 'android'}
           ListHeaderComponent={(
             <View>

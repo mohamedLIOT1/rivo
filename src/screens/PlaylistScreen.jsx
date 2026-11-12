@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Play, Pause, Shuffle, Heart, Plus, Minus, Search, ArrowLeft, Music, SlidersHorizontal, 
   Camera, Globe, Lock, Edit2, Loader2, Check, Trash2, X, Sliders, Wand2, 
   Sparkles, RefreshCw, Zap, Disc, ArrowRight, AlertTriangle, MoreVertical,
-  Download, CheckCircle2, CheckSquare, Square, ListPlus, FolderPlus
+  Download, CheckCircle2, CheckSquare, Square, ListPlus, FolderPlus, GripVertical
 } from 'lucide-react';
+import PlaylistActionMenu from '../components/playlist/PlaylistActionMenu';
 import { API_BASE_URL } from '../config';
 import MiniMixerModal from '../components/MiniMixerModal';
 import MixDownloadGate from '../components/MixDownloadGate';
@@ -617,13 +618,30 @@ export default function PlaylistScreen({
     return st;
   };
 
+  const [draggedTrackIdx, setDraggedTrackIdx] = useState(null);
+  const [dragOverTrackIdx, setDragOverTrackIdx] = useState(null);
+
+  const handleReorderTracks = useCallback(async (fromIdx, toIdx) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    const reordered = [...playlistTracks];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    const newTrackIds = reordered.map(t => String(t.id || t._id));
+    if (onUpdatePlaylist) {
+      onUpdatePlaylist({ ...playlist, trackIds: newTrackIds });
+    }
+    if (onToast) {
+      onToast(isRTL ? 'تم إعادة ترتيب القائمة' : 'Playlist reordered');
+    }
+  }, [playlistTracks, playlist, onUpdatePlaylist, onToast, isRTL]);
+
   const handleToggleMix = async () => {
     if (!canBeMix) return;
     const nextState = !isMixActive;
     setIsMixActive(nextState);
     if (nextState) {
       setIsMixMode?.(true);
-      if (Object.keys(transitions).length === 0 && playlistTracks.length > 1) {
+      if ((!playlist?.isMix || Object.keys(transitions).length === 0) && playlistTracks.length > 1) {
         handleAutoMixAll();
         return;
       } else {
@@ -1025,66 +1043,14 @@ export default function PlaylistScreen({
                 {isSiteAlbum ? (isQuran ? (t?.('library.surahCollection') || 'SURAH COLLECTION') : (t?.('library.officialAlbum') || 'OFFICIAL ALBUM')) : playlist.isLikedSongs ? (isQuran ? (t?.('library.favoriteSurahs') || 'FAVORITE SURAHS') : (t?.('library.likedSongs') || 'LIKED SONGS')) : (isQuran ? (t?.('library.quranPlaylist') || 'QURAN PLAYLIST') : (t?.('library.playlist') || 'PLAYLIST'))}
               </span>
 
-              {/* Public/Private Badge & Action Buttons (Hidden for Site Albums) */}
+              {/* Public/Private Badge (Hidden for Site Albums) */}
               {!playlist.isLikedSongs && !isSiteAlbum && (
-                isOwner ? (
-                  <>
-                    <button
-                      onClick={handleTogglePrivacy}
-                      disabled={isTogglingPrivacy}
-                      className={`brutal-btn flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
-                        isPublic 
-                          ? 'bg-[#26c4b7] text-[#082621]' 
-                          : 'bg-[#f59e0b] text-[#082621]'
-                      }`}
-                      title="Tap to toggle profile visibility"
-                    >
-                      {isTogglingPrivacy ? (
-                        <Loader2 size={11} className="animate-spin" />
-                      ) : isPublic ? (
-                        <><Globe size={11} /><span>PUBLIC</span></>
-                      ) : (
-                        <><Lock size={11} /><span>PRIVATE</span></>
-                      )}
-                    </button>
-
-                    {/* Edit Button */}
-                    <button
-                      onClick={() => {
-                        if (isSiteAlbum && openEditAlbumModal) {
-                          openEditAlbumModal(playlist);
-                        } else {
-                          setIsEditModalOpen(true);
-                        }
-                      }}
-                      className={`brutal-btn hidden sm:flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase brutal-border brutal-shadow-sm ${
-                        isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:bg-[#ded2bb]'
-                      }`}
-                      title={isSiteAlbum ? "Admin: Edit Album" : "Edit name & description"}
-                    >
-                      <Edit2 size={12} />
-                      <span>{isSiteAlbum ? "EDIT ALBUM" : "EDIT RECORD"}</span>
-                    </button>
-
-                    {/* Delete Button */}
-                    <button
-                      onClick={handleDelete}
-                      disabled={isDeleting}
-                      className="brutal-btn hidden sm:flex items-center gap-1.5 px-3 py-1 text-[11px] font-mono font-black uppercase bg-red-100 text-[#dc2626] brutal-border brutal-shadow-sm hover:bg-red-200 cursor-pointer"
-                      title={isSiteAlbum || playlist?.isAlbum ? "Delete album and all its tracks" : "Delete playlist"}
-                    >
-                      <Trash2 size={12} />
-                      <span>DISCARD</span>
-                    </button>
-                  </>
-                ) : (
-                  <span className={`flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-mono font-black uppercase brutal-border ${
-                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black'
-                  }`}>
-                    {isPublic ? <Globe size={11} /> : <Lock size={11} />}
-                    <span>{isPublic ? 'PUBLIC' : 'PRIVATE'}</span>
-                  </span>
-                )
+                <span className={`flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-[11px] font-mono font-black uppercase brutal-border ${
+                  isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black'
+                }`}>
+                  {isPublic ? <Globe size={11} /> : <Lock size={11} />}
+                  <span>{isPublic ? 'PUBLIC' : 'PRIVATE'}</span>
+                </span>
               )}
             </div>
 
@@ -1096,23 +1062,6 @@ export default function PlaylistScreen({
                   ? (isQuran ? (t?.('library.favoriteSurahs') || 'Favorite Surahs') : (t?.('library.likedSongs') || 'Liked Songs'))
                   : playlist.name}
               </h1>
-              {!playlist.isLikedSongs && isOwner && (
-                <button
-                  onClick={() => {
-                    if (isSiteAlbum && openEditAlbumModal) {
-                      openEditAlbumModal(playlist);
-                    } else {
-                      setIsEditModalOpen(true);
-                    }
-                  }}
-                  className={`p-1 transition-colors cursor-pointer shrink-0 ${
-                    isDark ? 'text-zinc-400 hover:text-white' : 'text-[#0b1110] hover:text-[#17a398]'
-                  }`}
-                  title={isSiteAlbum ? "Admin: Edit Album" : "Edit playlist name"}
-                >
-                  <Edit2 size={16} className="sm:w-5 sm:h-5" />
-                </button>
-              )}
             </div>
 
             {isSiteAlbum && playlist.artist && (
@@ -1207,37 +1156,37 @@ export default function PlaylistScreen({
       {/* ── Edit Playlist Modal ── */}
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg p-6 w-full max-w-md relative">
+          <div className={`${isDark ? 'bg-[#111a18] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'} brutal-border-thick brutal-shadow-lg p-6 w-full max-w-md relative`}>
             <button
               onClick={() => setIsEditModalOpen(false)}
-              className="absolute top-4 right-4 text-[#0b1110] hover:bg-[#ede5d3] p-1 brutal-border"
+              className={`absolute top-4 right-4 p-1 brutal-border ${isDark ? 'text-zinc-300 hover:bg-zinc-800 border-zinc-700' : 'text-[#0b1110] hover:bg-[#ede5d3] border-black'}`}
             >
               <X size={18} />
             </button>
-            <div className="flex items-center gap-2 mb-4 pb-2 border-b-2 border-[#0b1110]">
+            <div className={`flex items-center gap-2 mb-4 pb-2 border-b-2 ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>
               <div className="w-3 h-3 bg-[#17a398] brutal-border" />
-              <h3 className="text-lg font-mono font-black uppercase text-[#082621]">{isQuran ? 'Edit Quran Playlist Details' : 'Edit Playlist Details'}</h3>
+              <h3 className={`text-lg font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>{isQuran ? 'Edit Quran Playlist Details' : 'Edit Playlist Details'}</h3>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">{isQuran ? 'Collection / Playlist Name' : 'Playlist Name'}</label>
+                <label className={`block text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>{isQuran ? 'Collection / Playlist Name' : 'Playlist Name'}</label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-sm text-[#0b1110] font-sans font-bold focus:outline-none focus:bg-white"
+                  className={`w-full brutal-border px-3 py-2 text-sm font-sans font-bold focus:outline-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:bg-black' : 'bg-[#ede5d3] border-black text-[#0b1110] focus:bg-white'}`}
                   placeholder={isQuran ? "Collection name..." : "Playlist name..."}
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-mono font-black uppercase text-[#082621] mb-1">Description</label>
+                <label className={`block text-xs font-mono font-black uppercase mb-1 ${isDark ? 'text-zinc-300' : 'text-[#082621]'}`}>Description</label>
                 <textarea
                   value={editDesc}
                   onChange={(e) => setEditDesc(e.target.value)}
                   rows={3}
-                  className="w-full bg-[#ede5d3] brutal-border px-3 py-2 text-sm text-[#0b1110] font-sans font-medium focus:outline-none focus:bg-white resize-none"
+                  className={`w-full brutal-border px-3 py-2 text-sm font-sans font-medium focus:outline-none resize-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:bg-black' : 'bg-[#ede5d3] border-black text-[#0b1110] focus:bg-white'}`}
                   placeholder="Playlist description..."
                 />
               </div>
@@ -1246,20 +1195,22 @@ export default function PlaylistScreen({
                 <div
                   onClick={() => setEditIsMix(!editIsMix)}
                   className={`p-3 brutal-border flex items-center justify-between cursor-pointer transition-colors ${
-                    editIsMix ? 'bg-[#17a398]/20 border-[#17a398]' : 'bg-[#ede5d3]'
+                    editIsMix 
+                      ? 'bg-[#17a398]/20 border-[#17a398]' 
+                      : isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-[#ede5d3] border-black'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🎛️</span>
                     <div>
-                      <div className="text-xs font-mono font-black text-[#082621]">DJ MIX PLAYLIST</div>
-                      <div className="text-[10px] text-[#082621]/70">Seamless dual-buffer crossfading</div>
+                      <div className={`text-xs font-mono font-black ${isDark ? 'text-white' : 'text-[#082621]'}`}>DJ MIX PLAYLIST</div>
+                      <div className={`text-[10px] ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>Seamless dual-buffer crossfading</div>
                     </div>
                   </div>
                   <button
                     type="button"
                     className={`brutal-btn px-2.5 py-1 brutal-border text-[10px] font-mono font-black uppercase ${
-                      editIsMix ? 'bg-[#17a398] text-[#0b1110]' : 'bg-[#fdfbf7] text-[#082621]'
+                      editIsMix ? 'bg-[#17a398] text-[#0b1110]' : isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621]'
                     }`}
                   >
                     {editIsMix ? 'MIX ON' : 'OFF'}
@@ -1270,13 +1221,13 @@ export default function PlaylistScreen({
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   onClick={() => setIsEditModalOpen(false)}
-                  className="brutal-btn px-4 py-2 bg-[#ede5d3] brutal-border text-xs font-mono font-black uppercase text-[#0b1110]"
+                  className={`brutal-btn px-4 py-2 brutal-border text-xs font-mono font-black uppercase ${isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:bg-[#ded2bb]'}`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSaveDetails}
-                  className="brutal-btn px-5 py-2 bg-[#082621] text-[#26c4b7] brutal-border brutal-shadow-sm text-xs font-mono font-black uppercase hover:bg-[#0b1110]"
+                  className={`brutal-btn px-5 py-2 brutal-border brutal-shadow-sm text-xs font-mono font-black uppercase ${isDark ? 'bg-[#10b981] text-[#0b1110] hover:bg-emerald-400 border-black' : 'bg-[#082621] text-[#26c4b7] hover:bg-[#0b1110] border-black'}`}
                 >
                   Save Details
                 </button>
@@ -1323,27 +1274,25 @@ export default function PlaylistScreen({
             );
           })()}
 
-          <button
-            disabled={filteredPlaylistTracks.length === 0}
-            onClick={() => {
-              if (filteredPlaylistTracks.length === 0) return;
-              const shuffled = shuffleArray(filteredPlaylistTracks);
-              handlePlayPlaylistTrack(shuffled[0], shuffled);
+          {/* 3-Dots Playlist Action Menu */}
+          <PlaylistActionMenu
+            playlist={playlist}
+            isOwner={isOwner}
+            isAdmin={isSiteAlbum}
+            isDark={isDark}
+            isRTL={isRTL}
+            t={t}
+            onEdit={() => {
+              if (isSiteAlbum && openEditAlbumModal) {
+                openEditAlbumModal(playlist);
+              } else {
+                setIsEditModalOpen(true);
+              }
             }}
-            className={`brutal-btn w-10 h-10 sm:w-12 sm:h-12 brutal-border-thick brutal-shadow flex items-center justify-center transition-all shrink-0 ${
-              filteredPlaylistTracks.length > 0
-                ? 'bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer'
-                : 'bg-[#ded2bb] text-[#0b1110]/40 cursor-not-allowed'
-            }`}
-            title="Shuffle playlist"
-          >
-            <Shuffle size={18} className="text-[#0b1110] sm:w-5 sm:h-5" />
-          </button>
-
-          {/* Add entire playlist to queue or jam queue */}
-          <button
-            disabled={filteredPlaylistTracks.length === 0}
-            onClick={() => {
+            onDelete={handleDelete}
+            onTogglePrivacy={handleTogglePrivacy}
+            isTogglingPrivacy={isTogglingPrivacy}
+            onQueueAll={() => {
               if (filteredPlaylistTracks.length > 0) {
                 addToQueue?.(filteredPlaylistTracks);
                 if (onToast) {
@@ -1351,18 +1300,19 @@ export default function PlaylistScreen({
                 }
               }
             }}
-            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn flex items-center gap-1.5 sm:gap-2 transition-all shrink-0 ${
-              filteredPlaylistTracks.length > 0
-                ? isDark 
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border-zinc-700 cursor-pointer' 
-                  : 'bg-white hover:bg-[#ede5d3] text-black border-black cursor-pointer'
-                : 'opacity-40 cursor-not-allowed'
-            }`}
-            title={jamSession ? "Add playlist to Jam Queue" : "Add playlist to Queue"}
-          >
-            <ListPlus size={16} strokeWidth={2.5} className="text-[#26c4b7]" />
-            <span>{jamSession ? (t?.('library.addToJam') || 'ADD TO JAM') : (t?.('library.queuePlaylist') || 'QUEUE PLAYLIST')}</span>
-          </button>
+            onDownloadAll={() => {
+              if (playlistTracks.length > 0) {
+                downloadAllTracks?.(playlistTracks, playlist?.name || 'Playlist');
+              }
+            }}
+            isDownloadingAll={isBatchDownloading}
+            downloadStats={batchStats}
+            allDownloaded={playlistTracks.length > 0 && playlistTracks.every(t => t.downloaded)}
+            canBeMix={canBeMix}
+            isMixActive={isMixActive}
+            onToggleMix={handleToggleMix}
+            jamSession={jamSession}
+          />
 
           {/* Save to Library button (for other users' public playlists or albums) */}
           {!isUserPlaylist && !playlist?.isLikedSongs && (
@@ -1398,50 +1348,28 @@ export default function PlaylistScreen({
             </span>
           )}
 
-          {/* Download All / Cancel All Playlist Button */}
-          {playlistTracks.length > 0 && (
+          {/* Download progress active chip */}
+          {playlistTracks.length > 0 && isBatchDownloading && (
             <div className="flex items-center gap-2">
-              {isBatchDownloading ? (
-                <div className="flex items-center gap-2">
-                  <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm bg-amber-400 text-black flex items-center gap-2">
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>
-                      Downloading {batchStats.current + 1}/{batchStats.total}
-                    </span>
-                  </div>
-                  <button
-                    onClick={cancelAllDownloads}
-                    className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn bg-[#dc2626] hover:bg-red-600 text-white flex items-center gap-1.5 cursor-pointer transition-all"
-                    title="Cancel all playlist downloads"
-                  >
-                    <X size={14} strokeWidth={3} />
-                    <span>Cancel All</span>
-                  </button>
-                </div>
-              ) : playlistTracks.every(t => t.downloaded) ? (
-                <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm flex items-center gap-1.5 bg-emerald-500/10 text-emerald-500 border-emerald-500/30">
-                  <CheckCircle2 size={15} />
-                  <span>{isRTL ? 'تم التحميل بالكامل' : 'All Downloaded'}</span>
-                </div>
-              ) : (
-                <button
-                  onClick={() => downloadAllTracks?.(playlistTracks, playlist?.name || 'Playlist')}
-                  className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn cursor-pointer flex items-center gap-1.5 sm:gap-2 transition-all ${
-                    isDark 
-                      ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700 border-zinc-700' 
-                      : 'bg-white text-zinc-900 hover:bg-[#ede5d3] border-black'
-                  }`}
-                  title={isRTL ? "تحميل جميع المقاطع في هذه القائمة" : "Download all songs in this playlist one by one"}
-                >
-                  <Download size={14} strokeWidth={2.5} className="text-[#17a398]" />
-                  <span>{t?.('library.downloadAll') || 'Download All'} ({playlistTracks.filter(t => !t.downloaded).length})</span>
-                </button>
-              )}
+              <div className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm bg-amber-400 text-black flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                <span>
+                  Downloading {batchStats.current + 1}/{batchStats.total}
+                </span>
+              </div>
+              <button
+                onClick={cancelAllDownloads}
+                className="px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl font-display font-black text-xs brutal-border brutal-shadow-sm brutal-btn bg-[#dc2626] hover:bg-red-600 text-white flex items-center gap-1.5 cursor-pointer transition-all"
+                title="Cancel all playlist downloads"
+              >
+                <X size={14} strokeWidth={3} />
+                <span>Cancel All</span>
+              </button>
             </div>
           )}
 
-          {/* Rivo Mix Mode Toggle Button */}
-          {canBeMix && playlistTracks.length > 1 && (
+          {/* Rivo Mix Mode Toggle Button - ONLY shown if DJ Mix playlist */}
+          {canBeMix && (playlist?.isMix || isMixActive) && playlistTracks.length > 1 && (
             <div className="flex items-center gap-2">
               <button
                 onClick={handleToggleMix}
@@ -1457,24 +1385,6 @@ export default function PlaylistScreen({
                 <span>🎛️</span>
                 <span>{isMixActive ? 'Mix: ON' : 'Mix'}</span>
               </button>
-
-              {isMixActive && (
-                <>
-                  <button
-                    onClick={handleAutoMixAll}
-                    disabled={isAutoMixingAll}
-                    className={`px-3 py-2 sm:px-3.5 sm:py-2 rounded-xl text-xs font-mono font-bold brutal-border brutal-shadow-xs flex items-center gap-1.5 transition-all cursor-pointer ${
-                      isDark
-                        ? 'bg-zinc-900 hover:bg-zinc-800 text-emerald-400 border-zinc-700'
-                        : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-black'
-                    }`}
-                    title="Auto-mix all songs in this playlist with smart transitions"
-                  >
-                    <Wand2 size={13} className={isAutoMixingAll ? 'animate-spin' : ''} />
-                    <span>{isAutoMixingAll ? 'Mixing...' : 'Auto-Mix All'}</span>
-                  </button>
-                </>
-              )}
             </div>
           )}
 
@@ -1569,6 +1479,35 @@ export default function PlaylistScreen({
               return (
                 <React.Fragment key={track.id || track._id || i}>
                   <div
+                    draggable={Boolean(isOwner && !playlist?.isLikedSongs && !isSelectMode)}
+                    onDragStart={(e) => {
+                      if (!isOwner || playlist?.isLikedSongs || isSelectMode) return;
+                      e.dataTransfer.setData('text/plain', String(i));
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDraggedTrackIdx(i);
+                    }}
+                    onDragOver={(e) => {
+                      if (!isOwner || playlist?.isLikedSongs || isSelectMode) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (dragOverTrackIdx !== i) {
+                        setDragOverTrackIdx(i);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverTrackIdx === i) setDragOverTrackIdx(null);
+                    }}
+                    onDrop={(e) => {
+                      if (!isOwner || playlist?.isLikedSongs || isSelectMode) return;
+                      e.preventDefault();
+                      const raw = e.dataTransfer.getData('text/plain');
+                      const fromIdx = raw ? parseInt(raw, 10) : draggedTrackIdx;
+                      if (!isNaN(fromIdx) && fromIdx !== i) {
+                        handleReorderTracks(fromIdx, i);
+                      }
+                      setDraggedTrackIdx(null);
+                      setDragOverTrackIdx(null);
+                    }}
                     onClick={() => {
                       if (isSelectMode) {
                         toggleTrackSelect(track.id || track._id);
@@ -1576,7 +1515,9 @@ export default function PlaylistScreen({
                         handlePlayPlaylistTrack(track);
                       }
                     }}
-                    className={`grid grid-cols-12 items-center p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group ${
+                    className={`grid grid-cols-12 items-center p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-all cursor-pointer group ${
+                      dragOverTrackIdx === i ? 'border-t-4 border-t-[#17a398]' : ''
+                    } ${draggedTrackIdx === i ? 'opacity-40' : ''} ${
                       isSelected
                         ? isDark ? 'bg-[#17a398]/20 border-[#17a398]' : 'bg-[#17a398]/15 border-[#17a398]'
                         : isDark 
@@ -1600,7 +1541,12 @@ export default function PlaylistScreen({
                           <Check size={13} strokeWidth={3} className={isSelected ? 'text-[#0b1110]' : 'opacity-0'} />
                         </div>
                       ) : (
-                        String(i + 1).padStart(2, '0')
+                        <div className="flex items-center justify-center gap-0.5">
+                          {isOwner && !playlist?.isLikedSongs && (
+                            <GripVertical size={13} className="opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity cursor-grab text-[#17a398]" />
+                          )}
+                          <span>{String(i + 1).padStart(2, '0')}</span>
+                        </div>
                       )}
                     </span>
                     
@@ -1984,25 +1930,25 @@ export default function PlaylistScreen({
       {/* Duplicate Track Confirmation Modal */}
       {duplicateConfirmTrack && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 select-none">
-          <div className="bg-[#fdfbf7] brutal-border-thick brutal-shadow-lg p-6 w-full max-w-sm relative">
-            <div className="flex items-center justify-between pb-3 border-b-2 border-[#0b1110]">
+          <div className={`${isDark ? 'bg-[#111a18] border-zinc-700 text-white' : 'bg-[#fdfbf7] border-[#0b1110] text-[#082621]'} brutal-border-thick brutal-shadow-lg p-6 w-full max-w-sm relative`}>
+            <div className={`flex items-center justify-between pb-3 border-b-2 ${isDark ? 'border-zinc-700' : 'border-[#0b1110]'}`}>
               <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-amber-600" />
-                <h3 className="text-base font-mono font-black uppercase text-[#082621]">Already in Playlist</h3>
+                <AlertTriangle size={16} className="text-amber-500" />
+                <h3 className={`text-base font-mono font-black uppercase ${isDark ? 'text-white' : 'text-[#082621]'}`}>Already in Playlist</h3>
               </div>
               <button 
                 onClick={() => setDuplicateConfirmTrack(null)} 
-                className="brutal-btn p-1 bg-[#ede5d3] brutal-border hover:bg-[#ded2bb] text-[#0b1110]"
+                className={`brutal-btn p-1 brutal-border ${isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#0b1110] border-black hover:bg-[#ded2bb]'}`}
               >
                 <X size={16} />
               </button>
             </div>
 
             <div className="my-4 text-center">
-              <p className="text-xs font-mono font-bold text-[#082621]">
+              <p className={`text-xs font-mono font-bold ${isDark ? 'text-zinc-200' : 'text-[#082621]'}`}>
                 "<span className="font-black">{duplicateConfirmTrack.title}</span>" is already in this playlist.
               </p>
-              <p className="text-[11px] font-sans text-[#082621]/70 mt-1">
+              <p className={`text-[11px] font-sans mt-1 ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
                 Do you want to add it again?
               </p>
             </div>
@@ -2023,7 +1969,7 @@ export default function PlaylistScreen({
               <button
                 type="button"
                 onClick={() => setDuplicateConfirmTrack(null)}
-                className="flex-1 py-2.5 bg-[#ede5d3] hover:bg-[#ded2bb] text-[#082621] font-mono text-xs font-black uppercase brutal-border cursor-pointer flex items-center justify-center"
+                className={`flex-1 py-2.5 font-mono text-xs font-black uppercase brutal-border cursor-pointer flex items-center justify-center ${isDark ? 'bg-zinc-800 text-zinc-200 border-zinc-700 hover:bg-zinc-700' : 'bg-[#ede5d3] text-[#082621] border-black hover:bg-[#ded2bb]'}`}
               >
                 <span>Cancel</span>
               </button>
@@ -2036,7 +1982,7 @@ export default function PlaylistScreen({
                   onRemoveTrackFromPlaylist?.(duplicateConfirmTrack.id || duplicateConfirmTrack._id, playlist.id);
                   setDuplicateConfirmTrack(null);
                 }}
-                className="text-[11px] font-mono font-bold text-[#dc2626] hover:text-red-700 hover:underline cursor-pointer bg-transparent border-0 inline-block p-1"
+                className="text-[11px] font-mono font-bold text-[#dc2626] hover:text-red-400 hover:underline cursor-pointer bg-transparent border-0 inline-block p-1"
               >
                 Remove from playlist
               </button>

@@ -29,15 +29,18 @@ import {
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { getDownloadedTracks, deduplicateTrackList } from '../services/downloadManager';
 import { normalizeCoverUri } from '../utils/coverUtils';
 import { formatDuration } from '../utils/timeUtils';
+import { styles } from './createPlaylistStyles';
 
 export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTracks = [] }) {
   const { token, syncUserData, setPlaylists } = useUser();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
 
   // 'select_type' | 'form'
   const [step, setStep] = useState('select_type');
@@ -299,21 +302,33 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.sheetOuter}>
-          <View style={styles.hardShadow} />
-          <View style={styles.sheet}>
+          {!isDark && <View style={styles.hardShadow} />}
+          <View style={[
+            styles.sheet,
+            {
+              backgroundColor: isDark ? '#111a18' : '#fdfbf7',
+              borderColor: isDark ? '#27272a' : colors.ink,
+            }
+          ]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[
+              styles.header,
+              { borderBottomColor: isDark ? '#27272a' : colors.ink }
+            ]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
                 {step === 'form' && (
                   <TouchableOpacity
                     onPress={() => setStep('select_type')}
-                    style={styles.backBtn}
+                    style={[
+                      styles.backBtn,
+                      isDark && { backgroundColor: '#141d1b', borderColor: '#27272a' }
+                    ]}
                     activeOpacity={0.7}
                   >
-                    <ArrowLeft size={18} color={colors.ink} />
+                    <ArrowLeft size={18} color={isDark ? '#e4e4e7' : colors.ink} />
                   </TouchableOpacity>
                 )}
-                <View style={styles.iconBox}>
+                <View style={[styles.iconBox, isDark && { borderColor: '#27272a' }]}>
                   {step === 'select_type' ? (
                     <Plus size={18} color={colors.ink} />
                   ) : playlistType === 'mix' ? (
@@ -325,7 +340,7 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.title} numberOfLines={1}>
+                  <Text style={[styles.title, { color: isDark ? '#ffffff' : colors.ink }]} numberOfLines={1}>
                     {step === 'select_type'
                       ? 'CHOOSE PLAYLIST TYPE'
                       : playlistType === 'mix'
@@ -336,13 +351,19 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                   </Text>
                   <CassetteTag
                     label={playlistType === 'mix' ? 'PRO DJ MIX' : 'LIBRARY ARCHIVE'}
-                    bg={colors.ink}
-                    textColor={playlistType === 'mix' ? '#f59e0b' : colors.tealLight}
+                    bg={isDark ? '#141d1b' : colors.ink}
+                    textColor={playlistType === 'mix' ? '#f59e0b' : (isDark ? '#26c4b7' : colors.tealLight)}
                   />
                 </View>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={colors.ink} />
+              <TouchableOpacity
+                onPress={onClose}
+                style={[
+                  styles.closeBtn,
+                  isDark && { backgroundColor: '#141d1b', borderColor: '#27272a' }
+                ]}
+              >
+                <X size={20} color={isDark ? '#e4e4e7' : colors.ink} />
               </TouchableOpacity>
             </View>
 
@@ -350,13 +371,19 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
             {step === 'select_type' ? (
               <View style={{ flex: 1, paddingTop: 12 }}>
                 <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-                  <Text style={styles.sectionSubtitle}>
+                  <Text style={[styles.sectionSubtitle, { color: isDark ? '#9ca3af' : colors.ink }]}>
                     Select what type of playlist you want to create:
                   </Text>
 
                   {/* Standard Playlist Option */}
                   <TouchableOpacity
-                    style={styles.typeCard}
+                    style={[
+                      styles.typeCard,
+                      {
+                        backgroundColor: isDark ? '#141d1b' : '#ede5d3',
+                        borderColor: isDark ? '#27272a' : colors.ink,
+                      }
+                    ]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setPlaylistType('standard');
@@ -369,23 +396,34 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.typeHeaderRow}>
-                        <Text style={styles.typeTitle}>Standard Playlist</Text>
-                        <View style={styles.typeTag}>
-                          <Text style={styles.typeTagText}>STREAMING</Text>
+                        <Text style={[styles.typeTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
+                          Standard Playlist
+                        </Text>
+                        <View style={[styles.typeTag, isDark && { backgroundColor: '#1f2e2a', borderColor: '#27272a' }]}>
+                          <Text style={[styles.typeTagText, isDark && { color: '#26c4b7' }]}>STREAMING</Text>
                         </View>
                       </View>
-                      <Text style={styles.typeDesc}>
+                      <Text style={[styles.typeDesc, { color: isDark ? '#9ca3af' : '#4b5563' }]}>
                         Classic playlist for streaming and organizing your favorite songs and albums in custom order.
                       </Text>
                       <View style={styles.selectTypeActionRow}>
-                        <Text style={styles.selectTypeActionText}>SELECT STANDARD →</Text>
+                        <Text style={[styles.selectTypeActionText, isDark && { color: '#26c4b7' }]}>
+                          SELECT STANDARD →
+                        </Text>
                       </View>
                     </View>
                   </TouchableOpacity>
 
                   {/* DJ Mix Playlist Option */}
                   <TouchableOpacity
-                    style={[styles.typeCard, styles.typeCardMix]}
+                    style={[
+                      styles.typeCard,
+                      styles.typeCardMix,
+                      {
+                        backgroundColor: isDark ? '#0f2420' : '#e6f7f5',
+                        borderColor: isDark ? '#10b981' : colors.teal,
+                      }
+                    ]}
                     activeOpacity={0.8}
                     onPress={() => {
                       setPlaylistType('mix');
@@ -398,16 +436,18 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.typeHeaderRow}>
-                        <Text style={styles.typeTitle}>🎛️ DJ Mix Playlist</Text>
+                        <Text style={[styles.typeTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
+                          🎛️ DJ Mix Playlist
+                        </Text>
                         <View style={[styles.typeTag, styles.typeTagMix]}>
                           <Text style={styles.typeTagTextMix}>OFFLINE ENGINE</Text>
                         </View>
                       </View>
-                      <Text style={styles.typeDesc}>
+                      <Text style={[styles.typeDesc, { color: isDark ? '#9ca3af' : '#4b5563' }]}>
                         Continuous seamless mix with sample-accurate crossfades using local songs stored on your device.
                       </Text>
                       <View style={styles.selectTypeActionRow}>
-                        <Text style={[styles.selectTypeActionText, { color: '#082621' }]}>
+                        <Text style={[styles.selectTypeActionText, { color: isDark ? '#10b981' : '#082621' }]}>
                           CREATE DJ MIX →
                         </Text>
                       </View>
@@ -415,8 +455,19 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                   </TouchableOpacity>
                 </ScrollView>
 
-                <TouchableOpacity style={styles.cancelBtnFull} onPress={onClose}>
-                  <Text style={styles.cancelText}>CANCEL</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.cancelBtnFull,
+                    {
+                      backgroundColor: isDark ? '#1f2937' : '#ede5d3',
+                      borderColor: isDark ? '#27272a' : colors.ink,
+                    }
+                  ]}
+                  onPress={onClose}
+                >
+                  <Text style={[styles.cancelText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                    CANCEL
+                  </Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -425,23 +476,43 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                 {playlistType === 'standard' ? (
                   <View style={{ flex: 1 }}>
                     {/* Tab Switcher for Standard */}
-                    <View style={styles.tabBar}>
+                    <View style={[
+                      styles.tabBar,
+                      {
+                        backgroundColor: isDark ? '#141d1b' : '#ede5d3',
+                        borderColor: isDark ? '#27272a' : colors.ink,
+                      }
+                    ]}>
                       <TouchableOpacity
-                        style={[styles.tabBtn, activeTab === 'create' && styles.tabBtnActive]}
+                        style={[
+                          styles.tabBtn,
+                          activeTab === 'create' && (isDark ? { backgroundColor: '#26c4b7' } : styles.tabBtnActive)
+                        ]}
                         onPress={() => setActiveTab('create')}
                       >
                         <Text
-                          style={[styles.tabBtnText, activeTab === 'create' && styles.tabBtnTextActive]}
+                          style={[
+                            styles.tabBtnText,
+                            { color: isDark ? '#9ca3af' : colors.ink },
+                            activeTab === 'create' && (isDark ? { color: '#08110f' } : styles.tabBtnTextActive),
+                          ]}
                         >
                           CREATE NEW
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.tabBtn, activeTab === 'import' && styles.tabBtnActive]}
+                        style={[
+                          styles.tabBtn,
+                          activeTab === 'import' && (isDark ? { backgroundColor: '#26c4b7' } : styles.tabBtnActive)
+                        ]}
                         onPress={() => setActiveTab('import')}
                       >
                         <Text
-                          style={[styles.tabBtnText, activeTab === 'import' && styles.tabBtnTextActive]}
+                          style={[
+                            styles.tabBtnText,
+                            { color: isDark ? '#9ca3af' : colors.ink },
+                            activeTab === 'import' && (isDark ? { color: '#08110f' } : styles.tabBtnTextActive),
+                          ]}
                         >
                           IMPORT LINK
                         </Text>
@@ -451,30 +522,55 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                     <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
                       {activeTab === 'create' ? (
                         <View style={styles.formContent}>
-                          <Text style={styles.label}>PLAYLIST NAME *</Text>
+                          <Text style={[styles.label, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                            PLAYLIST NAME *
+                          </Text>
                           <TextInput
-                            style={styles.input}
+                            style={[
+                              styles.input,
+                              {
+                                backgroundColor: isDark ? '#08110f' : '#ffffff',
+                                borderColor: isDark ? '#27272a' : colors.ink,
+                                color: isDark ? '#ffffff' : colors.ink,
+                              }
+                            ]}
                             placeholder="e.g. Midnight Waves, Arabic Hip-Hop..."
-                            placeholderTextColor="#9ca3af"
+                            placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                             value={name}
                             onChangeText={setName}
                             autoCapitalize="words"
                           />
 
-                          <Text style={styles.label}>DESCRIPTION (OPTIONAL)</Text>
+                          <Text style={[styles.label, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                            DESCRIPTION (OPTIONAL)
+                          </Text>
                           <TextInput
-                            style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+                            style={[
+                              styles.input,
+                              {
+                                height: 60,
+                                textAlignVertical: 'top',
+                                backgroundColor: isDark ? '#08110f' : '#ffffff',
+                                borderColor: isDark ? '#27272a' : colors.ink,
+                                color: isDark ? '#ffffff' : colors.ink,
+                              }
+                            ]}
                             placeholder="Short description or mood for this playlist..."
-                            placeholderTextColor="#9ca3af"
+                            placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                             value={desc}
                             onChangeText={setDesc}
                             multiline
                           />
 
-                          <View style={styles.switchRow}>
+                          <View style={[
+                            styles.switchRow,
+                            isDark && { backgroundColor: '#141d1b', borderColor: '#27272a' }
+                          ]}>
                             <View style={{ flex: 1, paddingRight: 8 }}>
-                              <Text style={styles.switchTitle}>Make Playlist Public</Text>
-                              <Text style={styles.switchDesc}>
+                              <Text style={[styles.switchTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
+                                Make Playlist Public
+                              </Text>
+                              <Text style={[styles.switchDesc, { color: isDark ? '#9ca3af' : colors.ink }]}>
                                 Visible to others on your profile and search.
                               </Text>
                             </View>
@@ -488,15 +584,24 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                         </View>
                       ) : (
                         <View style={styles.formContent}>
-                          <Text style={styles.desc}>
+                          <Text style={[styles.desc, { color: isDark ? '#9ca3af' : colors.ink }]}>
                             Paste a Spotify or YouTube playlist URL to convert and import it directly into your Rivo library:
                           </Text>
 
-                          <Text style={styles.label}>PLAYLIST URL *</Text>
+                          <Text style={[styles.label, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                            PLAYLIST URL *
+                          </Text>
                           <TextInput
-                            style={styles.input}
+                            style={[
+                              styles.input,
+                              {
+                                backgroundColor: isDark ? '#08110f' : '#ffffff',
+                                borderColor: isDark ? '#27272a' : colors.ink,
+                                color: isDark ? '#ffffff' : colors.ink,
+                              }
+                            ]}
                             placeholder="https://open.spotify.com/playlist/... or youtube.com/playlist?list=..."
-                            placeholderTextColor="#9ca3af"
+                            placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                             value={importUrl}
                             onChangeText={setImportUrl}
                             autoCapitalize="none"
@@ -508,8 +613,19 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
 
                     {/* Bottom Action Bar */}
                     <View style={styles.btnRow}>
-                      <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                        <Text style={styles.cancelText}>CANCEL</Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.cancelBtn,
+                          {
+                            backgroundColor: isDark ? '#1f2937' : '#ede5d3',
+                            borderColor: isDark ? '#27272a' : colors.ink,
+                          }
+                        ]}
+                        onPress={onClose}
+                      >
+                        <Text style={[styles.cancelText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                          CANCEL
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
@@ -538,30 +654,55 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                       contentContainerStyle={{ paddingBottom: 10 }}
                     >
                       <View style={styles.formContent}>
-                        <Text style={styles.label}>DJ MIX NAME *</Text>
+                        <Text style={[styles.label, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                          DJ MIX NAME *
+                        </Text>
                         <TextInput
-                          style={styles.input}
+                          style={[
+                            styles.input,
+                            {
+                              backgroundColor: isDark ? '#08110f' : '#ffffff',
+                              borderColor: isDark ? '#27272a' : colors.ink,
+                              color: isDark ? '#ffffff' : colors.ink,
+                            }
+                          ]}
                           placeholder="e.g. Weekend Club Mix, High-Energy Mix..."
-                          placeholderTextColor="#9ca3af"
+                          placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                           value={name}
                           onChangeText={setName}
                           autoCapitalize="words"
                         />
 
-                        <Text style={styles.label}>DESCRIPTION (OPTIONAL)</Text>
+                        <Text style={[styles.label, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                          DESCRIPTION (OPTIONAL)
+                        </Text>
                         <TextInput
-                          style={[styles.input, { height: 46, textAlignVertical: 'top' }]}
+                          style={[
+                            styles.input,
+                            {
+                              height: 46,
+                              textAlignVertical: 'top',
+                              backgroundColor: isDark ? '#08110f' : '#ffffff',
+                              borderColor: isDark ? '#27272a' : colors.ink,
+                              color: isDark ? '#ffffff' : colors.ink,
+                            }
+                          ]}
                           placeholder="Continuous seamless crossfades with zero buffer latency..."
-                          placeholderTextColor="#9ca3af"
+                          placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                           value={desc}
                           onChangeText={setDesc}
                           multiline
                         />
 
-                        <View style={styles.switchRow}>
+                        <View style={[
+                          styles.switchRow,
+                          isDark && { backgroundColor: '#141d1b', borderColor: '#27272a' }
+                        ]}>
                           <View style={{ flex: 1, paddingRight: 8 }}>
-                            <Text style={styles.switchTitle}>Make DJ Mix Public</Text>
-                            <Text style={styles.switchDesc}>
+                            <Text style={[styles.switchTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
+                              Make DJ Mix Public
+                            </Text>
+                            <Text style={[styles.switchDesc, { color: isDark ? '#9ca3af' : colors.ink }]}>
                               Visible on your profile and accessible to other listeners.
                             </Text>
                           </View>
@@ -574,11 +715,14 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                         </View>
 
                         {/* Device Tracks Recommendation Section */}
-                        <View style={styles.deviceTracksSection}>
+                        <View style={[
+                          styles.deviceTracksSection,
+                          isDark && { backgroundColor: '#141d1b', borderColor: '#27272a' }
+                        ]}>
                           <View style={styles.deviceTracksHeader}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <HardDrive size={15} color={colors.teal} />
-                              <Text style={styles.deviceTracksTitle}>
+                              <Text style={[styles.deviceTracksTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
                                 DEVICE TRACKS ({filteredDeviceTracks.length})
                               </Text>
                             </View>
@@ -589,46 +733,70 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                             </View>
                           </View>
 
-                          <Text style={styles.deviceTracksDesc}>
+                          <Text style={[styles.deviceTracksDesc, { color: isDark ? '#9ca3af' : colors.ink }]}>
                             Select songs saved on this device to include in your DJ mix. Local files enable zero-latency sample crossfades.
                           </Text>
 
                           {/* Search Bar & Action Buttons */}
                           <View style={styles.searchRow}>
-                            <View style={styles.searchBox}>
+                            <View style={[
+                              styles.searchBox,
+                              isDark && { backgroundColor: '#08110f', borderColor: '#27272a' }
+                            ]}>
                               <Search size={14} color="#9ca3af" style={{ marginRight: 6 }} />
                               <TextInput
-                                style={styles.searchInput}
+                                style={[styles.searchInput, isDark && { color: '#ffffff' }]}
                                 placeholder="Search device tracks..."
                                 placeholderTextColor="#9ca3af"
                                 value={trackSearch}
                                 onChangeText={setTrackSearch}
                               />
                             </View>
-                            <TouchableOpacity style={styles.miniBtn} onPress={selectAllFiltered}>
-                              <Text style={styles.miniBtnText}>ALL</Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.miniBtn,
+                                isDark && { backgroundColor: '#1f2e2a', borderColor: '#27272a' }
+                              ]}
+                              onPress={selectAllFiltered}
+                            >
+                              <Text style={[styles.miniBtnText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                                ALL
+                              </Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.miniBtn} onPress={deselectAllFiltered}>
-                              <Text style={styles.miniBtnText}>CLEAR</Text>
+                            <TouchableOpacity
+                              style={[
+                                styles.miniBtn,
+                                isDark && { backgroundColor: '#1f2e2a', borderColor: '#27272a' }
+                              ]}
+                              onPress={deselectAllFiltered}
+                            >
+                              <Text style={[styles.miniBtnText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                                CLEAR
+                              </Text>
                             </TouchableOpacity>
                           </View>
 
                           {/* Scrollable Track List */}
-                          <View style={styles.deviceTracksList}>
+                          <View style={[
+                            styles.deviceTracksList,
+                            isDark && { backgroundColor: '#08110f', borderColor: '#27272a' }
+                          ]}>
                             {loadingDeviceTracks ? (
                               <View style={styles.emptyDeviceBox}>
                                 <ActivityIndicator size="small" color={colors.teal} />
-                                <Text style={styles.emptyDeviceText}>Scanning device Vault...</Text>
+                                <Text style={[styles.emptyDeviceText, isDark && { color: '#9ca3af' }]}>
+                                  Scanning device Vault...
+                                </Text>
                               </View>
                             ) : filteredDeviceTracks.length === 0 ? (
                               <View style={styles.emptyDeviceBox}>
                                 <Disc size={24} color="#9ca3af" />
-                                <Text style={styles.emptyDeviceTitle}>
+                                <Text style={[styles.emptyDeviceTitle, { color: isDark ? '#ffffff' : colors.ink }]}>
                                   {deviceTracks.length === 0
                                     ? 'No downloaded tracks on this device'
                                     : 'No matching tracks found'}
                                 </Text>
-                                <Text style={styles.emptyDeviceText}>
+                                <Text style={[styles.emptyDeviceText, isDark && { color: '#9ca3af' }]}>
                                   {deviceTracks.length === 0
                                     ? 'Download tracks to your Vault first so the DJ engine can mix them.'
                                     : 'Try another search keyword.'}
@@ -653,7 +821,12 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                                       key={id}
                                       style={[
                                         styles.deviceTrackItem,
-                                        isChecked && styles.deviceTrackItemChecked,
+                                        {
+                                          backgroundColor: isDark ? '#141d1b' : '#ffffff',
+                                          borderColor: isDark ? '#27272a' : colors.ink,
+                                          borderBottomColor: isDark ? '#27272a' : '#ede5d3',
+                                        },
+                                        isChecked && (isDark ? { backgroundColor: '#0f2e28' } : styles.deviceTrackItemChecked),
                                       ]}
                                       activeOpacity={0.7}
                                       onPress={() => toggleTrack(id)}
@@ -666,7 +839,7 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                                         )}
                                       </View>
 
-                                      <View style={styles.trackThumbBox}>
+                                      <View style={[styles.trackThumbBox, isDark && { backgroundColor: '#08110f', borderColor: '#27272a' }]}>
                                         {t.cover || t.coverUrl ? (
                                           <Image
                                             source={{ uri: normalizeCoverUri(t.cover || t.coverUrl) }}
@@ -679,20 +852,22 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
                                       </View>
 
                                       <View style={{ flex: 1, paddingRight: 6 }}>
-                                        <Text style={styles.trackTitle} numberOfLines={1}>
+                                        <Text style={[styles.trackTitle, { color: isDark ? '#ffffff' : colors.ink }]} numberOfLines={1}>
                                           {t.title}
                                         </Text>
-                                        <Text style={styles.trackArtist} numberOfLines={1}>
+                                        <Text style={[styles.trackArtist, { color: isDark ? '#9ca3af' : colors.ink }]} numberOfLines={1}>
                                           {t.artist || 'Unknown Artist'}
                                         </Text>
                                       </View>
 
                                       <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                                        <Text style={styles.trackDuration}>
+                                        <Text style={[styles.trackDuration, { color: isDark ? '#9ca3af' : colors.ink }]}>
                                           {formatDuration(t.duration, 180)}
                                         </Text>
-                                        <View style={styles.vaultTag}>
-                                          <Text style={styles.vaultTagText}>VAULT</Text>
+                                        <View style={[styles.vaultTag, isDark && { backgroundColor: '#08110f', borderColor: '#27272a' }]}>
+                                          <Text style={[styles.vaultTagText, { color: isDark ? '#26c4b7' : colors.ink }]}>
+                                            VAULT
+                                          </Text>
                                         </View>
                                       </View>
                                     </TouchableOpacity>
@@ -707,8 +882,19 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
 
                     {/* Fixed Bottom Action Bar */}
                     <View style={styles.btnRow}>
-                      <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                        <Text style={styles.cancelText}>CANCEL</Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.cancelBtn,
+                          {
+                            backgroundColor: isDark ? '#1f2937' : '#ede5d3',
+                            borderColor: isDark ? '#27272a' : colors.ink,
+                          }
+                        ]}
+                        onPress={onClose}
+                      >
+                        <Text style={[styles.cancelText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                          CANCEL
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={[
@@ -738,447 +924,3 @@ export default function CreatePlaylistModal({ visible, onClose, onSuccess, allTr
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'flex-end',
-    paddingHorizontal: 8,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 12,
-  },
-  sheetOuter: {
-    position: 'relative',
-    height: '86%',
-    maxHeight: '92%',
-    width: '100%',
-  },
-  hardShadow: {
-    position: 'absolute',
-    top: -4,
-    left: 4,
-    right: -4,
-    bottom: -4,
-    backgroundColor: colors.ink,
-    borderRadius: 16,
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: colors.paper,
-    borderRadius: 16,
-    borderWidth: 2.5,
-    borderColor: colors.ink,
-    padding: 16,
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.ink,
-  },
-  backBtn: {
-    padding: 6,
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 6,
-  },
-  iconBox: {
-    width: 32,
-    height: 32,
-    backgroundColor: colors.mint,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 13,
-    color: colors.ink,
-    letterSpacing: 0.5,
-  },
-  closeBtn: {
-    padding: 6,
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 6,
-  },
-  sectionSubtitle: {
-    fontFamily: 'monospace',
-    fontSize: 11,
-    color: colors.ink,
-    opacity: 0.75,
-    marginBottom: 10,
-  },
-  typeCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#ede5d3',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
-    gap: 12,
-  },
-  typeCardMix: {
-    backgroundColor: '#e6f7f5',
-    borderColor: colors.teal,
-  },
-  typeIconBox: {
-    width: 44,
-    height: 44,
-    backgroundColor: colors.ink,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  typeIconBoxMix: {
-    backgroundColor: colors.mint,
-  },
-  typeHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  typeTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 13,
-    color: colors.ink,
-  },
-  typeTag: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  typeTagMix: {
-    backgroundColor: colors.teal,
-  },
-  typeTagText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: colors.ink,
-  },
-  typeTagTextMix: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: '#ffffff',
-  },
-  typeDesc: {
-    fontSize: 11,
-    color: colors.ink,
-    opacity: 0.8,
-    lineHeight: 16,
-  },
-  selectTypeActionRow: {
-    marginTop: 8,
-    alignItems: 'flex-end',
-  },
-  selectTypeActionText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 10,
-    color: colors.teal,
-    textDecorationLine: 'underline',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    padding: 3,
-    marginBottom: 8,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  tabBtnActive: {
-    backgroundColor: colors.ink,
-  },
-  tabBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 10,
-    color: colors.ink,
-  },
-  tabBtnTextActive: {
-    color: colors.mint,
-  },
-  formContent: {
-    paddingVertical: 6,
-    gap: 8,
-  },
-  label: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 10,
-    color: colors.ink,
-  },
-  desc: {
-    fontSize: 12,
-    color: colors.ink,
-    opacity: 0.85,
-    lineHeight: 18,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 12,
-    color: colors.ink,
-    fontWeight: 'bold',
-  },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    padding: 8,
-  },
-  switchTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  switchDesc: {
-    fontSize: 9,
-    color: colors.ink,
-    opacity: 0.75,
-    marginTop: 2,
-  },
-  deviceTracksSection: {
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    padding: 8,
-    gap: 6,
-  },
-  deviceTracksHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  deviceTracksTitle: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  deviceTrackCountBadge: {
-    backgroundColor: colors.teal,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderWidth: 1,
-    borderColor: colors.ink,
-  },
-  deviceTrackCountText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: '#ffffff',
-  },
-  deviceTracksDesc: {
-    fontSize: 10,
-    color: colors.ink,
-    opacity: 0.8,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    height: 32,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 11,
-    color: colors.ink,
-    paddingVertical: 0,
-    fontFamily: 'monospace',
-  },
-  miniBtn: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  miniBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 9,
-    color: colors.ink,
-  },
-  deviceTracksList: {
-    maxHeight: 200,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  deviceTrackItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#ede5d3',
-  },
-  deviceTrackItemChecked: {
-    backgroundColor: '#e6f7f5',
-  },
-  trackThumbBox: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#ede5d3',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginRight: 8,
-  },
-  trackThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  trackTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: colors.ink,
-  },
-  trackArtist: {
-    fontSize: 9,
-    color: colors.ink,
-    opacity: 0.7,
-  },
-  trackDuration: {
-    fontFamily: 'monospace',
-    fontSize: 9,
-    color: colors.ink,
-    opacity: 0.7,
-  },
-  vaultTag: {
-    backgroundColor: '#ede5d3',
-    borderWidth: 1,
-    borderColor: colors.ink,
-    borderRadius: 3,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  vaultTagText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 7,
-    color: colors.ink,
-  },
-  emptyDeviceBox: {
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  emptyDeviceTitle: {
-    fontFamily: 'monospace',
-    fontWeight: 'bold',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  emptyDeviceText: {
-    fontSize: 9,
-    color: colors.ink,
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginTop: 8,
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  cancelBtnFull: {
-    backgroundColor: '#ede5d3',
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  cancelText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  submitBtn: {
-    flex: 2,
-    backgroundColor: colors.mint,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  submitBtnMix: {
-    backgroundColor: colors.mint,
-  },
-  submitText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-});

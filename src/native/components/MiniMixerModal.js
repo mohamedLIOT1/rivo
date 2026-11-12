@@ -194,7 +194,7 @@ export default function MiniMixerModal({
   return (
     <Modal visible={visible} animationType={Platform.OS === 'android' ? 'none' : 'slide'} transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheetContainer}>
+        <View style={styles.sheetContainer} renderToHardwareTextureAndroid={true}>
           {/* ── Modal Header ── */}
           <View style={styles.headerRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, marginRight: 8 }}>

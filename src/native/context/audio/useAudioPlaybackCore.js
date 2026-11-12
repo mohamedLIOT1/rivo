@@ -441,6 +441,30 @@ export const useAudioPlaybackCore = ({
         }
       }
 
+      // Auto-detect if the queue/track is explicitly a DJ Mix
+      const isExplicitMix = Boolean(
+        (Array.isArray(trackList) && (trackList.isMix || trackList._isMix || (trackList.name && String(trackList.name).toUpperCase().includes('MIX')))) ||
+        cleanTrack?.isMix || cleanTrack?._isMix
+      );
+
+      if (!isRetry) {
+        if (isExplicitMix) {
+          if (isMixModeRef) isMixModeRef.current = true;
+        } else {
+          // Normal queue (Daily Rotation, Liked Songs, Album) -> turn OFF Mix Mode
+          if (isMixModeRef) isMixModeRef.current = false;
+        }
+      }
+
+      // Clean up any stale lookahead nextSoundRef before starting new track to prevent duplicate playback
+      if (nextSoundRef?.current) {
+        try { nextSoundRef.current.setOnPlaybackStatusUpdate(null); } catch {}
+        nextSoundRef.current.unloadAsync().catch(() => {});
+        nextSoundRef.current = null;
+      }
+      if (nextTrackRef) nextTrackRef.current = null;
+      if (nextSoundPlayingRef) nextSoundPlayingRef.current = false;
+
       const uri = await resolveTrackPlaybackUri({
         track: cleanTrack,
         isVocalOnly: isVocalOnlyRef.current,
@@ -676,6 +700,32 @@ export const useAudioPlaybackCore = ({
     repeatModeRef, isShuffleRef, broadcastListeningActivity, setIsPlaying
   ]);
 
+  const pause = useCallback(async () => {
+    if (isPlayingRef.current) {
+      return togglePlay(true);
+    }
+    shouldBePlayingRef.current = false;
+    interruptedByOsRef.current = false;
+    try {
+      await soundRef.current?.pauseAsync().catch(() => {});
+    } catch {}
+    if (isPlayingRef.current) {
+      isPlayingRef.current = false;
+      setIsPlaying(false);
+    }
+    const curTrack = currentTrackRef.current;
+    const curPos = playbackStatusRef.current?.currentTime || 0;
+    const isLikedTrack = curTrack ? (likedTrackIdsRef.current || []).some(id => String(id) === String(curTrack._id || curTrack.id)) : false;
+    const isLive = isRadioTrack(curTrack) || Boolean(curTrack?.isLive);
+    const curDur = isLive ? 0 : (playbackStatusRef.current?.duration || sanitizeDuration(curTrack?.duration, 0));
+    updateMediaNotification(false, repeatModeRef.current, isShuffleRef.current, isLikedTrack, {
+      ...curTrack,
+      currentTime: curPos,
+      duration: curDur,
+    });
+    broadcastListeningActivity?.(curTrack, false, curPos);
+  }, [togglePlay, setIsPlaying, broadcastListeningActivity, repeatModeRef, isShuffleRef]);
+
   const seekTo = useCallback(async (secs) => {
     if (isRadioTrack(currentTrackRef.current) || currentTrackRef.current?.isLive) return;
     const safeSecs = Math.max(0, Number(secs) || 0);
@@ -772,6 +822,7 @@ export const useAudioPlaybackCore = ({
     playTrack,
     playPlaylist,
     togglePlay,
+    pause,
     seekTo,
     onPlaybackStatusUpdate,
   };

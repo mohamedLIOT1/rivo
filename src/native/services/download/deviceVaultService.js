@@ -55,75 +55,158 @@ export const updateDownloadedTrackLyrics = async (trackIdOrObj, lyrics) => {
 
 export const exportTrackAudioFile = async (track) => {
   if (!track) throw new Error('No track provided');
-  const trackId = String(track._id || track.id || '');
+  const res = await exportTracksBatch([track]);
+  if (res?.cancelled) return { success: false, cancelled: true };
+  if (res?.skippedCount > 0) {
+    return { success: true, skipped: true, method: 'already_exists' };
+  }
+  return { success: true, exported: true, method: 'saf' };
+};
 
-  const rawUri = track.localAudioUri || track.nativeAudioUri || track.audioUrl;
-  let sourceUri = reanchorDocumentUri(rawUri);
-  if (sourceUri && typeof sourceUri === 'string' && sourceUri.startsWith('file://')) {
-    const info = await FileSystem.getInfoAsync(sourceUri).catch(() => null);
-    if (!info || !info.exists || info.size < 1024) {
+export const exportTracksBatch = async (tracks = [], { onProgress } = {}) => {
+  if (!Array.isArray(tracks) || tracks.length === 0) return { success: false, count: 0 };
+
+  const validTracks = [];
+  for (const t of tracks) {
+    if (!t) continue;
+    const trackId = String(t._id || t.id || '');
+    const rawUri = t.localAudioUri || t.nativeAudioUri || t.audioUrl;
+    let sourceUri = reanchorDocumentUri(rawUri);
+
+    if (sourceUri && typeof sourceUri === 'string' && sourceUri.startsWith('file://')) {
+      const info = await FileSystem.getInfoAsync(sourceUri).catch(() => null);
+      if (!info || !info.exists || info.size < 1024) sourceUri = null;
+    } else {
       sourceUri = null;
     }
-  } else {
-    sourceUri = null;
-  }
 
-  if (!sourceUri) {
-    const candidates = [
-      `${TRACKS_DIR}${trackId}.mp3`,
-      `${TRACKS_DIR}${trackId}.m4a`,
-      `${TRACKS_DIR}${trackId}`,
-    ];
-    for (const cand of candidates) {
-      const info = await FileSystem.getInfoAsync(cand).catch(() => null);
-      if (info && info.exists && info.size > 1000) {
-        sourceUri = cand;
-        break;
+    if (!sourceUri) {
+      const candidates = [
+        `${TRACKS_DIR}${trackId}.mp3`,
+        `${TRACKS_DIR}${trackId}.m4a`,
+        `${TRACKS_DIR}${trackId}`,
+      ];
+      for (const cand of candidates) {
+        const info = await FileSystem.getInfoAsync(cand).catch(() => null);
+        if (info && info.exists && info.size > 1000) {
+          sourceUri = cand;
+          break;
+        }
       }
+    }
+
+    if (sourceUri) {
+      const cleanTitle = (t.title || 'Track').replace(/[/\\?%*:|"<>]/g, '_').trim();
+      const cleanArtist = (t.artist || 'Rivo').replace(/[/\\?%*:|"<>]/g, '_').trim();
+      const ext = sourceUri.endsWith('.m4a') ? 'm4a' : 'mp3';
+      const cleanFileName = `${cleanTitle} - ${cleanArtist}.${ext}`;
+      validTracks.push({ track: t, sourceUri, cleanFileName, ext });
     }
   }
 
-  if (!sourceUri) {
-    throw new Error('Audio file not found on disk. Please ensure track is downloaded.');
-  }
-
-  const cleanTitle = (track.title || 'Track').replace(/[/\\?%*:|"<>]/g, '_').trim();
-  const cleanArtist = (track.artist || 'Rivo').replace(/[/\\?%*:|"<>]/g, '_').trim();
-  const ext = sourceUri.endsWith('.m4a') ? 'm4a' : 'mp3';
-  const cleanFileName = `${cleanTitle} - ${cleanArtist}.${ext}`;
-  const targetUri = `${FileSystem.cacheDirectory}${cleanFileName}`;
-
-  try {
-    await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
-  } catch {
-    await FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
-    await FileSystem.copyAsync({ from: sourceUri, to: targetUri });
+  if (validTracks.length === 0) {
+    throw new Error('No valid offline audio files found on disk for selected tracks.');
   }
 
   if (Platform.OS === 'ios') {
-    await Share.share({ url: targetUri, title: `${cleanTitle} - ${cleanArtist}` });
-  } else {
-    try {
-      if (FileSystem.StorageAccessFramework) {
-        const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-        if (permissions && permissions.granted) {
-          const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
-            permissions.directoryUri,
-            cleanFileName,
-            ext === 'm4a' ? 'audio/mp4' : 'audio/mpeg'
-          );
-          try {
-            await FileSystem.copyAsync({ from: targetUri, to: newFileUri });
-            return { success: true, uri: newFileUri, method: 'copy' };
-          } catch {
-            const base64 = await FileSystem.readAsStringAsync(targetUri, { encoding: FileSystem.EncodingType.Base64 });
-            await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
-            return { success: true, uri: newFileUri, method: 'saf' };
-          }
-        }
+    const urls = [];
+    for (const item of validTracks) {
+      const targetUri = `${FileSystem.cacheDirectory}${item.cleanFileName}`;
+      try {
+        await FileSystem.copyAsync({ from: item.sourceUri, to: targetUri });
+      } catch {
+        await FileSystem.deleteAsync(targetUri, { idempotent: true }).catch(() => {});
+        await FileSystem.copyAsync({ from: item.sourceUri, to: targetUri });
       }
-    } catch {}
+      urls.push(targetUri);
+    }
+    if (urls.length > 0) {
+      await Share.share({ url: urls[0], urls, title: 'Export Audio Files' });
+    }
+    return { success: true, exportedCount: urls.length, skippedCount: 0, total: validTracks.length };
   }
+
+  // Android: StorageAccessFramework batch export with deduplication
+  if (!FileSystem.StorageAccessFramework) {
+    throw new Error('StorageAccessFramework is not supported on this platform');
+  }
+
+  const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!permissions || !permissions.granted) {
+    return { success: false, cancelled: true };
+  }
+
+  const directoryUri = permissions.directoryUri;
+  let existingNames = new Set();
+  try {
+    const existingEntries = await FileSystem.StorageAccessFramework.readDirectoryAsync(directoryUri);
+    existingNames = new Set(
+      (existingEntries || []).map((uri) => {
+        try {
+          const decoded = decodeURIComponent(uri);
+          const fn = decoded.split('/').pop()?.replace(/^.*:/, '').trim().toLowerCase();
+          return fn;
+        } catch {
+          return '';
+        }
+      }).filter(Boolean)
+    );
+  } catch {}
+
+  let exportedCount = 0;
+  let skippedCount = 0;
+
+  for (let i = 0; i < validTracks.length; i++) {
+    const item = validTracks[i];
+    const normName = item.cleanFileName.toLowerCase();
+
+    // Deduplication check: skip if file already exists in target directory
+    if (existingNames.has(normName)) {
+      skippedCount++;
+      if (typeof onProgress === 'function') onProgress(i + 1, validTracks.length);
+      continue;
+    }
+
+    try {
+      const mimeType = item.ext === 'm4a' ? 'audio/mp4' : 'audio/mpeg';
+      const newFileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+        directoryUri,
+        item.cleanFileName,
+        mimeType
+      );
+
+      const targetCacheUri = `${FileSystem.cacheDirectory}${item.cleanFileName}`;
+      try {
+        await FileSystem.copyAsync({ from: item.sourceUri, to: targetCacheUri });
+      } catch {
+        await FileSystem.deleteAsync(targetCacheUri, { idempotent: true }).catch(() => {});
+        await FileSystem.copyAsync({ from: item.sourceUri, to: targetCacheUri });
+      }
+
+      try {
+        await FileSystem.copyAsync({ from: targetCacheUri, to: newFileUri });
+      } catch {
+        const base64 = await FileSystem.readAsStringAsync(targetCacheUri, { encoding: FileSystem.EncodingType.Base64 });
+        await FileSystem.writeAsStringAsync(newFileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      }
+
+      existingNames.add(normName);
+      exportedCount++;
+    } catch (err) {
+      console.warn('[VaultExport] Failed to export item:', item.cleanFileName, err);
+    }
+
+    if (typeof onProgress === 'function') {
+      onProgress(i + 1, validTracks.length);
+    }
+  }
+
+  return {
+    success: true,
+    exportedCount,
+    skippedCount,
+    total: validTracks.length,
+  };
 };
 
 export const getStorageLocationInfo = async () => {

@@ -1,3 +1,4 @@
+import { AppState } from 'react-native';
 import { updateAudioProgress } from '../AudioProgressContext';
 import { isQuranContent, isRadioTrack } from '../../../utils/quranUtils';
 import { calculateCrossfadeGains } from '../../utils/musicAnalysis';
@@ -145,6 +146,17 @@ export const handlePlaybackStatusUpdate = ({
       notifyMediaState(false);
     }
   } else if (!isLoadingRef?.current && !isSeekingRef?.current && !status.didJustFinish && !isFinished) {
+    if (!status.isBuffering) {
+      if (interruptedByOsRef) interruptedByOsRef.current = true;
+      if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
+        setIsPlaying(false);
+        notifyMediaState(false);
+      }
+      clearStallRecoveryTimer(stallRecoveryTimerRef);
+      if (AppState.currentState !== 'active') {
+        return;
+      }
+    }
     handlePlaybackStallOrInterruption({
       status,
       soundRef,
@@ -180,7 +192,8 @@ export const handlePlaybackStatusUpdate = ({
     }
 
     // RIVO DJ ENGINE: Dual-Player Lookahead Crossfade with Smooth Volume Ramping
-    if (isMixModeRef?.current && !isLiveStream && status.isPlaying && statusDurSec > 10) {
+    const isQueueMix = Boolean(queueRef?.current?.isMix || queueRef?.current?._isMix || curTrack?.isMix || curTrack?._isMix);
+    if (isMixModeRef?.current && isQueueMix && !isLiveStream && status.isPlaying && statusDurSec > 10) {
       if (!isQuranContent(curTrack)) {
         const curId = String(curTrack?._id || curTrack?.id || '');
         const q = queueRef.current || [];
@@ -203,8 +216,9 @@ export const handlePlaybackStatusUpdate = ({
           const effectiveOut = (transConf.mixOutPoint && Number(transConf.mixOutPoint) > 0)
             ? Math.min(newDuration, Number(transConf.mixOutPoint))
             : newDuration;
-          const remTime = effectiveOut - newCurrentTime;
-          const handoffThreshold = 0.55;
+          const curPosSec = (status.positionMillis || 0) / 1000;
+          const remTime = effectiveOut - curPosSec;
+          const handoffThreshold = 1.0;
 
           if (remTime <= Math.max(12, transDur + 6) && !nextSoundRef?.current && preloadNextTrackForDjMix) {
             preloadNextTrackForDjMix(mixInPoint, speedB);
@@ -233,6 +247,7 @@ export const handlePlaybackStatusUpdate = ({
           if (remTime <= handoffThreshold && nextSoundRef?.current && !isMixTransitioningRef?.current && completeSeamlessHandoff) {
             isMixTransitioningRef.current = true;
             completeSeamlessHandoff();
+            return;
           }
         }
       }
@@ -252,6 +267,9 @@ export const handlePlaybackStatusUpdate = ({
   }
 
   if (isFinished) {
+    if (nextSoundPlayingRef?.current || isMixTransitioningRef?.current) {
+      return;
+    }
     if (curActiveId && trackCompletionHandledRef?.current === curActiveId) {
       return;
     }

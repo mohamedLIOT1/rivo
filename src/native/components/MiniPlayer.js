@@ -45,7 +45,7 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
   const dockBottom = bottomOffset !== undefined ? bottomOffset : (Platform.OS === 'ios' ? 14 : 10);
 
   return (
-    <View style={[styles.outerDock, { bottom: dockBottom }]}>
+    <View style={[styles.outerDock, { bottom: dockBottom }]} renderToHardwareTextureAndroid={true}>
 
             {/* Real-Time AI Vocal Isolation Progress Banner (Strictly Hidden for Holy Quran) */}
       {!isQuran && vocalIsolationStatus?.isProcessing && (
@@ -81,6 +81,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <Image
                 source={{ uri: coverUri }}
                 style={styles.cover}
+                resizeMode="cover"
+                fadeDuration={0}
                 onError={() => setImageError(true)}
               />
             ) : null}

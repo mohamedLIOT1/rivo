@@ -30,6 +30,7 @@ export const useDjCrossfade = ({
   autoPersistFinishedTrack,
   handleDownloadTrack,
   autoDownloadFinishedRef,
+  trackCompletionHandledRef,
 }) => {
   const [isMixMode, setIsMixModeState] = useState(false);
   const isMixModeRef = useRef(false);
@@ -264,6 +265,9 @@ export const useDjCrossfade = ({
         nextSoundRateRef.current = 1.0;
         lastMixBridgeUpdateRef.current = { time: 0, volA: -1, volB: -1, speedA: startRate };
         loadedTrackIdRef.current = newActiveId;
+        if (trackCompletionHandledRef) {
+          trackCompletionHandledRef.current = newActiveId;
+        }
         currentTrackRef.current = newActiveTrack;
         setCurrentTrack(newActiveTrack);
 

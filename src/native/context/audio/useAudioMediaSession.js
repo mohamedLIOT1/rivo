@@ -176,19 +176,52 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
       }
     });
 
+    const handleRemotePlay = () => {
+      const pb = playbackRef.current;
+      if (!pb) return;
+      if (!pb.isPlayingRef?.current) {
+        pb.togglePlay?.(true);
+      } else if (!pb.soundRef?.current) {
+        pb.togglePlay?.(true);
+      } else {
+        // Handle case where sound is paused in audio engine
+        pb.soundRef.current.getStatusAsync?.().then((st) => {
+          if (st?.isLoaded && !st.isPlaying) {
+            pb.soundRef.current.playAsync?.().catch(() => {});
+            if (pb.shouldBePlayingRef) pb.shouldBePlayingRef.current = true;
+          }
+        }).catch(() => {});
+      }
+    };
+
+    const handleRemotePause = () => {
+      const pb = playbackRef.current;
+      if (!pb) return;
+      if (typeof pb.pause === 'function') {
+        pb.pause();
+      } else if (pb.isPlayingRef?.current) {
+        pb.togglePlay?.(true);
+      } else {
+        pb.soundRef?.current?.pauseAsync?.().catch(() => {});
+        if (pb.shouldBePlayingRef) pb.shouldBePlayingRef.current = false;
+        if (pb.isPlayingRef) pb.isPlayingRef.current = false;
+        pb.setIsPlaying?.(false);
+      }
+    };
+
+    const handleRemotePlayPause = () => {
+      playbackRef.current?.togglePlay?.(true);
+    };
+
     const handleMediaAction = (action, payload) => {
       try {
         const act = typeof action === 'string' ? action : action?.action || '';
         if (act === 'play') {
-          if (!playbackRef.current?.isPlayingRef?.current) {
-            playbackRef.current?.togglePlay?.();
-          }
+          handleRemotePlay();
         } else if (act === 'pause') {
-          if (playbackRef.current?.isPlayingRef?.current) {
-            playbackRef.current?.togglePlay?.();
-          }
+          handleRemotePause();
         } else if (act === 'play_pause' || act === 'toggle') {
-          playbackRef.current?.togglePlay?.();
+          handleRemotePlayPause();
         } else if (act === 'next') {
           queueRef.current?.playNextTrack?.();
         } else if (act === 'prev' || act === 'previous') {
@@ -221,26 +254,22 @@ export const useAudioMediaSession = ({ playbackRef, queueRef, lyrics }) => {
     const sub = subscribeToMediaActions({
       onPlay: () => {
         try {
-          if (!playbackRef.current?.isPlayingRef?.current) {
-            playbackRef.current?.togglePlay?.();
-          }
+          handleRemotePlay();
         } catch (_e) {}
       },
       onPause: () => {
         try {
-          if (playbackRef.current?.isPlayingRef?.current) {
-            playbackRef.current?.togglePlay?.();
-          }
+          handleRemotePause();
         } catch (_e) {}
       },
       onPlayPause: () => {
         try {
-          playbackRef.current?.togglePlay?.();
+          handleRemotePlayPause();
         } catch (_e) {}
       },
       togglePlay: () => {
         try {
-          playbackRef.current?.togglePlay?.();
+          handleRemotePlayPause();
         } catch (_e) {}
       },
       onNext: () => {

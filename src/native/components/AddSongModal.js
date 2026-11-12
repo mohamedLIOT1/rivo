@@ -16,13 +16,16 @@ import { X, Plus, Search, Link as LinkIcon, Music, Check, Clock } from 'lucide-r
 import { API_BASE_URL } from '../config';
 import { useUser } from '../context/UserContext';
 import { useToast } from '../context/ToastContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 import { formatDuration, sanitizeDuration } from '../utils/timeUtils';
+import { styles } from './addSongStyles';
 
 export default function AddSongModal({ visible, onClose, onSuccess }) {
   const { token, syncUserData } = useUser();
   const { showToast } = useToast();
+  const { isDark } = useTheme();
 
   const [activeTab, setActiveTab] = useState('search'); // 'search' | 'link'
   const [searchQuery, setSearchQuery] = useState('');
@@ -140,12 +143,21 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.sheetOuter}>
-          <View style={styles.hardShadow} />
-          <View style={styles.sheet}>
+          {!isDark && <View style={styles.hardShadow} />}
+          <View style={[
+            styles.sheet,
+            {
+              backgroundColor: isDark ? '#111a18' : colors.paper,
+              borderColor: isDark ? '#27272a' : colors.ink,
+            }
+          ]}>
             {/* Header */}
-            <View style={styles.header}>
+            <View style={[
+              styles.header,
+              { borderBottomColor: isDark ? '#27272a' : colors.ink }
+            ]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={styles.iconBox}>
+                <View style={[styles.iconBox, isDark && { borderColor: '#27272a' }]}>
                   {activeTab === 'search' ? (
                     <Search size={18} color={colors.ink} />
                   ) : (
@@ -153,30 +165,54 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                   )}
                 </View>
                 <View>
-                  <Text style={styles.title}>ADD SONG</Text>
-                  <CassetteTag label="AUDIO STREAM" bg={colors.ink} textColor={colors.tealLight} />
+                  <Text style={[styles.title, { color: isDark ? '#ffffff' : colors.ink }]}>ADD SONG</Text>
+                  <CassetteTag
+                    label="AUDIO STREAM"
+                    bg={isDark ? '#141d1b' : colors.ink}
+                    textColor={isDark ? '#26c4b7' : colors.tealLight}
+                  />
                 </View>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={colors.ink} />
+                <X size={20} color={isDark ? '#e4e4e7' : colors.ink} />
               </TouchableOpacity>
             </View>
 
             {/* Tab Switcher */}
-            <View style={styles.tabBar}>
+            <View style={[
+              styles.tabBar,
+              {
+                backgroundColor: isDark ? '#141d1b' : '#ede5d3',
+                borderColor: isDark ? '#27272a' : colors.ink,
+              }
+            ]}>
               <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'search' && styles.tabBtnActive]}
+                style={[
+                  styles.tabBtn,
+                  activeTab === 'search' && (isDark ? { backgroundColor: '#26c4b7' } : styles.tabBtnActive),
+                ]}
                 onPress={() => setActiveTab('search')}
               >
-                <Text style={[styles.tabBtnText, activeTab === 'search' && styles.tabBtnTextActive]}>
+                <Text style={[
+                  styles.tabBtnText,
+                  { color: isDark ? '#9ca3af' : colors.ink },
+                  activeTab === 'search' && (isDark ? { color: '#08110f' } : styles.tabBtnTextActive),
+                ]}>
                   SEARCH BY NAME
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'link' && styles.tabBtnActive]}
+                style={[
+                  styles.tabBtn,
+                  activeTab === 'link' && (isDark ? { backgroundColor: '#26c4b7' } : styles.tabBtnActive),
+                ]}
                 onPress={() => setActiveTab('link')}
               >
-                <Text style={[styles.tabBtnText, activeTab === 'link' && styles.tabBtnTextActive]}>
+                <Text style={[
+                  styles.tabBtnText,
+                  { color: isDark ? '#9ca3af' : colors.ink },
+                  activeTab === 'link' && (isDark ? { color: '#08110f' } : styles.tabBtnTextActive),
+                ]}>
                   PASTE LINK
                 </Text>
               </TouchableOpacity>
@@ -185,18 +221,27 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
             {/* Tab 1: Search by Name */}
             {activeTab === 'search' ? (
               <View style={{ flex: 1 }}>
-                <View style={styles.searchBar}>
-                  <Search size={16} color={colors.ink} style={{ marginRight: 8 }} />
+                <View style={[
+                  styles.searchBar,
+                  {
+                    backgroundColor: isDark ? '#08110f' : '#ffffff',
+                    borderColor: isDark ? '#27272a' : colors.ink,
+                  }
+                ]}>
+                  <Search size={16} color={isDark ? '#9ca3af' : colors.ink} style={{ marginRight: 8 }} />
                   <TextInput
-                    style={styles.searchInput}
+                    style={[
+                      styles.searchInput,
+                      { color: isDark ? '#ffffff' : colors.ink }
+                    ]}
                     placeholder="Search song or artist name (e.g. Amr Diab, Lege-cy)..."
-                    placeholderTextColor="#6b7280"
+                    placeholderTextColor={isDark ? '#6b7280' : '#6b7280'}
                     value={searchQuery}
                     onChangeText={handleSearchChange}
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
-                  {isSearching && <ActivityIndicator size="small" color={colors.ink} />}
+                  {isSearching && <ActivityIndicator size="small" color={isDark ? '#26c4b7' : colors.ink} />}
                 </View>
 
                 <ScrollView style={styles.resultsList} showsVerticalScrollIndicator={false}>
@@ -206,7 +251,16 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                     const isAdding = addingId === tId;
 
                     return (
-                      <View key={tId} style={styles.resultItem}>
+                      <View
+                        key={tId}
+                        style={[
+                          styles.resultItem,
+                          {
+                            backgroundColor: isDark ? '#141d1b' : '#ffffff',
+                            borderColor: isDark ? '#27272a' : colors.ink,
+                          }
+                        ]}
+                      >
                         <Image
                           source={{
                             uri:
@@ -214,18 +268,18 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                               track.coverUrl ||
                               'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=100',
                           }}
-                          style={styles.resultCover}
+                          style={[styles.resultCover, isDark && { backgroundColor: '#08110f' }]}
                         />
                         <View style={{ flex: 1, marginRight: 8 }}>
-                          <Text style={styles.resultTitle} numberOfLines={1}>
+                          <Text style={[styles.resultTitle, { color: isDark ? '#ffffff' : colors.ink }]} numberOfLines={1}>
                             {track.title}
                           </Text>
-                          <Text style={styles.resultArtist} numberOfLines={1}>
+                          <Text style={[styles.resultArtist, { color: isDark ? '#9ca3af' : '#4b5563' }]} numberOfLines={1}>
                             {track.artist || 'Unknown Artist'}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-                            <Clock size={10} color="#6b7280" />
-                            <Text style={styles.resultMeta}>
+                            <Clock size={10} color={isDark ? '#9ca3af' : '#6b7280'} />
+                            <Text style={[styles.resultMeta, isDark && { color: '#9ca3af' }]}>
                               {formatDuration(track.duration, 180)} • {track.source || 'Online'}
                             </Text>
                           </View>
@@ -261,8 +315,10 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                   {!isSearching && searchQuery.trim() !== '' && searchResults.length === 0 && (
                     <View style={styles.emptyState}>
                       <Music size={28} color="#9ca3af" />
-                      <Text style={styles.emptyText}>No songs found for "{searchQuery}"</Text>
-                      <Text style={styles.emptySub}>
+                      <Text style={[styles.emptyText, { color: isDark ? '#ffffff' : colors.ink }]}>
+                        No songs found for "{searchQuery}"
+                      </Text>
+                      <Text style={[styles.emptySub, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                         Try searching with artist name or switch to "PASTE LINK".
                       </Text>
                     </View>
@@ -271,8 +327,8 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                   {!searchQuery.trim() && (
                     <View style={styles.emptyState}>
                       <Search size={28} color="#9ca3af" />
-                      <Text style={styles.emptyText}>Search Catalog</Text>
-                      <Text style={styles.emptySub}>
+                      <Text style={[styles.emptyText, { color: isDark ? '#ffffff' : colors.ink }]}>Search Catalog</Text>
+                      <Text style={[styles.emptySub, { color: isDark ? '#9ca3af' : '#6b7280' }]}>
                         Type any song or artist name to find and add tracks instantly to your library.
                       </Text>
                     </View>
@@ -282,14 +338,21 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
             ) : (
               /* Tab 2: Paste Link */
               <View style={styles.linkContent}>
-                <Text style={styles.desc}>
+                <Text style={[styles.desc, { color: isDark ? '#9ca3af' : colors.ink }]}>
                   Paste a YouTube, Spotify or direct MP3 stream URL to add it directly to your library:
                 </Text>
 
                 <TextInput
-                  style={styles.input}
+                  style={[
+                    styles.input,
+                    {
+                      backgroundColor: isDark ? '#08110f' : '#ffffff',
+                      borderColor: isDark ? '#27272a' : colors.ink,
+                      color: isDark ? '#ffffff' : colors.ink,
+                    }
+                  ]}
                   placeholder="https://youtu.be/... or https://example.com/audio.mp3"
-                  placeholderTextColor="#9ca3af"
+                  placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
                   value={url}
                   onChangeText={setUrl}
                   autoCapitalize="none"
@@ -297,8 +360,19 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
                 />
 
                 <View style={styles.btnRow}>
-                  <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-                    <Text style={styles.cancelText}>CANCEL</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.cancelBtn,
+                      {
+                        backgroundColor: isDark ? '#1f2937' : '#ede5d3',
+                        borderColor: isDark ? '#27272a' : colors.ink,
+                      }
+                    ]}
+                    onPress={onClose}
+                  >
+                    <Text style={[styles.cancelText, { color: isDark ? '#e4e4e7' : colors.ink }]}>
+                      CANCEL
+                    </Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -321,236 +395,3 @@ export default function AddSongModal({ visible, onClose, onSuccess }) {
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
-    justifyContent: 'flex-end',
-    padding: 12,
-  },
-  sheetOuter: {
-    position: 'relative',
-    height: '80%',
-    maxHeight: '80%',
-  },
-  hardShadow: {
-    position: 'absolute',
-    top: 6,
-    left: 6,
-    right: -6,
-    bottom: -6,
-    backgroundColor: colors.ink,
-    borderRadius: 16,
-  },
-  sheet: {
-    flex: 1,
-    backgroundColor: colors.paper,
-    borderWidth: 2.5,
-    borderColor: colors.ink,
-    borderRadius: 16,
-    padding: 16,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: colors.ink,
-    marginBottom: 10,
-  },
-  iconBox: {
-    width: 34,
-    height: 34,
-    backgroundColor: colors.mint,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 15,
-    color: colors.ink,
-    letterSpacing: 0.5,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#ede5d3',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    padding: 2,
-    marginBottom: 10,
-  },
-  tabBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  tabBtnActive: {
-    backgroundColor: colors.ink,
-  },
-  tabBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  tabBtnTextActive: {
-    color: colors.mint,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginBottom: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: colors.ink,
-    fontWeight: 'bold',
-  },
-  resultsList: {
-    flex: 1,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
-  },
-  resultCover: {
-    width: 44,
-    height: 44,
-    borderRadius: 6,
-    marginRight: 10,
-    backgroundColor: '#ede5d3',
-  },
-  resultTitle: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: colors.ink,
-  },
-  resultArtist: {
-    fontSize: 11,
-    color: '#4b5563',
-    marginTop: 1,
-  },
-  resultMeta: {
-    fontSize: 10,
-    color: '#6b7280',
-    fontFamily: 'monospace',
-  },
-  addBtn: {
-    backgroundColor: colors.mint,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnDone: {
-    backgroundColor: '#86efac',
-  },
-  addBtnText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 11,
-    color: colors.ink,
-  },
-  emptyState: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-  },
-  emptyText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 13,
-    color: colors.ink,
-    marginTop: 8,
-  },
-  emptySub: {
-    fontSize: 11,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: 20,
-  },
-  linkContent: {
-    paddingTop: 8,
-  },
-  desc: {
-    fontSize: 12,
-    color: colors.ink,
-    opacity: 0.85,
-    lineHeight: 18,
-    marginBottom: 10,
-  },
-  input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: colors.ink,
-    fontWeight: 'bold',
-    marginBottom: 12,
-  },
-  btnRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: '#ede5d3',
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 12,
-    color: colors.ink,
-  },
-  submitBtn: {
-    flex: 2,
-    backgroundColor: colors.mint,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  submitText: {
-    fontFamily: 'monospace',
-    fontWeight: '900',
-    fontSize: 12,
-    color: colors.ink,
-  },
-});

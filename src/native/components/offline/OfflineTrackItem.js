@@ -29,6 +29,7 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
   isSelectMode,
   isDark,
   onPress,
+  onLongPress,
   onPlay,
   onExport,
   onDelete,
@@ -40,6 +41,7 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
     <TouchableOpacity
       activeOpacity={0.8}
       onPress={onPress}
+      onLongPress={onLongPress}
       style={[
         styles.trackCard,
         !isDark && styles.trackCardLight,
@@ -66,6 +68,7 @@ export const OfflineTrackItem = React.memo(function OfflineTrackItem({
             uri: normalizeCoverUri(track?.coverUrl || track?.cover, track),
           }}
           style={styles.cover}
+          resizeMode="cover"
           fadeDuration={0}
         />
       </View>

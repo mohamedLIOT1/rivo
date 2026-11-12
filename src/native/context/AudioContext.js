@@ -305,6 +305,7 @@ export const AudioProvider = ({ children }) => {
       playTrack: playback.playTrack,
       playPlaylist: playback.playPlaylist,
       togglePlay: playback.togglePlay,
+      pause: playback.pause,
       seekTo: playback.seekTo,
       jumpBy: playback.jumpBy,
       playbackRate: playback.playbackRate,

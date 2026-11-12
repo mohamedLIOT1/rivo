@@ -57,7 +57,12 @@ const SearchPersonCard = React.memo(function SearchPersonCard({ user, isHorizont
     >
       <View style={styles.personAvatarWrap}>
         {user.avatar ? (
-          <Image source={{ uri: normalizeCoverUri(user.avatar) }} style={styles.personAvatar} fadeDuration={0} />
+          <Image
+            source={{ uri: normalizeCoverUri(user.avatar) }}
+            style={styles.personAvatar}
+            resizeMode="cover"
+            fadeDuration={0}
+          />
         ) : (
           <View style={styles.personAvatarFallback}>
             <Text style={styles.personAvatarInitial}>{initial}</Text>
@@ -627,9 +632,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               renderItem={renderHorizontalPersonItem}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.peopleScrollRow}
-              windowSize={5}
-              initialNumToRender={6}
-              maxToRenderPerBatch={6}
+              windowSize={7}
+              initialNumToRender={8}
+              maxToRenderPerBatch={8}
+              updateCellsBatchingPeriod={30}
               removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
@@ -657,9 +663,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               renderItem={renderHorizontalArtistItem}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.artistsScrollRow}
-              windowSize={5}
-              initialNumToRender={6}
-              maxToRenderPerBatch={6}
+              windowSize={7}
+              initialNumToRender={8}
+              maxToRenderPerBatch={8}
+              updateCellsBatchingPeriod={30}
               removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
@@ -925,10 +932,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={isLiteMode ? 6 : 8}
-        maxToRenderPerBatch={isLiteMode ? 4 : 6}
-        windowSize={5}
-        updateCellsBatchingPeriod={50}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        windowSize={7}
+        updateCellsBatchingPeriod={30}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl

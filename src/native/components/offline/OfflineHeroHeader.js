@@ -43,7 +43,7 @@ export const OfflineHeroHeader = React.memo(function OfflineHeroHeader({
     <View>
       {/* Offline Storage Status Card */}
       <View style={styles.heroOuter}>
-        <View style={styles.heroShadow} />
+        {Platform.OS !== 'android' && <View style={styles.heroShadow} />}
         <View style={[styles.heroCard, !isDark && styles.heroCardLight]}>
           <View style={styles.topRow}>
             <CassetteTag label={isRTL ? 'بدون إنترنت' : 'NO WI-FI REQUIRED'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />

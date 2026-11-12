@@ -223,11 +223,13 @@ export const subscribeToMediaActions = (callbackOrHandlers) => {
               if (typeof callbackOrHandlers.onPlay === 'function') callbackOrHandlers.onPlay();
               else if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
               else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
+              else if (typeof callbackOrHandlers.onAction === 'function') callbackOrHandlers.onAction('play', seekPos);
               break;
             case 'pause':
               if (typeof callbackOrHandlers.onPause === 'function') callbackOrHandlers.onPause();
               else if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
               else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
+              else if (typeof callbackOrHandlers.onAction === 'function') callbackOrHandlers.onAction('pause', seekPos);
               break;
             case 'play_pause':
             case 'playpause':
@@ -236,6 +238,7 @@ export const subscribeToMediaActions = (callbackOrHandlers) => {
               if (typeof callbackOrHandlers.onPlayPause === 'function') callbackOrHandlers.onPlayPause();
               else if (typeof callbackOrHandlers.togglePlay === 'function') callbackOrHandlers.togglePlay();
               else if (typeof callbackOrHandlers.onPlay === 'function') callbackOrHandlers.onPlay();
+              else if (typeof callbackOrHandlers.onAction === 'function') callbackOrHandlers.onAction('play_pause', seekPos);
               break;
             case 'next':
               callbackOrHandlers.onNext?.();

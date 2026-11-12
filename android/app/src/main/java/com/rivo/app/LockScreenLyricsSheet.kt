@@ -28,7 +28,12 @@ class LockScreenLyricsSheet(
     private var activeIndex = -1
     private var isUserScrolling = false
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val resumeAutoScrollRunnable = Runnable { isUserScrolling = false }
+    private val resumeAutoScrollRunnable = Runnable {
+        isUserScrolling = false
+        if (isSheetOpen) {
+            scrollToActive(smooth = true)
+        }
+    }
     private val adapter = LyricsAdapter()
 
     init {
@@ -38,12 +43,16 @@ class LockScreenLyricsSheet(
 
         listView?.setOnScrollListener(object : AbsListView.OnScrollListener {
             override fun onScrollStateChanged(view: AbsListView?, scrollState: Int) {
-                if (scrollState == AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL) {
-                    isUserScrolling = true
-                    mainHandler.removeCallbacks(resumeAutoScrollRunnable)
-                } else if (scrollState == AbsListView.OnScrollListener.SCROLL_STATE_IDLE) {
-                    mainHandler.removeCallbacks(resumeAutoScrollRunnable)
-                    mainHandler.postDelayed(resumeAutoScrollRunnable, 3000L)
+                when (scrollState) {
+                    AbsListView.OnScrollListener.SCROLL_STATE_TOUCH_SCROLL,
+                    AbsListView.OnScrollListener.SCROLL_STATE_FLING -> {
+                        isUserScrolling = true
+                        mainHandler.removeCallbacks(resumeAutoScrollRunnable)
+                    }
+                    AbsListView.OnScrollListener.SCROLL_STATE_IDLE -> {
+                        mainHandler.removeCallbacks(resumeAutoScrollRunnable)
+                        mainHandler.postDelayed(resumeAutoScrollRunnable, 3000L)
+                    }
                 }
             }
 
@@ -59,6 +68,8 @@ class LockScreenLyricsSheet(
                 MediaControlsModule.sendEvent("seek:$posSeconds")
                 activeIndex = position
                 adapter.notifyDataSetChanged()
+                isUserScrolling = false
+                mainHandler.removeCallbacks(resumeAutoScrollRunnable)
                 scrollToActive(smooth = true)
             }
         }
@@ -68,6 +79,8 @@ class LockScreenLyricsSheet(
         refresh()
         val root = sheetRoot ?: return
         isSheetOpen = true
+        isUserScrolling = false
+        mainHandler.removeCallbacks(resumeAutoScrollRunnable)
         root.animate().cancel()
         root.visibility = View.VISIBLE
         root.translationY = 600f
@@ -84,6 +97,7 @@ class LockScreenLyricsSheet(
 
     fun hide() {
         isSheetOpen = false
+        mainHandler.removeCallbacks(resumeAutoScrollRunnable)
         val root = sheetRoot ?: return
         if (root.visibility != View.VISIBLE) return
         root.animate().cancel()
@@ -114,7 +128,7 @@ class LockScreenLyricsSheet(
             val isSynced = LockScreenLyricsStore.hasSyncedLyrics()
             txtSyncStatus?.text = if (isSynced) "Synced • Tap to jump" else "Lyrics"
         } else {
-            emptyView?.visibility = View.GONE
+            emptyView?.visibility = View.VISIBLE
             listView?.visibility = View.GONE
             txtSyncStatus?.text = "No lyrics"
         }
@@ -138,7 +152,8 @@ class LockScreenLyricsSheet(
     private fun scrollToActive(smooth: Boolean) {
         val list = listView ?: return
         if (activeIndex !in 0 until adapter.count) return
-        val offset = (list.height * 0.33f).toInt().coerceAtLeast(0)
+        val listHeight = if (list.height > 0) list.height else list.resources.displayMetrics.heightPixels / 2
+        val offset = (listHeight * 0.33f).toInt().coerceAtLeast(0)
         if (smooth) {
             list.smoothScrollToPositionFromTop(activeIndex, offset, 300)
         } else {
@@ -181,15 +196,19 @@ class LockScreenLyricsSheet(
 
             val isActive = position == activeIndex
             if (isActive) {
-                holder.txtText.setTextColor(COLOR_ACTIVE)
+                holder.txtText.setTextColor(COLOR_EMERALD)
                 holder.txtText.setTypeface(null, Typeface.BOLD)
-                holder.txtText.textSize = 17.5f
+                holder.txtText.textSize = 18f
                 holder.txtText.alpha = 1.0f
+                holder.txtText.scaleX = 1.05f
+                holder.txtText.scaleY = 1.05f
+                holder.txtText.pivotX = 0f
                 if (item.timeMs >= 0L) {
                     holder.txtTime.visibility = View.VISIBLE
-                    holder.txtTime.setTextColor(COLOR_ACTIVE)
+                    holder.txtTime.setTextColor(COLOR_EMERALD)
                     holder.txtTime.text = formatTime(item.timeMs)
-                    holder.txtTime.alpha = 0.85f
+                    holder.txtTime.alpha = 0.9f
+                    holder.txtTime.setTypeface(null, Typeface.BOLD)
                 } else {
                     holder.txtTime.visibility = View.GONE
                 }
@@ -198,12 +217,16 @@ class LockScreenLyricsSheet(
                 holder.txtText.setTextColor(COLOR_INACTIVE)
                 holder.txtText.setTypeface(null, Typeface.NORMAL)
                 holder.txtText.textSize = 15.5f
-                holder.txtText.alpha = if (isPast) 0.5f else 0.85f
+                holder.txtText.alpha = if (isPast) 0.45f else 0.75f
+                holder.txtText.scaleX = 1.0f
+                holder.txtText.scaleY = 1.0f
+                holder.txtText.pivotX = 0f
                 if (item.timeMs >= 0L) {
                     holder.txtTime.visibility = View.VISIBLE
                     holder.txtTime.setTextColor(COLOR_TIME_DIM)
                     holder.txtTime.text = formatTime(item.timeMs)
-                    holder.txtTime.alpha = 0.5f
+                    holder.txtTime.alpha = if (isPast) 0.35f else 0.55f
+                    holder.txtTime.setTypeface(null, Typeface.NORMAL)
                 } else {
                     holder.txtTime.visibility = View.GONE
                 }
@@ -221,7 +244,7 @@ class LockScreenLyricsSheet(
     }
 
     companion object {
-        private const val COLOR_ACTIVE = 0xFF2DD4BF.toInt()
+        private const val COLOR_EMERALD = 0xFF10B981.toInt()
         private const val COLOR_INACTIVE = 0xFFFFFFFF.toInt()
         private const val COLOR_TIME_DIM = 0xFF94A3B8.toInt()
     }

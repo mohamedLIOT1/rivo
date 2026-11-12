@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { WifiOff, Wifi, Search, ListPlus, Trash2 } from 'lucide-react-native';
+import { WifiOff, Wifi, Search, ListPlus, Trash2, FolderDown } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useToast } from '../context/ToastContext';
 import { useTheme } from '../context/ThemeContext';
@@ -51,6 +51,7 @@ function OfflineScreen() {
     formatBytes,
     handleDelete,
     handleBatchDelete,
+    handleBatchExport,
     handlePlayOffline,
     handleExportTrack,
   } = useOfflineOperations({
@@ -155,6 +156,14 @@ function OfflineScreen() {
     });
   }, [getSelectedTracks, handleBatchDelete]);
 
+  const onConfirmBatchExport = useCallback(() => {
+    const sel = getSelectedTracks();
+    handleBatchExport(sel, () => {
+      setSelectedIds([]);
+      setIsSelectMode(false);
+    });
+  }, [getSelectedTracks, handleBatchExport]);
+
   const keyExtractor = useCallback((track, idx) => {
     return String(track?._id || track?.id || idx);
   }, []);
@@ -184,6 +193,12 @@ function OfflineScreen() {
             toggleSelectTrack(trackId);
           } else {
             handlePlayOffline(track);
+          }
+        }}
+        onLongPress={() => {
+          if (!isSelectMode) {
+            setIsSelectMode(true);
+            toggleSelectTrack(trackId);
           }
         }}
         onPlay={() => handlePlayOffline(track)}
@@ -332,16 +347,19 @@ function OfflineScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[styles.content, isSelectMode && { paddingBottom: 110 }]}
         showsVerticalScrollIndicator={false}
-        windowSize={Platform.OS === 'android' ? 3 : 5}
-        initialNumToRender={Platform.OS === 'android' ? 6 : 8}
-        maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 6}
-        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={30}
         removeClippedSubviews={Platform.OS === 'android'}
       />
 
       {/* Floating Tactical Multi-Select Bottom Action Deck */}
       {isSelectMode && (
-        <View style={[styles.selectActionBar, { bottom: currentTrack ? (Platform.OS === 'ios' ? 134 : 118) : 20 }]}>
+        <View
+          style={[styles.selectActionBar, { bottom: currentTrack ? (Platform.OS === 'ios' ? 134 : 118) : 20 }]}
+          renderToHardwareTextureAndroid={true}
+        >
           <View style={styles.selectInfoRow}>
             <Text style={styles.selectCountBadge}>{selectedIds.length}</Text>
             <Text style={styles.selectCountText}>{t('offline.selectedCount')}</Text>
@@ -358,6 +376,14 @@ function OfflineScreen() {
           >
             <ListPlus size={14} color={colors.ink} />
             <Text style={styles.selectActionBtnText}>{t('offline.queueSelected')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={onConfirmBatchExport}
+            disabled={selectedIds.length === 0}
+            style={[styles.selectActionBtnSuccess, selectedIds.length === 0 && { opacity: 0.4 }]}
+          >
+            <FolderDown size={14} color="#ffffff" />
+            <Text style={styles.selectActionBtnTextSuccess}>{t('offline.exportSelected') || (isRTL ? 'تصدير' : 'EXPORT')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={onConfirmBatchDelete}

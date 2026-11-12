@@ -28,6 +28,7 @@ export default {
   selectAll: 'تحديد الكل',
   deselectAll: 'إلغاء تحديد الكل',
   queueSelected: 'إضافة للانتظار',
+  exportSelected: 'تصدير',
   deleteSelected: 'حذف',
   deleteConfirmTitle: 'حذف المقاطع المحلية',
   deleteConfirmDesc: 'هل أنت متأكد من حذف {count} مقطع محدد من ذاكرة الهاتف؟',

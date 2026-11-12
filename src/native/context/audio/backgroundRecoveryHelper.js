@@ -294,7 +294,11 @@ export const handlePlaybackStallOrInterruption = (ctx) => {
   const { status, soundRef, shouldBePlayingRef, isLoadingRef, isSeekingRef, interruptedByOsRef, isPlayingRef, setIsPlaying, stallRecoveryTimerRef, notifyPaused } = ctx;
   if (!shouldBePlayingRef?.current || isLoadingRef?.current || isSeekingRef?.current) return;
 
-  if (interruptedByOsRef?.current) {
+  const isBackground = AppState?.currentState !== 'active';
+
+  // If already marked as interrupted or app is in background while unbuffered pause occurred (external app playing sound)
+  if (interruptedByOsRef?.current || (isBackground && !status?.isBuffering)) {
+    if (interruptedByOsRef) interruptedByOsRef.current = true;
     clearStallRecoveryTimer(stallRecoveryTimerRef);
     if (isPlayingRef?.current && typeof setIsPlaying === 'function') {
       setIsPlaying(false);

@@ -25,6 +25,7 @@ export const styles = StyleSheet.create({
     bottom: -5,
     backgroundColor: colors.tealDark,
     borderRadius: 12,
+    ...(Platform.OS === 'android' ? { display: 'none' } : {}),
   },
   heroCard: {
     backgroundColor: colors.surfaceDark,
@@ -450,6 +451,21 @@ export const styles = StyleSheet.create({
   },
   selectActionBtnText: {
     color: colors.ink,
+    fontSize: 11,
+    fontWeight: '900',
+    fontFamily: 'monospace',
+  },
+  selectActionBtnSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#10b981',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  selectActionBtnTextSuccess: {
+    color: '#000000',
     fontSize: 11,
     fontWeight: '900',
     fontFamily: 'monospace',

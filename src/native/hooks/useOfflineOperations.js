@@ -7,6 +7,7 @@ import {
   importLocalAudioFiles,
   importAudioFolderFromDevice,
   exportTrackAudioFile,
+  exportTracksBatch,
   scanOfflineVault,
   getStorageLocationInfo,
   deduplicateTrackList,
@@ -212,6 +213,33 @@ export function useOfflineOperations({
     }
   }, [showToast]);
 
+  const handleBatchExport = useCallback(async (sel, onSuccess) => {
+    if (!sel || sel.length === 0) return;
+    try {
+      setActionLoading(true);
+      showToast('Exporting songs to selected folder...', 'info');
+      const res = await exportTracksBatch(sel);
+      if (res?.cancelled) {
+        showToast('Export cancelled', 'info');
+        return;
+      }
+      if (res?.success) {
+        if (res.exportedCount === 0 && res.skippedCount > 0) {
+          showToast(`All ${res.skippedCount} song(s) already exist in that folder`, 'info');
+        } else if (res.skippedCount > 0) {
+          showToast(`Exported ${res.exportedCount} song(s) (${res.skippedCount} skipped - already existed)`, 'success');
+        } else {
+          showToast(`Exported ${res.exportedCount} song(s) successfully!`, 'success');
+        }
+        onSuccess?.();
+      }
+    } catch (e) {
+      showToast(e.message || 'Export failed', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [showToast]);
+
   return {
     offlineTracks,
     storageUsed,
@@ -224,6 +252,7 @@ export function useOfflineOperations({
     formatBytes,
     handleDelete,
     handleBatchDelete,
+    handleBatchExport,
     handlePlayOffline,
     handleExportTrack,
   };

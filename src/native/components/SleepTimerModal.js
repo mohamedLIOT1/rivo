@@ -4,6 +4,7 @@ import { X, Moon, Clock, Ban } from 'lucide-react-native';
 import { useSleepTimer, useSleepTimerRemaining } from '../context/SleepTimerContext';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useTranslation, useLiteMode } from '../context/LocalizationContext';
+import { useTheme } from '../context/ThemeContext';
 import { colors } from '../theme/colors';
 import CassetteTag from '../ui/CassetteTag';
 
@@ -32,6 +33,7 @@ const SleepTimerCountdownText = React.memo(function SleepTimerCountdownText({
 export default function SleepTimerModal({ visible, onClose }) {
   const { isRTL } = useTranslation();
   const { isLiteMode } = useLiteMode();
+  const { isDark } = useTheme();
   const sleepTimer = useSleepTimer();
   const audioPlayer = useAudioPlayer();
 
@@ -61,31 +63,52 @@ export default function SleepTimerModal({ visible, onClose }) {
       />
       <View style={styles.overlay} pointerEvents="box-none">
         <View style={styles.sheetOuter}>
-          {!isLiteMode && <View style={styles.hardShadow} />}
-          <View style={styles.sheet}>
+          {!isLiteMode && !isDark && <View style={styles.hardShadow} />}
+          <View style={[
+            styles.sheet,
+            {
+              backgroundColor: isDark ? '#111a18' : colors.paper,
+              borderColor: isDark ? '#27272a' : colors.ink,
+            }
+          ]}>
             {/* Header */}
             <View style={styles.header}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={styles.iconBox}>
-                  <Moon size={18} color={colors.ink} />
+                <View style={[styles.iconBox, isDark && { borderColor: '#27272a' }]}>
+                  <Moon size={18} color={isDark ? '#26c4b7' : colors.ink} />
                 </View>
                 <View>
-                  <Text style={[styles.title, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }]}>
+                  <Text style={[
+                    styles.title,
+                    { color: isDark ? '#ffffff' : colors.ink },
+                    isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }
+                  ]}>
                     {isRTL ? 'مؤقت النوم' : 'SLEEP TIMER'}
                   </Text>
-                  <CassetteTag label={isRTL ? 'إيقاف تلقائي' : 'AUTO-SUSPEND DECK'} bg={colors.ink} textColor={colors.sky} />
+                  <CassetteTag
+                    label={isRTL ? 'إيقاف تلقائي' : 'AUTO-SUSPEND DECK'}
+                    bg={isDark ? '#141d1b' : colors.ink}
+                    textColor={isDark ? '#26c4b7' : colors.sky}
+                  />
                 </View>
               </View>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                <X size={20} color={colors.ink} />
+                <X size={20} color={isDark ? '#e4e4e7' : colors.ink} />
               </TouchableOpacity>
             </View>
 
             {/* Active countdown / status card */}
             {isTimerActive && (
-              <View style={styles.activeCard}>
+              <View style={[
+                styles.activeCard,
+                isDark && { backgroundColor: '#08110f', borderColor: '#26c4b7' }
+              ]}>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.activeLabel, isRTL && { letterSpacing: 0 }]}>
+                  <Text style={[
+                    styles.activeLabel,
+                    isDark && { color: '#26c4b7' },
+                    isRTL && { letterSpacing: 0 }
+                  ]}>
                     {isRTL ? 'المؤقت مفعّل حالياً' : 'TIMER CURRENTLY ACTIVE'}
                   </Text>
                   <SleepTimerCountdownText
@@ -109,22 +132,36 @@ export default function SleepTimerModal({ visible, onClose }) {
               </View>
             )}
 
-            <Text style={[styles.subText, isRTL && { letterSpacing: 0 }]}>
+            <Text style={[
+              styles.subText,
+              { color: isDark ? '#9ca3af' : colors.ink },
+              isRTL && { letterSpacing: 0 }
+            ]}>
               {isRTL ? 'إيقاف التشغيل بعد:' : 'Suspend playback after:'}
             </Text>
             <View style={styles.optionsList}>
               {timerOptions.map((opt) => (
                 <TouchableOpacity
                   key={String(opt.minutes)}
-                  style={styles.optionBtn}
+                  style={[
+                    styles.optionBtn,
+                    {
+                      backgroundColor: isDark ? '#141d1b' : colors.cardBg,
+                      borderColor: isDark ? '#27272a' : colors.ink,
+                    }
+                  ]}
                   onPress={() => {
                     if (startSleepTimer) startSleepTimer(opt.minutes);
                     onClose();
                   }}
                   activeOpacity={0.8}
                 >
-                  <Clock size={16} color={colors.ink} />
-                  <Text style={[styles.optionLabel, isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }]}>
+                  <Clock size={16} color={isDark ? '#26c4b7' : colors.ink} />
+                  <Text style={[
+                    styles.optionLabel,
+                    { color: isDark ? '#ffffff' : colors.ink },
+                    isRTL && { letterSpacing: 0, fontFamily: Platform.OS === 'ios' ? 'System' : 'normal' }
+                  ]}>
                     {opt.label}
                   </Text>
                 </TouchableOpacity>
