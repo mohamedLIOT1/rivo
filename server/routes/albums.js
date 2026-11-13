@@ -19,15 +19,22 @@ let cachedFeaturedJson = null;
 let cachedFeaturedTime = 0;
 let cachedFeaturedEtag = null;
 
-const ALBUMS_CACHE_TTL = 60 * 1000;
+const ALBUMS_CACHE_TTL = 15 * 60 * 1000; // 15 minutes cache
+const albumDetailsCache = new Map();
+const ALBUM_DETAILS_TTL = 15 * 60 * 1000;
 
-function invalidateAlbumsCache() {
+function invalidateAlbumsCache(albumKey = null) {
   cachedAlbumsJson = null;
   cachedAlbumsTime = 0;
   cachedAlbumsEtag = null;
   cachedFeaturedJson = null;
   cachedFeaturedTime = 0;
   cachedFeaturedEtag = null;
+  if (albumKey) {
+    albumDetailsCache.delete(String(albumKey).toLowerCase().trim());
+  } else {
+    albumDetailsCache.clear();
+  }
 }
 
 // GET /api/albums - List albums with slim projection by default or top 16 curated releases
@@ -204,6 +211,15 @@ router.get('/lookup', handleAlbumLookup);
 router.get('/:id', async (req, res) => {
   try {
     const rawId = req.params.id;
+    const cacheKey = String(rawId).toLowerCase().trim();
+
+    // High-speed in-memory cache hit (< 5ms)
+    const cached = albumDetailsCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < ALBUM_DETAILS_TTL)) {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.json(cached.data);
+    }
+
     let album = null;
     if (mongoose.isValidObjectId(rawId)) {
       album = await Album.findById(rawId).lean();
@@ -238,7 +254,7 @@ router.get('/:id', async (req, res) => {
     }
 
     const tracks = orConditions.length > 0
-      ? await Track.find({ $or: orConditions }).lean()
+      ? await Track.find({ $or: orConditions }, { lyrics: 0, fullLyrics: 0 }).lean()
       : [];
 
     const formattedTracks = tracks.map(t => ({
@@ -316,8 +332,13 @@ router.get('/:id', async (req, res) => {
       tracks: validTracks,
       trackIds: cleanTrackIds
     };
+    const responseData = { success: true, album: formattedAlbum, tracks: validTracks };
+    albumDetailsCache.set(cacheKey, { data: responseData, timestamp: Date.now() });
+    if (album.id) albumDetailsCache.set(String(album.id).toLowerCase().trim(), { data: responseData, timestamp: Date.now() });
+    if (album._id) albumDetailsCache.set(String(album._id).toLowerCase().trim(), { data: responseData, timestamp: Date.now() });
+
     res.setHeader('Cache-Control', 'public, max-age=300');
-    res.json({ success: true, album: formattedAlbum, tracks: validTracks });
+    res.json(responseData);
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
   }

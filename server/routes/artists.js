@@ -16,15 +16,29 @@ const { autoGenerateAndSaveArtistBio } = require('./artists/artistBioHelper');
 // In-memory cache for aggregate artist data
 let artistsCache = null;
 let lastCacheTime = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache
+
+// In-memory cache for individual artist profiles
+const artistProfileCache = new Map();
+const PROFILE_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+function clearArtistCache(artistKey = null) {
+  if (artistKey) {
+    artistProfileCache.delete(String(artistKey).toLowerCase().trim());
+  } else {
+    artistProfileCache.clear();
+  }
+  artistsCache = null;
+  lastCacheTime = 0;
+}
 
 async function getCachedOrFetchArtists(forceRefresh = false) {
   if (!forceRefresh && artistsCache && (Date.now() - lastCacheTime < CACHE_TTL_MS)) {
     return artistsCache;
   }
 
-  const allTracks = await Track.find({}, 'artist album title cover plays').lean();
-  const allAlbums = await Album.find().lean();
+  const allTracks = await Track.find({}, 'artist album title cover plays isQuran').lean();
+  const allAlbums = await Album.find({}, { tracks: 0, description: 0 }).lean();
   const allArtistDocs = await Artist.find().lean();
 
   const artistDocMap = {};
@@ -177,6 +191,15 @@ router.get('/:name', async (req, res) => {
   try {
     const rawName = decodeURIComponent(req.params.name).trim();
     const canonicalName = getCanonicalArtistName(rawName) || rawName;
+    const cacheKey = canonicalName.toLowerCase().trim();
+
+    // High-speed in-memory cache hit (< 5ms)
+    const cached = artistProfileCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < PROFILE_CACHE_TTL)) {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      return res.json({ success: true, artist: cached.data });
+    }
+
     const aliases = getArtistAliases(canonicalName);
     const allNames = Array.from(new Set([rawName, canonicalName, ...aliases])).filter(Boolean);
     const pattern = allNames.map(escapeRegex).join('|');
@@ -184,8 +207,8 @@ router.get('/:name', async (req, res) => {
     const regex = new RegExp(`(?:^|[\\s,،;&+/])(?:${pattern})(?:$|[\\s,،;&+/])`, 'i');
 
     const [tracks, rawAlbums, artistDoc] = await Promise.all([
-      Track.find({ artist: { $regex: regex } }).sort({ views: -1, plays: -1 }).lean(),
-      Album.find({ artist: { $regex: regex } }).sort({ createdAt: -1 }).lean(),
+      Track.find({ artist: { $regex: regex } }, { lyrics: 0, fullLyrics: 0 }).sort({ views: -1, plays: -1 }).lean(),
+      Album.find({ artist: { $regex: regex } }, { tracks: 0, description: 0 }).sort({ createdAt: -1 }).lean(),
       Artist.findOne({ name: { $regex: new RegExp(`^(?:${pattern})$`, 'i') } }).lean()
     ]);
 
@@ -237,6 +260,8 @@ router.get('/:name', async (req, res) => {
       albums
     };
 
+    artistProfileCache.set(cacheKey, { data: artistData, timestamp: Date.now() });
+    res.setHeader('Cache-Control', 'public, max-age=300');
     res.json({ success: true, artist: artistData });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -247,6 +272,7 @@ router.get('/:name', async (req, res) => {
 router.put('/:name', adminAuth, async (req, res) => {
   try {
     const rawName = decodeURIComponent(req.params.name).trim();
+    clearArtistCache(rawName);
     const { name, bio, cover, banner, isVerified, customLinks } = req.body;
     const newName = (name || rawName).trim();
     const artistId = newName.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
@@ -281,7 +307,10 @@ router.put('/:name', adminAuth, async (req, res) => {
     }
 
     // Invalidate memory cache so changes reflect immediately
-    artistsCache = null;
+    clearArtistCache(rawName);
+    if (name && rawName.toLowerCase() !== newName.toLowerCase()) {
+      clearArtistCache(newName);
+    }
 
     const io = req.app.get('io') || req.io;
     if (io) io.emit('artist:updated', updated);
@@ -291,4 +320,5 @@ router.put('/:name', adminAuth, async (req, res) => {
   }
 });
 
+router.clearArtistCache = clearArtistCache;
 module.exports = router;

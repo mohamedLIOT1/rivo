@@ -49,7 +49,7 @@ async function resolvePlaylistDetails({ plId, authUserId }) {
       }
       let albumTracks = [];
       if (orConditions.length > 0) {
-        albumTracks = await Track.find({ $or: orConditions }).lean();
+        albumTracks = await Track.find({ $or: orConditions }, { lyrics: 0, fullLyrics: 0 }).lean();
       }
       return {
         status: 200,
@@ -110,9 +110,9 @@ async function resolvePlaylistDetails({ plId, authUserId }) {
           { _id: { $in: validObjectIds } },
           { id: { $in: rawIds } }
         ]
-      }).lean();
+      }, { lyrics: 0, fullLyrics: 0 }).lean();
     } else if (rawIds.length > 0) {
-      populatedTracks = await Track.find({ id: { $in: rawIds } }).lean();
+      populatedTracks = await Track.find({ id: { $in: rawIds } }, { lyrics: 0, fullLyrics: 0 }).lean();
     }
 
     const trackMap = new Map();

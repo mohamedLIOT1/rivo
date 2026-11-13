@@ -16,6 +16,10 @@ const getHeaders = () => {
   };
 };
 
+let memoryAlbumsCache = null;
+let memoryAlbumsCacheTime = 0;
+const CLIENT_ALBUMS_TTL = 10 * 60 * 1000; // 10 minutes
+
 export const dataService = {
   // ── Tracks ──────────────────────────────────────────────────────────
   async addTrack(song) {
@@ -53,16 +57,54 @@ export const dataService = {
   },
 
   // ── Albums ──────────────────────────────────────────────────────────
-  async fetchAlbums() {
-    const res = await fetch(`${API_BASE_URL}/api/albums`);
-    const data = await res.json();
-    if (data.success && Array.isArray(data.albums)) {
-      return data.albums;
+  async fetchAlbums({ bypassCache = false } = {}) {
+    if (!bypassCache && memoryAlbumsCache && (Date.now() - memoryAlbumsCacheTime < CLIENT_ALBUMS_TTL)) {
+      return memoryAlbumsCache;
+    }
+
+    try {
+      if (!bypassCache && !memoryAlbumsCache) {
+        const stored = sessionStorage.getItem('rivo_cached_albums');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            memoryAlbumsCache = parsed;
+            memoryAlbumsCacheTime = Date.now();
+            // Stale-while-revalidate: return cached immediately, fetch fresh in background
+            fetch(`${API_BASE_URL}/api/albums`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.success && Array.isArray(d.albums)) {
+                  memoryAlbumsCache = d.albums;
+                  memoryAlbumsCacheTime = Date.now();
+                  sessionStorage.setItem('rivo_cached_albums', JSON.stringify(d.albums));
+                }
+              })
+              .catch(() => {});
+            return parsed;
+          }
+        }
+      }
+
+      const res = await fetch(`${API_BASE_URL}/api/albums`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.albums)) {
+        memoryAlbumsCache = data.albums;
+        memoryAlbumsCacheTime = Date.now();
+        try {
+          sessionStorage.setItem('rivo_cached_albums', JSON.stringify(data.albums));
+        } catch {}
+        return data.albums;
+      }
+    } catch (err) {
+      if (memoryAlbumsCache) return memoryAlbumsCache;
     }
     return [];
   },
 
   async deleteAlbum(albumId, deleteTracks = true) {
+    memoryAlbumsCache = null;
+    try { sessionStorage.removeItem('rivo_cached_albums'); } catch {}
     const res = await fetch(`${API_BASE_URL}/api/albums/${encodeURIComponent(albumId)}`, {
       method: 'DELETE',
       headers: getHeaders(),

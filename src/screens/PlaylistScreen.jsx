@@ -23,6 +23,10 @@ import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import { getAlbumArtwork, OFFICIAL_ALBUM_COVERS } from './ArtistScreen';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
 
+// In-memory client cache for 0ms instant album & playlist loading
+const clientPlaylistCache = new Map();
+const CLIENT_PL_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
 export default function PlaylistScreen({
   playlist: initialPlaylist, 
   tracks = [], 
@@ -72,10 +76,22 @@ export default function PlaylistScreen({
 
   useEffect(() => {
     const plId = initialPlaylist?.id || initialPlaylist?._id;
-    setRemotePlaylist(null);
-    setFetchedTracks([]);
     if (!plId || plId === 'liked') {
+      setRemotePlaylist(null);
+      setFetchedTracks([]);
       return;
+    }
+
+    // Instant 0ms cache restore if previously visited
+    const cached = clientPlaylistCache.get(String(plId));
+    if (cached) {
+      setRemotePlaylist(cached.playlist);
+      if (Array.isArray(cached.tracks) && cached.tracks.length > 0) {
+        setFetchedTracks(cached.tracks);
+      }
+    } else {
+      setRemotePlaylist(null);
+      setFetchedTracks([]);
     }
 
     // Synthetic 12-hour AI Mood Mix playlist: never fetch non-existent /api/playlists/ai-mood-mix
@@ -135,6 +151,7 @@ export default function PlaylistScreen({
                 trackIds: fTrackIds,
                 tracks: cleanTracks
               };
+              clientPlaylistCache.set(String(plId), { playlist: enrichedPl, tracks: cleanTracks, timestamp: Date.now() });
               setRemotePlaylist(enrichedPl);
               try { onUpdatePlaylist(enrichedPl); } catch {}
               if (cleanTracks.length > 0) {

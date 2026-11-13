@@ -3,10 +3,11 @@ import { API_BASE_URL } from '../../config';
 import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../../utils/artistUtils';
 import { isQuranContent } from '../../utils/quranUtils';
 
-export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
-  const [remoteData, setRemoteData] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+// In-memory client cache for 0ms instant artist page loads
+const clientArtistCache = new Map();
+const CLIENT_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
   const rawArtistName = useMemo(() => {
     if (!initialArtist) return '';
     if (typeof initialArtist === 'string') return initialArtist.trim();
@@ -18,16 +19,32 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
   const artistKey = artistName.toLowerCase();
   const aliasNote = useMemo(() => getArtistAliasNote(artistName), [artistName]);
 
-  // Fetch full artist data from backend API
+  // Initialize immediately from client cache for 0ms instant open
+  const cachedInitial = clientArtistCache.get(artistKey);
+  const [remoteData, setRemoteData] = useState(cachedInitial ? cachedInitial.data : null);
+  const [isLoading, setIsLoading] = useState(!cachedInitial);
+
+  // Fetch full artist data from backend API (stale-while-revalidate)
   useEffect(() => {
     if (!artistName) {
       setRemoteData(null);
+      setIsLoading(false);
       return;
     }
 
-    let isMounted = true;
-    setIsLoading(true);
+    const cached = clientArtistCache.get(artistKey);
+    if (cached) {
+      setRemoteData(cached.data);
+      // If cached data is still fresh (< 5 mins), skip network request entirely
+      if (Date.now() - cached.timestamp < CLIENT_CACHE_TTL / 2) {
+        setIsLoading(false);
+        return;
+      }
+    } else {
+      setIsLoading(true);
+    }
 
+    let isMounted = true;
     const controller = new AbortController();
 
     (async () => {
@@ -38,6 +55,7 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
         if (res.ok) {
           const data = await res.json();
           if (isMounted && data?.success && data?.artist) {
+            clientArtistCache.set(artistKey, { data: data.artist, timestamp: Date.now() });
             setRemoteData(data.artist);
           }
         }
@@ -56,7 +74,7 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
       isMounted = false;
       controller.abort();
     };
-  }, [artistName]);
+  }, [artistName, artistKey]);
 
   // Local tracks filtered for this artist
   const localArtistTracks = useMemo(() => {
