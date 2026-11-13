@@ -216,7 +216,7 @@ async function processSingleTrack(track, { allowedCategories, dryRun = false, si
   const verifiedGenre = resolveVerifiedGenreUpdate(track, cls);
   if (verifiedGenre) flagUpdates.genre = verifiedGenre;
 
-  if (category === 'hindi' || category === 'non_music_video') {
+  if (category === 'hindi' || category === 'non_music_video' || category === 'blacklisted') {
     if (!dryRun) {
       await Track.updateOne({ _id: track._id }, {
         $set: { ...flagUpdates, migration: { status: 'skipped', reason: `${category}:${cls.reason}`, category, updatedAt: new Date() } }

@@ -1456,6 +1456,7 @@ function LibraryScreen({
           windowSize={isLiteMode ? 3 : 5}
           updateCellsBatchingPeriod={40}
           removeClippedSubviews={Platform.OS === 'android'}
+          scrollEventThrottle={16}
           ListHeaderComponent={
             selectedView === 'liked' ? (
               <View>

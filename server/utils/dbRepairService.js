@@ -159,9 +159,22 @@ async function runDatabaseRepairs() {
     await Album.updateMany({ name: /مزيكا القرن 21/i }, { $set: { artist: 'Sadat' } }).catch(() => {});
     await Artist.updateMany({ name: /wegz/i }, { $pull: { albums: { name: /مزيكا القرن 21/i } } }).catch(() => {});
 
-    // 5. Remove generic 1,000+ "Single" dump album erroneously attributed to Mahmoud El Leithy
-    await Album.deleteMany({ name: /^Single$/i, artist: /mahmoud el leithy|محمود الليث/i }).catch(() => {});
-    await Artist.updateMany({ name: /mahmoud el leithy|محمود الليث/i }, { $pull: { albums: { name: /^Single$/i } } }).catch(() => {});
+    // 5. Blacklist & Permanently Purge Mahmoud El Leithy completely from DB
+    await Track.deleteMany({
+      $or: [
+        { artist: /الليث[يى]|Elleithy|El Leithy|El-Leithy/i },
+        { title: /محمود الليث[يى]/i }
+      ]
+    }).catch(() => {});
+    await Album.deleteMany({
+      $or: [
+        { artist: /الليث[يى]|Elleithy|El Leithy|El-Leithy/i },
+        { name: /الليث[يى]/i }
+      ]
+    }).catch(() => {});
+    await Artist.deleteMany({
+      name: /الليث[يى]|Elleithy|El Leithy|El-Leithy/i
+    }).catch(() => {});
 
     // 6. Fix Compilations incorrectly attributed to single artists
     await Album.updateMany({ name: /Arabic Hits Of The 80's/i }, { $set: { artist: 'Various Artists' } }).catch(() => {});

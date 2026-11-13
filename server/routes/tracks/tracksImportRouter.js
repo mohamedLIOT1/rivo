@@ -186,6 +186,11 @@ const importTrackHandler = async (req, res) => {
       return res.status(400).json({ error: 'Failed to resolve audio for the provided link.' });
     }
 
+    const isBlacklisted = /(?:محمود\s*الليث[يى]|mahmoud\s*el\s*leithy|mahmoud\s*elleithy|\belleithy\b)/i.test(`${artist} ${title}`);
+    if (isBlacklisted) {
+      return res.status(403).json({ error: 'This artist is blacklisted and cannot be imported to Rivo.' });
+    }
+
     if (!cover) cover = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600';
     if (!title) title = 'Imported Track';
     if (!artist) artist = 'Various Artists';

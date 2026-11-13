@@ -38,6 +38,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     return initialNav.screen || 'home';
   });
   const [topSearchQuery, setTopSearchQuery] = useState(initialNav.params?.query || '');
+  const [searchFilter, setSearchFilter] = useState(initialNav.params?.filter || 'all');
   const [selectedArtist, setSelectedArtist] = useState(() => {
     if (initialNav.screen === 'artist' && initialNav.params?.name) {
       return { name: initialNav.params.name, id: initialNav.params.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-') };

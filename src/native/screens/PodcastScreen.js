@@ -379,6 +379,7 @@ export function PodcastScreen({ onTrackAction }) {
         windowSize={3}
         updateCellsBatchingPeriod={50}
         removeClippedSubviews={Platform.OS === 'android'}
+        scrollEventThrottle={16}
       />
     </View>
   );

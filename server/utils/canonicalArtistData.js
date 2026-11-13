@@ -283,12 +283,6 @@ const CANONICAL_ARTIST_GROUPS = [
     ]
   },
   {
-    canonical: 'Mahmoud El Leithy',
-    aliases: [
-      'mahmoud el leithy', 'محمود الليثي', 'الليثي'
-    ]
-  },
-  {
     canonical: 'Ramy Sabry',
     aliases: [
       'ramy sabry', 'رامي صبري'

@@ -982,6 +982,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         windowSize={isLiteMode || Platform.OS === 'android' ? 3 : 5}
         updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
         removeClippedSubviews={Platform.OS === 'android'}
+        scrollEventThrottle={16}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

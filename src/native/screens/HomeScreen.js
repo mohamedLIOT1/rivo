@@ -617,6 +617,7 @@ function HomeScreen({
         windowSize={isLiteMode ? 4 : 6}
         updateCellsBatchingPeriod={20}
         removeClippedSubviews={Platform.OS === 'android'}
+        scrollEventThrottle={16}
         onEndReached={handleLoadMoreOnEnd}
         onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}

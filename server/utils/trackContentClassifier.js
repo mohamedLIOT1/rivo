@@ -5,9 +5,10 @@ const { buildCombinedSignal } = require('./cloudStorageClient');
 
 const INDIC_SCRIPT_REGEX = /[\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/;
 const HINDI_HINT_REGEX = /(\bhindi\b|\bbollywood\b|\bpunjabi\b|\btamil\b|\btelugu\b|\bmalyalam\b|\bkannada\b|\bdesi\b|\bfilmi\b|هندي|بوليوود|بنجابي|أغنية هندية|اغنية هندية)/i;
+const BLACKLISTED_ARTISTS_REGEX = /(?:محمود\s*الليث[يى]|mahmoud\s*el\s*leithy|mahmoud\s*elleithy|\belleithy\b)/i;
 const EXTRA_NON_MUSIC_REGEX = /(مقلب|مقالب|تحدي\s*ا?ل?أ?كل|تحدي\s*الأكل|اكل|أكل|طبخ|وصفة|فلوج|فلوقات|يوميات|روتين|ملخص\s*مباراة|أهداف|مباراة|ببجي|ماينكرافت|فورتنايت|رد\s*فعل|ريأكشن|تحليل\s*الحلقة|برنامج|مقابلة|بودكاست|\bmukbang\b|\bprank\b|\bvlog\b|\bgameplay\b|\bhighlights\b|\btrailer\b|\breaction\b|\bunboxing\b|\breview\b|\btutorial\b|\bfood\s*challenge\b)/i;
 
-const VALID_CATEGORIES = new Set(['music', 'hindi', 'quran', 'podcast', 'non_music_video']);
+const VALID_CATEGORIES = new Set(['music', 'hindi', 'quran', 'podcast', 'non_music_video', 'blacklisted']);
 
 const CANONICAL_GENRES = [
   'Rap / Hip-Hop',
@@ -227,6 +228,11 @@ async function classifyTrackBeforeMigration(track, videoId, signal) {
   const album = track.album || '';
   const genre = track.genre || '';
   const combined = `${title} ${artist} ${album} ${genre} ${ytMeta?.ytTitle || ''} ${ytMeta?.ytChannel || ''}`;
+
+  // 0. Blacklisted Artist Check (Permanently excluded: Mahmoud El Leithy)
+  if (BLACKLISTED_ARTISTS_REGEX.test(artist) || BLACKLISTED_ARTISTS_REGEX.test(title) || BLACKLISTED_ARTISTS_REGEX.test(combined)) {
+    return { category: 'blacklisted', genre: 'Blacklisted', reason: 'blacklisted_artist:mahmoud_el_leithy', source: 'rules', ytMeta };
+  }
 
   // 1. Fast deterministic checks
   if (track.isQuran || track.contentType === 'quran' || isQuranContent(title, artist, album, genre)) {
