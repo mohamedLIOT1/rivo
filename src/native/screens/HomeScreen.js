@@ -610,14 +610,13 @@ function HomeScreen({
         data={visibleTracks}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
-        getItemLayout={getItemLayout}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={isLiteMode || Platform.OS === 'android' ? 4 : 6}
-        maxToRenderPerBatch={isLiteMode || Platform.OS === 'android' ? 4 : 6}
-        windowSize={isLiteMode || Platform.OS === 'android' ? 3 : 5}
-        updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 40}
-        removeClippedSubviews={Platform.OS === 'android'}
+        initialNumToRender={isLiteMode ? 6 : 10}
+        maxToRenderPerBatch={isLiteMode ? 6 : 10}
+        windowSize={isLiteMode ? 5 : 7}
+        updateCellsBatchingPeriod={Platform.OS === 'android' ? 40 : 30}
+        removeClippedSubviews={false}
         onEndReached={handleLoadMoreOnEnd}
         onEndReachedThreshold={0.4}
         showsVerticalScrollIndicator={false}

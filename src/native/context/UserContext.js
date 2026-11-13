@@ -173,86 +173,51 @@ export const UserProvider = ({ children }) => {
   const fetchPublicTracks = useCallback(async () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tracks`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (res.ok) {
-        const data = await res.json();
-        const list = Array.isArray(data?.tracks) ? data.tracks : Array.isArray(data) ? data : [];
-        const cleaned = deduplicateTrackList(list.filter(t => 
-          t &&
-          t.source !== 'SoundCloud' &&
-          t.album !== 'SoundCloud' &&
-          !String(t.audioUrl || '').includes('soundcloud.com') &&
-          !String(t.audioUrl || '').includes('sndcdn.com') &&
-          !String(t.id || t._id || '').startsWith('sc-')
-        ));
-        if (cleaned.length > 0) {
-          let didChange = true;
-          setTracks(prev => {
-            if (
-              prev &&
-              prev.length === cleaned.length &&
-              (prev[0]?._id || prev[0]?.id) === (cleaned[0]?._id || cleaned[0]?.id) &&
-              (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (cleaned[cleaned.length - 1]?._id || cleaned[cleaned.length - 1]?.id)
-            ) {
-              didChange = false;
-              return prev;
-            }
-            return cleaned;
-          });
-          if (didChange) {
-            const saveTask = () => {
-              setTimeout(() => {
-                const compact = cleaned.map(({ lyrics, ...rest }) => rest);
-                AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(compact)).catch(() => {});
-              }, 3000);
-            };
-            if (InteractionManager?.runAfterInteractions) {
-              InteractionManager.runAfterInteractions(saveTask);
-            } else {
-              saveTask();
-            }
-          }
-        }
-      }
-    } catch {}
 
-    // Fetch discography albums
-    try {
-      const albRes = await fetch(`${API_BASE_URL}/api/albums`);
-      if (albRes.ok) {
-        const albData = await albRes.json();
-        const albList = Array.isArray(albData?.albums) ? albData.albums : [];
-        if (albList.length > 0) {
-          let albChanged = true;
-          setAlbums(prev => {
-            if (
-              prev &&
-              prev.length === albList.length &&
-              (prev[0]?._id || prev[0]?.id) === (albList[0]?._id || albList[0]?.id) &&
-              (prev[prev.length - 1]?._id || prev[prev.length - 1]?.id) === (albList[albList.length - 1]?._id || albList[albList.length - 1]?.id)
-            ) {
-              albChanged = false;
-              return prev;
-            }
-            return albList;
-          });
-          if (albChanged) {
-            const saveAlbTask = () => {
-              setTimeout(() => {
-                AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
-              }, 4000);
-            };
-            if (InteractionManager?.runAfterInteractions) {
-              InteractionManager.runAfterInteractions(saveAlbTask);
-            } else {
-              saveAlbTask();
-            }
+    const fetchAlbumsPromise = (async () => {
+      try {
+        const albRes = await fetch(`${API_BASE_URL}/api/albums?featured=true`, { signal: controller.signal });
+        if (albRes.ok) {
+          const albData = await albRes.json();
+          const albList = Array.isArray(albData?.albums) ? albData.albums : [];
+          if (albList.length > 0) {
+            setAlbums(albList);
+            AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
           }
         }
-      }
-    } catch {}
+      } catch {}
+    })();
+
+    const fetchTracksPromise = (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/tracks?limit=250`, { signal: controller.signal });
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data?.tracks) ? data.tracks : Array.isArray(data) ? data : [];
+          const cleaned = deduplicateTrackList(list.filter(t => 
+            t &&
+            t.source !== 'SoundCloud' &&
+            t.album !== 'SoundCloud' &&
+            !String(t.audioUrl || '').includes('soundcloud.com') &&
+            !String(t.audioUrl || '').includes('sndcdn.com') &&
+            !String(t.id || t._id || '').startsWith('sc-')
+          ));
+          if (cleaned.length > 0) {
+            setTracks(cleaned);
+            setTimeout(() => {
+              const compact = cleaned.map(({ lyrics, ...rest }) => rest);
+              AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(compact)).catch(() => {});
+            }, 3000);
+          }
+        }
+      } catch {}
+    })();
+
+    try {
+      await Promise.allSettled([fetchAlbumsPromise, fetchTracksPromise]);
+    } finally {
+      clearTimeout(timer);
+    }
   }, []);
 
   const syncUserData = useCallback(async (activeToken) => {

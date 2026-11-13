@@ -402,17 +402,17 @@ async function runMigrationLoop({ limit = 0, watch = false, dryRun = false, trac
     }
 
     if (result.downloadedFresh && freshBatchCount >= nextHumanBreakAt) {
-      const breakMs = randomBetween(120000, 240000);
+      const breakMs = randomBetween(45000, 75000);
       console.log(`[CloudBot] ☕ Human break for ${Math.round(breakMs / 1000)}s after ${freshBatchCount} fresh downloads`);
       freshBatchCount = 0;
-      nextHumanBreakAt = Math.floor(randomBetween(18, 29));
+      nextHumanBreakAt = Math.floor(randomBetween(25, 38));
       await sleepWithAbort(breakMs, signal).catch(() => {});
       continue;
     }
 
     const delayMs = dryRun ? 300 : (result.downloadedFresh
-      ? randomBetween(18000, 42000)
-      : (result.status === 'migrated' ? randomBetween(2800, 5500) : randomBetween(1000, 2500)));
+      ? randomBetween(7000, 14000)
+      : (result.status === 'migrated' ? randomBetween(1500, 3000) : randomBetween(1000, 2000)));
     await sleepWithAbort(delayMs, signal).catch(() => {});
   }
 

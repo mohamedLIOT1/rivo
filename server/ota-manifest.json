@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.40",
+  "version": "2.4.41",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "إصلاح نهائي لحلقة التحديث الهوائي، ربط ألبوم عمره ما يغيب بمحمد حماقي، وتحديث صورة ألبوم سهران وسرعة التحميل الفورية",
-  "notesEn": "Fix OTA loop, associate Omro Ma Ygheb with Hamaki, fix Sahran cover, instant 0ms home render",
-  "bundleSize": 5367052,
+  "notes": "تحديث سرعة الألبومات، إزالة التعليق، تسريع الفتح، وتعديل الكاش",
+  "notesEn": "Update album caching, eliminate layout shift, boost cold start",
+  "bundleSize": 5366090,
   "sizeMb": "5.12 MB",
-  "updatedAt": "2026-11-13T17:37:50.985Z"
+  "updatedAt": "2026-11-13T18:54:02.197Z"
 }

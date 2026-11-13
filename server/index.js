@@ -282,7 +282,7 @@ app.get('/api/sync', auth, async (req, res) => {
         }
       },
       { $sort: { createdAt: -1 } },
-      { $limit: 3000 },
+      { $limit: 500 },
       {
         $project: {
           id: 1,

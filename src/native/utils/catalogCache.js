@@ -40,6 +40,7 @@ export function getCachedMusicTracks({ userTracks, downloadedTracks, isOffline, 
 }
 
 const rotatedAlbumsWindowCache = new WeakMap();
+let lastKnownFeaturedAlbums = [];
 
 /**
  * Returns filtered/derived Featured Albums for HomeScreen with 12h deterministic rotation + artist interleaving.
@@ -64,7 +65,13 @@ export function getCachedHomeAlbums(albums, userTracks, ownerId = 'global') {
     }
     const list = curateFeaturedAlbums(dbAlbums, { ownerId, limit: 16 });
     rotatedAlbumsWindowCache.set(safeAlbums, { bucket: bucket12h, ownerId, list });
+    lastKnownFeaturedAlbums = list;
     return list;
+  }
+
+  // Preserve last known featured albums across re-renders to prevent cold-start layout flicker
+  if (lastKnownFeaturedAlbums.length > 0) {
+    return lastKnownFeaturedAlbums;
   }
 
   const src = Array.isArray(userTracks) ? userTracks : EMPTY;
