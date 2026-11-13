@@ -3,6 +3,10 @@ import { API_BASE_URL } from '../../config';
 import { INITIAL_TRACKS } from '../../data/initialTracks';
 import { matchesArtist } from '../../../utils/artistUtils.jsx';
 
+// In-memory cache for instant 0ms artist profile opens on mobile
+const nativeArtistCache = new Map();
+const NATIVE_ARTIST_TTL = 10 * 60 * 1000;
+
 export function useArtistDetailData({
   artist,
   artistName,
@@ -12,19 +16,47 @@ export function useArtistDetailData({
   allTracks = [],
   allAlbums = [],
 }) {
-  const [remoteTracks, setRemoteTracks] = useState([]);
-  const [remoteAlbums, setRemoteAlbums] = useState([]);
+  const cachedInitial = nativeArtistCache.get(artistKey);
+  const [remoteTracks, setRemoteTracks] = useState(cachedInitial ? cachedInitial.tracks : []);
+  const [remoteAlbums, setRemoteAlbums] = useState(cachedInitial ? cachedInitial.albums : []);
 
   useEffect(() => {
     if (!visible || !artistName) {
-      setRemoteTracks([]);
-      setRemoteAlbums([]);
       return;
     }
+
+    const cached = nativeArtistCache.get(artistKey);
+    if (cached) {
+      setRemoteTracks(cached.tracks);
+      setRemoteAlbums(cached.albums);
+      // Skip network request if fresh (< 5 mins)
+      if (Date.now() - cached.timestamp < NATIVE_ARTIST_TTL / 2) {
+        return;
+      }
+    }
+
     let isMounted = true;
     (async () => {
       try {
         const cleanName = encodeURIComponent(artistName);
+        const res = await fetch(`${API_BASE_URL}/api/artists/${cleanName}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data?.success && data?.artist) {
+            const trList = Array.isArray(data.artist.tracks) ? data.artist.tracks : [];
+            const albList = Array.isArray(data.artist.albums) ? data.artist.albums : [];
+            nativeArtistCache.set(artistKey, {
+              tracks: trList,
+              albums: albList,
+              timestamp: Date.now()
+            });
+            setRemoteTracks(trList);
+            setRemoteAlbums(albList);
+            return;
+          }
+        }
+
+        // Fallback if /api/artists/:name returned non-ok
         const [trRes, albRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/tracks?artist=${cleanName}`),
           fetch(`${API_BASE_URL}/api/albums?artist=${cleanName}`)
@@ -44,7 +76,7 @@ export function useArtistDetailData({
       }
     })();
     return () => { isMounted = false; };
-  }, [visible, artistName]);
+  }, [visible, artistName, artistKey]);
 
   // Filter local artist tracks (supporting aliases, multiple artists per track)
   const effectiveAllTracks = (allTracks && allTracks.length > 0) ? allTracks : INITIAL_TRACKS;

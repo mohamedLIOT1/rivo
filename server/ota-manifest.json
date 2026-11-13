@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.35",
+  "version": "2.4.36",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث هوائي فوري (5.07 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
-  "notesEn": "Instant in-app OTA update (5.07 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5313976,
-  "sizeMb": "5.07 MB",
-  "updatedAt": "2026-11-12T21:33:15.822Z"
+  "notes": "تسريع فتح الألبومات والبروفايل والبحث الفرانكو",
+  "notesEn": "Speed up albums, artist profiles & bilingual track search",
+  "bundleSize": 5333522,
+  "sizeMb": "5.09 MB",
+  "updatedAt": "2026-11-13T15:42:34.946Z"
 }
