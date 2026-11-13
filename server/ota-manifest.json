@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.36",
+  "version": "2.4.37",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تسريع فتح الألبومات والبروفايل والبحث الفرانكو",
-  "notesEn": "Speed up albums, artist profiles & bilingual track search",
+  "notes": "تسريع فتح قوائم التشغيل والألبومات وإلغاء الازدواجية",
+  "notesEn": "Speed up playlists and albums, eliminate double-fetch waterfall",
   "bundleSize": 5333522,
   "sizeMb": "5.09 MB",
-  "updatedAt": "2026-11-13T15:42:34.946Z"
+  "updatedAt": "2026-11-13T16:06:05.639Z"
 }
