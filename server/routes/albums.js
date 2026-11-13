@@ -1,36 +1,46 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const axios = require('axios');
 const crypto = require('crypto');
 const { Album, Track } = require('../models');
 const { adminAuth } = require('../middleware/auth');
-const { classifyGenre } = require('../utils/genreClassifier');
-const {
-  scrapePlaylistOrAlbum,
-  autoFixAlbumCovers,
-  escapeRegex
-} = require('../utils/helpers');
+const { isQuranContent } = require('../utils/helpers');
 const { handleImportAlbum, handleDeleteAlbum } = require('./albums/albumAdminService');
+const { handleAlbumLookup } = require('./albums/albumLookupService');
+const { createAlbumHandler, updateAlbumHandler } = require('./albums/albumCrudService');
+const { curateFeaturedAlbums } = require('./albums/albumCurator');
 
 // High-speed in-memory cache for albums
 let cachedAlbumsJson = null;
 let cachedAlbumsTime = 0;
 let cachedAlbumsEtag = null;
+
+let cachedFeaturedJson = null;
+let cachedFeaturedTime = 0;
+let cachedFeaturedEtag = null;
+
 const ALBUMS_CACHE_TTL = 60 * 1000;
 
 function invalidateAlbumsCache() {
   cachedAlbumsJson = null;
   cachedAlbumsTime = 0;
   cachedAlbumsEtag = null;
+  cachedFeaturedJson = null;
+  cachedFeaturedTime = 0;
+  cachedFeaturedEtag = null;
 }
 
-// Get all albums
+// GET /api/albums - List albums with slim projection by default or top 16 curated releases
 router.get('/', async (req, res) => {
   try {
-    const isDefault = !req.query.artist;
+    const isFeatured = req.query.featured === 'true';
+    const includeTracks = req.query.includeTracks === 'true';
+    const includeSingles = req.query.includeSingles === 'true';
+    const hasArtist = Boolean(req.query.artist);
+    const isDefault = !hasArtist && !includeTracks && !includeSingles && !isFeatured;
     const clientEtag = req.headers['if-none-match'];
 
+    // 1. In-memory cache hit for default album list
     if (isDefault && cachedAlbumsJson && (Date.now() - cachedAlbumsTime < ALBUMS_CACHE_TTL)) {
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'public, max-age=300');
@@ -42,52 +52,129 @@ router.get('/', async (req, res) => {
       }
       return res.send(cachedAlbumsJson);
     }
-    let filter = {};
-    if (req.query.artist) {
+
+    // 2. In-memory cache hit for featured curated list
+    if (isFeatured && !hasArtist && !includeTracks && cachedFeaturedJson && (Date.now() - cachedFeaturedTime < ALBUMS_CACHE_TTL)) {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      if (cachedFeaturedEtag) {
+        res.setHeader('ETag', cachedFeaturedEtag);
+        if (clientEtag && (clientEtag === cachedFeaturedEtag || clientEtag === `W/${cachedFeaturedEtag}`)) {
+          return res.status(304).end();
+        }
+      }
+      return res.send(cachedFeaturedJson);
+    }
+
+    // Base query filter
+    const filter = {
+      isQuran: { $ne: true },
+      genre: { $nin: ['Holy Quran', 'Quran', 'Quran Recitation'] }
+    };
+
+    if (hasArtist) {
       const rawArt = req.query.artist.trim();
       const escaped = rawArt.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const flexible = escaped.replace(/[-_\s]+/g, '[-_\\s]*');
-      filter = {
-        $or: [
-          { artist: new RegExp(flexible, 'i') },
-          { name: new RegExp(flexible, 'i') }
-        ]
-      };
+      filter.$or = [
+        { artist: new RegExp(flexible, 'i') },
+        { name: new RegExp(flexible, 'i') }
+      ];
     }
-    const albums = await Album.find(filter).sort({ updatedAt: -1 }).lean();
+
+    // Slim projection: strictly excludes the heavy embedded `tracks` array unless includeTracks=true
+    const projection = includeTracks
+      ? null
+      : { id: 1, name: 1, artist: 1, cover: 1, releaseDate: 1, genre: 1, releaseType: 1, trackCount: 1, isVerified: 1, isQuran: 1, trackIds: 1 };
+
+    const albums = await Album.find(filter, projection).sort({ updatedAt: -1 }).lean();
+
     const formatted = albums.map(a => {
       const explicitCount = Number(a.trackCount || 0);
       const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
       const trackCount = explicitCount > 0 ? explicitCount : arrCount;
-      const name = String(a.name || a.title || '').toLowerCase().trim();
+      const name = String(a.name || a.title || 'Untitled Album');
+      const lowerName = name.toLowerCase().trim();
+
       let releaseType = a.releaseType;
       if (!releaseType) {
-        if (name.endsWith('- single') || name.endsWith('(single)') || trackCount === 1) {
+        if (lowerName.endsWith('- single') || lowerName.endsWith('(single)') || trackCount === 1) {
           releaseType = 'single';
-        } else if (name.endsWith('- ep') || name.endsWith('(ep)') || (trackCount >= 2 && trackCount <= 6)) {
+        } else if (lowerName.endsWith('- ep') || lowerName.endsWith('(ep)') || (trackCount >= 2 && trackCount <= 6)) {
           releaseType = 'ep';
         } else {
           releaseType = 'album';
         }
       }
+
+      // If full tracks are requested, keep rich fields
+      if (includeTracks) {
+        return {
+          id: a.id || String(a._id),
+          _id: a._id,
+          name,
+          title: name,
+          artist: a.artist || '',
+          cover: a.cover || '',
+          releaseDate: a.releaseDate || '',
+          genre: a.genre || '',
+          releaseType,
+          trackCount,
+          songsCount: trackCount,
+          isVerified: Boolean(a.isVerified),
+          isQuran: Boolean(a.isQuran),
+          tracks: a.tracks || [],
+          trackIds: a.trackIds || []
+        };
+      }
+
+      // Default slim projection: ONLY return the required lightweight metadata fields
       return {
-        ...a,
-        title: a.title || a.name || 'Untitled Album',
-        name: a.name || a.title || 'Untitled Album',
+        id: a.id || String(a._id),
+        name,
+        artist: a.artist || '',
+        cover: a.cover || '',
+        releaseDate: a.releaseDate || '',
+        genre: a.genre || '',
         releaseType,
         trackCount,
-        songsCount: trackCount,
-        tracks: a.tracks || []
+        isVerified: Boolean(a.isVerified),
+        isQuran: Boolean(a.isQuran)
       };
     });
-    const includeSingles = req.query.includeSingles === 'true';
+
     const finalAlbums = formatted.filter(a => {
+      // Strictly isolate Quran content from music albums
+      if (a.isQuran || a.genre === 'Holy Quran' || a.genre === 'Quran') return false;
+      const rawName = String(a.name || '');
+      if (isQuranContent(rawName, a.artist, rawName, a.genre)) return false;
+
+      // Strictly isolate 1-track single items from music albums grid
+      const count = Number(a.trackCount || 0);
+      if (!includeSingles && (a.releaseType === 'single' || count <= 1)) return false;
+
       // Never return empty albums with 0 tracks
-      const hasTracks = (a.trackCount > 0) || (Array.isArray(a.tracks) && a.tracks.length > 0) || (Array.isArray(a.trackIds) && a.trackIds.length > 0);
-      if (!hasTracks) return false;
-      if (!includeSingles && (a.releaseType === 'single' || a.trackCount <= 1)) return false;
+      if (count === 0 && (!a.tracks || a.tracks.length === 0)) return false;
+
       return true;
     });
+
+    // Support ?featured=true to return top 16 curated releases
+    if (isFeatured) {
+      const featured = curateFeaturedAlbums(finalAlbums, { limit: 16 });
+      cachedFeaturedJson = JSON.stringify({ success: true, albums: featured });
+      cachedFeaturedTime = Date.now();
+      cachedFeaturedEtag = `"${crypto.createHash('md5').update(cachedFeaturedJson).digest('hex')}"`;
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('ETag', cachedFeaturedEtag);
+
+      if (clientEtag && (clientEtag === cachedFeaturedEtag || clientEtag === `W/${cachedFeaturedEtag}`)) {
+        return res.status(304).end();
+      }
+      return res.send(cachedFeaturedJson);
+    }
 
     if (isDefault) {
       cachedAlbumsJson = JSON.stringify({ success: true, albums: finalAlbums });
@@ -111,101 +198,9 @@ router.get('/', async (req, res) => {
 });
 
 // Admin / User: Album Metadata Auto-Lookup (iTunes API & Link Scraper)
-router.get('/lookup', async (req, res) => {
-  try {
-    const { query, url } = req.query;
-    if (!query && !url) {
-      return res.status(400).json({ success: false, error: 'Query or URL is required' });
-    }
+router.get('/lookup', handleAlbumLookup);
 
-    if (url && (url.includes('spotify.com') || url.includes('youtube.com') || url.includes('youtu.be') || url.includes('music.apple.com'))) {
-      const scraped = await scrapePlaylistOrAlbum(url.trim());
-      return res.json({
-        success: true,
-        name: scraped.title,
-        artist: scraped.artist,
-        cover: scraped.cover,
-        releaseDate: scraped.releaseDate || new Date().getFullYear().toString(),
-        genre: classifyGenre({ title: scraped.title, artist: scraped.artist, genre: scraped.genre }).genre,
-        tracks: (scraped.items || []).map(t => ({
-          title: t.title,
-          artist: t.artist || scraped.artist,
-          duration: t.duration || 180,
-          cover: t.cover || scraped.cover
-        }))
-      });
-    }
-
-    const searchTerm = (query || '').trim();
-    const itunesRes = await axios.get('https://itunes.apple.com/search', {
-      params: {
-        term: searchTerm,
-        entity: 'album',
-        limit: 5
-      },
-      timeout: 10000
-    });
-
-    const albumResult = itunesRes.data?.results?.[0];
-    if (!albumResult) {
-      return res.status(404).json({ success: false, error: 'No album metadata found for this search' });
-    }
-
-    let highResCover = albumResult.artworkUrl100 || '';
-    if (highResCover) {
-      highResCover = highResCover.replace(/\/\d+x\d+bb\./, '/1200x1200bb.');
-    }
-
-    const releaseYear = albumResult.releaseDate ? new Date(albumResult.releaseDate).getFullYear().toString() : new Date().getFullYear().toString();
-
-    let tracks = [];
-    try {
-      const lookupRes = await axios.get('https://itunes.apple.com/lookup', {
-        params: {
-          id: albumResult.collectionId,
-          entity: 'song'
-        },
-        timeout: 10000
-      });
-      const results = lookupRes.data?.results || [];
-      tracks = results.filter(r => r.wrapperType === 'track').map(r => ({
-        title: r.trackName,
-        artist: r.artistName || albumResult.artistName,
-        duration: Math.round((r.trackTimeMillis || 180000) / 1000),
-        trackNumber: r.trackNumber,
-        cover: highResCover
-      }));
-    } catch (lookupErr) {
-      console.warn('iTunes album track lookup notice:', lookupErr.message);
-    }
-
-    return res.json({
-      success: true,
-      name: albumResult.collectionName,
-      artist: albumResult.artistName,
-      cover: highResCover,
-      releaseDate: releaseYear,
-      genre: classifyGenre({ title: albumResult.collectionName, artist: albumResult.artistName, genre: albumResult.primaryGenreName }).genre,
-      trackCount: albumResult.trackCount,
-      tracks
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message || 'Album lookup failed' });
-  }
-});
-
-// Admin / System: Trigger auto-fix for all album covers to official HD square artwork (Admin only)
-router.post('/auto-fix', adminAuth, async (req, res) => {
-  try {
-    const io = req.app.get('io') || req.io;
-    await autoFixAlbumCovers(io);
-    res.json({ success: true, message: 'All album covers auto-fixed with official HD artwork' });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
-
-// Get Album Details by ID or Name
+// Get Album Details by ID or Name (resolves full tracks)
 router.get('/:id', async (req, res) => {
   try {
     const rawId = req.params.id;
@@ -228,6 +223,9 @@ router.get('/:id', async (req, res) => {
       }).lean();
     }
     if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
+    if (album.isQuran || album.genre === 'Holy Quran' || album.genre === 'Quran' || isQuranContent(album.name, album.artist)) {
+      return res.status(404).json({ success: false, error: 'Quran recitation is not accessible via music albums API' });
+    }
 
     const trackIds = Array.isArray(album.trackIds) ? album.trackIds : [];
     const validObjectIds = trackIds.filter(id => mongoose.isValidObjectId(id));
@@ -326,127 +324,18 @@ router.get('/:id', async (req, res) => {
 });
 
 // Admin: Create / Upload Album
-const createAlbumHandler = async (req, res) => {
-  invalidateAlbumsCache();
-  try {
-    const { name, artist, cover, linkUrl, releaseDate, genre, trackIds = [], isQuran = false, description = '' } = req.body;
-    if (!name || !name.trim()) {
-      return res.status(400).json({ success: false, error: 'Album name is required' });
-    }
-    if (!artist || !artist.trim()) {
-      return res.status(400).json({ success: false, error: 'Artist name is required' });
-    }
+router.post('/', adminAuth, (req, res) => createAlbumHandler(req, res, { invalidateAlbumsCache }));
+router.post('/create', adminAuth, (req, res) => createAlbumHandler(req, res, { invalidateAlbumsCache }));
 
-    const cleanName = name.trim();
-    const cleanArtist = artist.trim();
-    const cleanTrackIds = Array.isArray(trackIds) ? trackIds.map(String) : [];
+// Admin: Import Album from Link
+router.post('/import', adminAuth, (req, res) => handleImportAlbum(req, res, { invalidateAlbumsCache }));
 
-    const newAlbum = new Album({
-      id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-      name: cleanName,
-      artist: cleanArtist,
-      cover: cover ? cover.trim() : 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600',
-      linkUrl: linkUrl ? linkUrl.trim() : '',
-      trackIds: cleanTrackIds,
-      releaseDate: releaseDate ? releaseDate.trim() : '',
-      genre: Boolean(isQuran) ? 'Holy Quran' : classifyGenre({ title: name, artist, genre, description }).genre,
-      isAlbum: true,
-      isSystem: true,
-      isPublic: true,
-      isQuran: Boolean(isQuran),
-      description: description ? description.trim() : '',
-      source: 'admin_upload',
-      createdBy: req.user?.id || req.user?.name || 'admin'
-    });
-
-    await newAlbum.save();
-
-    if (cleanTrackIds.length > 0) {
-      await Track.updateMany(
-        { _id: { $in: cleanTrackIds } },
-        { $set: { album: cleanName } }
-      ).catch(() => {});
-    }
-
-    const io = req.app.get('io') || req.io;
-    if (io) io.emit('album:created', newAlbum);
-    res.json({ success: true, album: newAlbum });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-};
-router.post('/', adminAuth, createAlbumHandler);
-router.post('/create', adminAuth, createAlbumHandler);
-
-// Admin: Import Album from YouTube / Spotify Link
-const importAlbumHandler = (req, res) => handleImportAlbum(req, res, { invalidateAlbumsCache });
-router.post('/import', adminAuth, importAlbumHandler);
-
-// Admin: Edit / Update Album Details
-const updateAlbumHandler = async (req, res) => {
-  invalidateAlbumsCache();
-  try {
-    const albumId = req.params.id;
-    const { name, artist, cover, linkUrl, releaseDate, genre, trackIds } = req.body;
-    const album = await Album.findOne({ $or: [{ id: albumId }, { _id: mongoose.isValidObjectId(albumId) ? albumId : null }] });
-    if (!album) return res.status(404).json({ success: false, error: 'Album not found' });
-
-    const oldName = album.name;
-    if (name) album.name = name.trim();
-    if (artist) album.artist = artist.trim();
-    if (cover !== undefined) album.cover = cover.trim();
-    if (linkUrl !== undefined) album.linkUrl = linkUrl.trim();
-    if (releaseDate !== undefined) album.releaseDate = releaseDate;
-    if (genre !== undefined) album.genre = genre;
-    if (Array.isArray(trackIds)) album.trackIds = trackIds;
-
-    await album.save();
-
-    if (name && oldName && name.trim().toLowerCase() !== oldName.trim().toLowerCase()) {
-      await Track.updateMany(
-        { album: { $regex: new RegExp(`^${escapeRegex(oldName)}$`, 'i') } },
-        { $set: { album: name.trim() } }
-      ).catch(() => {});
-    }
-
-    const io = req.app.get('io') || req.io;
-    if (io) io.emit('album:updated', album);
-    res.json({ success: true, album });
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-};
-router.put('/:id', adminAuth, updateAlbumHandler);
-router.post('/:id/update', adminAuth, updateAlbumHandler);
+// Admin: Edit / Update Album
+router.put('/:id', adminAuth, (req, res) => updateAlbumHandler(req, res, { invalidateAlbumsCache }));
+router.post('/:id/update', adminAuth, (req, res) => updateAlbumHandler(req, res, { invalidateAlbumsCache }));
 
 // Admin: Delete Album
-const deleteAlbumHandler = (req, res) => handleDeleteAlbum(req, res, { invalidateAlbumsCache });
-router.delete('/:id', adminAuth, deleteAlbumHandler);
-router.post('/:id/delete', adminAuth, deleteAlbumHandler);
-
-// Auto-cleanup any bogus tracks mistakenly imported from YouTube sidebar playlists
-setTimeout(async () => {
-  try {
-    const bogusTracks = await Track.find({
-      $or: [
-        { audioUrl: /watch\?v=PL/i },
-        { audioUrl: /youtube\.com\/watch\?v=PL/i }
-      ]
-    }).lean();
-
-    if (bogusTracks.length > 0) {
-      const bogusIds = bogusTracks.map(t => String(t._id || t.id));
-      await Track.deleteMany({ _id: { $in: bogusIds } });
-      await Album.updateMany(
-        { trackIds: { $in: bogusIds } },
-        { $pull: { trackIds: { $in: bogusIds } } }
-      );
-      invalidateAlbumsCache();
-      console.log(`[Auto-Clean] Purged ${bogusIds.length} bogus YouTube playlist entries from database.`);
-    }
-  } catch (err) {
-    console.warn('[Auto-Clean] Notice:', err.message);
-  }
-}, 5000);
+router.delete('/:id', adminAuth, (req, res) => handleDeleteAlbum(req, res, { invalidateAlbumsCache }));
+router.post('/:id/delete', adminAuth, (req, res) => handleDeleteAlbum(req, res, { invalidateAlbumsCache }));
 
 module.exports = router;

@@ -1,0 +1,1351 @@
+{
+  "albumsUpdated": [
+    {
+      "artist": "Amr Diab",
+      "album": "Ahla W Ahla",
+      "addedTracks": 6,
+      "totalTracks": 12
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Ice cream fi glym",
+      "addedTracks": 2,
+      "totalTracks": 9
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Zekrayat",
+      "addedTracks": 2,
+      "totalTracks": 8
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Allem Alby",
+      "addedTracks": 5,
+      "totalTracks": 18
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Tamally Maak",
+      "addedTracks": 5,
+      "totalTracks": 15
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Amarain",
+      "addedTracks": 5,
+      "totalTracks": 13
+    },
+    {
+      "artist": "Sherine",
+      "album": "Sherine",
+      "addedTracks": 13,
+      "totalTracks": 24
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Ya Fatenny",
+      "addedTracks": 1,
+      "totalTracks": 18
+    },
+    {
+      "artist": "Angham",
+      "album": "Leih Sebtaha",
+      "addedTracks": 2,
+      "totalTracks": 11
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Ekhtart Sah",
+      "addedTracks": 3,
+      "totalTracks": 17
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Haeesh Hayati",
+      "addedTracks": 6,
+      "totalTracks": 21
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Dawn FM",
+      "addedTracks": 1,
+      "totalTracks": 17
+    },
+    {
+      "artist": "Drake",
+      "album": "HABIBTI",
+      "addedTracks": 4,
+      "totalTracks": 15
+    },
+    {
+      "artist": "Drake",
+      "album": "Her Loss",
+      "addedTracks": 1,
+      "totalTracks": 17
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "Tool Manty Ganby",
+      "addedTracks": 4,
+      "totalTracks": 14
+    },
+    {
+      "artist": "Abdel Rahman Musad",
+      "album": "Abdel Rahman Musad Collection",
+      "addedTracks": 11,
+      "totalTracks": 42
+    },
+    {
+      "artist": "Ahmed Mekky",
+      "album": "Asloh Araby",
+      "addedTracks": 1,
+      "totalTracks": 12
+    }
+  ],
+  "newAlbumsAdded": [
+    {
+      "artist": "Amr Diab",
+      "album": "Kammel Kalamak",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Makanak",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Mn Asmaa Allah Al Hosna",
+      "trackCount": 20,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Matkhafeesh",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Shoft El Ayam",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Hala Hala",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "ya taree'",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Zekrayat",
+      "trackCount": 6,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Ice cream fi glym",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Ghany men Albak",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "El Leila",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "SHAWAKNA",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Banadek Taala",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "We Yloumouni",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Wayah",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "El Lilady (Tonight)",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Ahla Ma Ghana Amr Diab",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Lealy Nahary",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "RAGEEN",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "MIAL",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "AYAMNA",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "SHAWANA",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "HABIBY",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "KHALSEEN",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "REWIND",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "بحبك (ريمكس)",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Aktar Wahed Beihebak",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Nour El Ein",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "راجعين",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "ويلمونى",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "ذكريات",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Ya omerena",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "أيامنا",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "أيس كريم في جليم",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "حبيبي",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "متخافيش",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "شوقنا",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "ميال",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "عودوني",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Mayal",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "خالصين",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "هلا هلا",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "غني من قلبك",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Amr Diab: Greatest Hits 2013",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Arabic Hits Of The 80's",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "bahbek",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Diab",
+      "album": "Habibi",
+      "trackCount": 6,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "مقدرش",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Shekolata - شيكولاتة",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "أجمل ماغنى منير و منيب",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Mounir Live Session",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Eftah Albak",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Chocalata",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "ممكن",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Shababeek",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "West El Dayra",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Etkalemy",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Hadootah Masreya",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Alemoni Eneki",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "المجموعة الذهبية",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "AALEMOONY EINEKY",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "WEST EL DAYARA",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Al Malek Howa Al Malek",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Ya Ahl Al Arab Wel Tarab",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "ROBA'EYAT FI HOB ALLAH",
+      "trackCount": 27,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Taam El Biyout",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Hadouta Masreya",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Embareh Omri Kan Eshreen",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Fi 3esh2 El Banat",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Ahmar Shafayef",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "El Ard Welsalam",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Alby Masaken Sha3beya",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Eftah Galbak",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "El Tool We El Loon We El Horya",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Benetweled",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Baree",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Ya Eskenderia",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Ya Isskindiria",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Chocolata",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "El Tool Wel Loon Wel Horreya",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Best of Mohamed Mounir",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "Gold Collection",
+      "trackCount": 25,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Mounir",
+      "album": "El Malek",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Btmanna Ansak",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Nassay",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Beautiful Songs",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Her Excellency",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Sherine Live 2",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Sherine 2015",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Esaal Alaya",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Ana Ketir",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Habeat",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Dalaa for women only",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Free Mix Vol. 3",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "El Doha Concert - 2006",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Leilet El Demou3",
+      "trackCount": 6,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Sahbet El Saada",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Mawazine 2016",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Batamenak",
+      "trackCount": 4,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Jalsat Tarab",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Sherine",
+      "album": "Jeddah Live Concert 2021",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Kol Youm Men Dah",
+      "trackCount": 20,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Omroh Ma Yeghib",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Mn Alby Baghany",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Kheles El kalam",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "Omro M Yegheeb",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "حاجة مش طبيعية",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "ناويها",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "خلص الكلام",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mohamed Hamaki",
+      "album": "خلينا نعيش",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "اغاني صوت القاهرة",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Basbosa Hafla - بسبوسة حفله",
+      "trackCount": 5,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Mazh",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Hala Khasa Gedan",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Angham",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Ahlam Barya",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Ella Ana",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Yanayer",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "AL HEKAYAH MOHAMMADEYAH",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Nefsi Ahebak",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Dandana With Angham",
+      "trackCount": 25,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Kol Ma Nearrab",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Bethib Meen",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Awin Awin",
+      "trackCount": 6,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Bahebak Waheshtini",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Omry Maak",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Ana 3ayaza 7abiby",
+      "trackCount": 41,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "El Om",
+      "trackCount": 18,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "شي ضاع",
+      "trackCount": 5,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Bebasata Keda",
+      "trackCount": 6,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Etafakna",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "هيبة",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Riyadh Trio Night 2021 - 2022",
+      "trackCount": 18,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Habibi (Romantic Arabic Hits)",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Angham",
+      "album": "Angham Collection",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "هرمون السعادة",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Aashaangy",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Khaleek Folazy",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "عيش بشوقك",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Omry Ebtada",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "180°",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Bahebak Enta",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Elly Gai Ahla",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "El Ganna Fi Beyoutna",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Hob",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Pyramids Concert - 2020",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "بحبك (From Bhabak Movie)",
+      "trackCount": 6,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Aghany Film Omar We Salma 3",
+      "trackCount": 4,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "El-Alamein Concert 2023",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Tamer Hosny",
+      "album": "Marina Live Concert 2021",
+      "trackCount": 4,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Angham Episode - Bahaa Sultan",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Bahaa Sultan Riyadh Season 2022",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Sahibat AlSaada - 2017",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Sahibat AlSaada New Year - 2021",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Sahibat Al Saada - 2019",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Bad3y Ya Rab",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Soula Show - 2013",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "Talat Da2aye2",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "ElAlamien Concert - Bahaa Sultan",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Bahaa Sultan",
+      "album": "رسينى",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "Deadbeat",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "The Slow Rush",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "Currents",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "Lonerism",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "InnerSpeaker",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "The Slow Rush B-Sides & Remixes",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Tame Impala",
+      "album": "Live Versions",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "The Highlights (Deluxe)",
+      "trackCount": 36,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Kiss Land",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Echoes of Silence",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Thursday",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "House Of Balloons",
+      "trackCount": 9,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Live At SoFi Stadium",
+      "trackCount": 31,
+      "releaseType": "album"
+    },
+    {
+      "artist": "The Weeknd",
+      "album": "Trilogy",
+      "trackCount": 30,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Travis Scott",
+      "album": "JACKBOYS 2",
+      "trackCount": 17,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Travis Scott",
+      "album": "DAYS BEFORE RODEO",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Travis Scott",
+      "album": "Huncho Jack, Jack Huncho",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Travis Scott",
+      "album": "JACKBOYS",
+      "trackCount": 7,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "For All The Dogs Scary Hours Edition",
+      "trackCount": 29,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "Honestly, Nevermind",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "If You're Reading This It's Too Late",
+      "trackCount": 17,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "Nothing Was The Same",
+      "trackCount": 13,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "Thank Me Later (Int'l Version)",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Drake",
+      "album": "Care Package",
+      "trackCount": 17,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "GNX",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "Mr. Morale & The Big Steppers",
+      "trackCount": 18,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "Black Panther The Album Music From And Inspired By",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "DAMN. COLLECTORS EDITION.",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "To Pimp A Butterfly",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "good kid, m.A.A.d. city",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "Section.80",
+      "trackCount": 15,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "Overly Dedicated",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Kendrick Lamar",
+      "album": "untitled unmastered.",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Omar Keif",
+      "album": "KEIF 001 (Disc-1)",
+      "trackCount": 5,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "Donya Gedeida",
+      "trackCount": 14,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "Meen Ana",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "صيف عسيلي 2025",
+      "trackCount": 6,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "زعلان منى يا شتا ليه ؟",
+      "trackCount": 4,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mahmoud El Esseily",
+      "album": "Neama Bay (Instrumental Collection)",
+      "trackCount": 3,
+      "releaseType": "ep"
+    },
+    {
+      "artist": "Mahmoud El Leithy",
+      "album": "Fe Nas",
+      "trackCount": 12,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Leithy",
+      "album": "Single",
+      "trackCount": 26,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Leithy",
+      "album": "Mahmoud Ellithy's Songs",
+      "trackCount": 27,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Leithy",
+      "album": "Souk El Banat",
+      "trackCount": 10,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Mahmoud El Leithy",
+      "album": "Afdal Aghani",
+      "trackCount": 8,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Mostafa",
+      "album": "تعظيم سلام",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Mostafa",
+      "album": "AYAMY",
+      "trackCount": 11,
+      "releaseType": "album"
+    },
+    {
+      "artist": "Amr Mostafa",
+      "album": "مالوش زي",
+      "trackCount": 6,
+      "releaseType": "ep"
+    }
+  ],
+  "totalTracksAdded": 2240
+}

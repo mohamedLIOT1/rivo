@@ -1667,10 +1667,10 @@ function LibraryScreen({
           ListFooterComponent={
             selectedView !== 'liked' ? (
               <View style={[styles.playlistAddSection, { marginBottom: 30 }]}>
-                <View style={[styles.playlistAddHeader, { gap: 8 }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexShrink: 1, minWidth: 0, marginRight: 8 }}>
+                <View style={styles.playlistAddHeader}>
+                  <View style={styles.playlistAddTitleContainer}>
                     <Sparkles size={14} color="#17a398" strokeWidth={2.5} style={{ flexShrink: 0 }} />
-                    <Text style={[styles.playlistAddTitle, { flex: 1, flexShrink: 1 }, rtlTextStyle]} numberOfLines={1} ellipsizeMode="tail">
+                    <Text style={[styles.playlistAddTitle, rtlTextStyle]} numberOfLines={1} ellipsizeMode="tail">
                       {songSearchQuery.trim()
                         ? (isRTL ? `نتائج البحث (${searchResultsForAdd.length})` : `SEARCH RESULTS (${searchResultsForAdd.length})`)
                         : ((selectedView?.isMix || isMixMode || (selectedView?.name && selectedView.name.toLowerCase().includes('mix')) || isOffline)
@@ -1680,7 +1680,7 @@ function LibraryScreen({
                   </View>
                   {!songSearchQuery.trim() && (
                     <TouchableOpacity
-                      style={[styles.refreshAiBtn, { flexShrink: 0 }]}
+                      style={styles.refreshAiBtn}
                       onPress={fetchAiRecommendations}
                       disabled={isLoadingAi}
                       activeOpacity={0.7}
@@ -2797,6 +2797,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    width: '100%',
+  },
+  playlistAddTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    marginRight: 10,
+    overflow: 'hidden',
   },
   playlistAddTitle: {
     fontFamily: 'monospace',
@@ -2807,7 +2818,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     flex: 1,
     flexShrink: 1,
-    marginRight: 8,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   refreshAiBtn: {
     flexDirection: 'row',
@@ -2818,6 +2830,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: 'rgba(23, 163, 152, 0.12)',
     flexShrink: 0,
+    marginLeft: 4,
   },
   refreshAiText: {
     fontFamily: 'monospace',

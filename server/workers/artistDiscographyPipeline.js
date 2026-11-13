@@ -4,6 +4,7 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const { splitArtistNames, getCanonicalArtistName } = require('../utils/artistAlbumUtils');
+const { isQuranContent, detectQuranReciter } = require('../utils/helpers');
 
 const STATUS_FILE = process.platform === 'win32'
   ? path.resolve(__dirname, '../../data/discography_pipeline_status.json')
@@ -107,8 +108,10 @@ async function getDynamicTargetArtists(TrackCollection) {
         if (!raw || typeof raw !== 'string') continue;
         const subArtists = splitArtistNames(raw);
         for (const sa of subArtists) {
+          if (detectQuranReciter('', sa, '') || isQuranContent('', sa, '', '')) continue;
           const canonical = getCanonicalArtistName(sa) || sa;
           if (!canonical || canonical.length < 2) continue;
+          if (detectQuranReciter('', canonical, '') || isQuranContent('', canonical, '', '')) continue;
           const l = canonical.toLowerCase().trim();
           if (!seen.has(l) && !l.includes('topic') && !l.includes('unknown')) {
             seen.add(l);
@@ -210,6 +213,11 @@ async function runPipeline() {
         if (!alb.collectionName) continue;
         const rawCollection = String(alb.collectionName).trim();
         const rawTrackCount = Number(alb.trackCount) || 0;
+
+        // Strictly exclude Quran recitations from music discography
+        if (isQuranContent(rawCollection, alb.artistName || artist, '', alb.primaryGenreName) || detectQuranReciter(rawCollection, alb.artistName || artist)) {
+          continue;
+        }
 
         // Accurate release classification - NEVER allow singles as albums!
         if (/\b(?:-\s*)?single\b/i.test(rawCollection) || rawTrackCount <= 1) {

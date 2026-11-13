@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { API_BASE_URL } from '../../config';
 import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../../utils/artistUtils';
 import { isQuranContent } from '../../utils/quranUtils';
@@ -143,7 +143,32 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
   }, [artistTracks, remoteData]);
 
   const bio = remoteData?.bio || initialArtist?.bio || '';
-  const avatar = remoteData?.avatar || remoteData?.cover || initialArtist?.headerImage || initialArtist?.avatar || artistTracks[0]?.cover || '';
+  
+  // Persistent avatar lock per artist to prevent drifting or flipping across track reorders
+  const lockedAvatarRef = useRef({});
+  const avatar = useMemo(() => {
+    // 1. Highest priority: Fixed canonical remote data
+    const canonicalRemote = remoteData?.cover || remoteData?.avatar;
+    if (canonicalRemote) {
+      lockedAvatarRef.current[artistKey] = canonicalRemote;
+      return canonicalRemote;
+    }
+
+    // 2. Previously locked avatar for this artist in the current session
+    if (lockedAvatarRef.current[artistKey]) {
+      return lockedAvatarRef.current[artistKey];
+    }
+
+    // 3. Initial artist data (if carrying a dedicated portrait, not temporary)
+    const initialImg = initialArtist?.cover || initialArtist?.avatar || initialArtist?.headerImage;
+    if (initialImg) {
+      lockedAvatarRef.current[artistKey] = initialImg;
+      return initialImg;
+    }
+
+    return '';
+  }, [remoteData, initialArtist, artistKey]);
+
   const banner = remoteData?.banner || initialArtist?.banner || '';
   const isVerified = Boolean(remoteData?.isVerified || initialArtist?.isVerified);
 

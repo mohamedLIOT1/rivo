@@ -46,7 +46,20 @@ async function handleImportAlbum(req, res, { invalidateAlbumsCache }) {
         ? isQuran 
         : isQuranContent(albumName, albumArtist, '', '') || scraped.items.every(t => isQuranContent(t.title, t.artist || albumArtist))
     );
-    const detectedAlbumReciter = finalIsQuran ? detectQuranReciter(albumName, albumArtist, '', '') : null;
+    if (finalIsQuran) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Quran recitations belong in Rivo Quran system and cannot be imported into music albums' 
+      });
+    }
+
+    if (!scraped.items || scraped.items.length <= 1) {
+      return res.status(400).json({
+        success: false,
+        error: 'Single-track releases cannot be imported as music albums'
+      });
+    }
+    const detectedAlbumReciter = null;
 
     const trackIds = [];
     const createdTracks = [];
@@ -165,6 +178,8 @@ async function handleImportAlbum(req, res, { invalidateAlbumsCache }) {
       }
     }
 
+    const releaseType = trackIds.length <= 6 ? 'ep' : 'album';
+
     const newAlbum = new Album({
       id: `album-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
       name: albumName,
@@ -172,11 +187,13 @@ async function handleImportAlbum(req, res, { invalidateAlbumsCache }) {
       cover: albumCover,
       trackIds: trackIds,
       releaseDate: releaseDate ? releaseDate.trim() : new Date().getFullYear().toString(),
-      genre: finalIsQuran ? 'Holy Quran' : classifyGenre({ title: albumName, artist: albumArtist, genre, description }).genre,
+      genre: classifyGenre({ title: albumName, artist: albumArtist, genre, description }).genre,
+      releaseType,
+      trackCount: trackIds.length,
       isAlbum: true,
       isSystem: true,
       isPublic: true,
-      isQuran: finalIsQuran,
+      isQuran: false,
       description: description ? description.trim() : '',
       source: 'link_import',
       createdBy: req.user?.id || req.user?.name || 'admin'

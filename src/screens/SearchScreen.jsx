@@ -17,6 +17,7 @@ import { isQuranContent } from '../utils/quranUtils';
 import { isUserAdmin } from '../utils/adminUtils';
 import { useAudioPlayer } from '../context/AudioContext';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
+import { useSearchArtists } from '../hooks/useSearchArtists';
 
 const TRENDING_TAGS = [
   { label: 'بوب عربي', query: 'أغاني بوب عربي' },
@@ -108,53 +109,8 @@ export default function SearchScreen({
   const safeTracks = React.useMemo(() => (tracks || []).filter(t => !isQuranContent(t)), [tracks]);
   const safeAlbums = React.useMemo(() => (albums || []).filter(a => !isQuranContent(a)), [albums]);
 
-  // Extract all artists from tracks & albums (aggregated by canonical artist identity)
-  const allArtists = React.useMemo(() => {
-    const map = new Map();
-    safeTracks.forEach(t => {
-      if (!t.artist || !isMusicTrack(t.title, t.artist)) return;
-      const artistNames = getTrackArtists(t.artist, t.title);
-      artistNames.forEach(rawName => {
-        const canonical = getCanonicalArtistName(rawName);
-        if (!canonical) return;
-        const key = canonical.toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, { 
-            name: canonical, 
-            count: 1, 
-            cover: t.cover,
-            aliases: getArtistAliases(canonical)
-          });
-        } else {
-          const existing = map.get(key);
-          existing.count += 1;
-          if (!existing.cover && t.cover) existing.cover = t.cover;
-        }
-      });
-    });
-    safeAlbums.forEach(a => {
-      if (!a.artist) return;
-      const artistNames = getTrackArtists(a.artist);
-      artistNames.forEach(rawName => {
-        const canonical = getCanonicalArtistName(rawName);
-        if (!canonical) return;
-        const key = canonical.toLowerCase();
-        const albCount = (a.trackIds || []).length || 1;
-        if (!map.has(key)) {
-          map.set(key, { 
-            name: canonical, 
-            count: albCount, 
-            cover: a.cover,
-            aliases: getArtistAliases(canonical)
-          });
-        } else {
-          const existing = map.get(key);
-          if (!existing.cover && a.cover) existing.cover = a.cover;
-        }
-      });
-    });
-    return Array.from(map.values()).sort((a, b) => b.count - a.count);
-  }, [safeTracks, safeAlbums]);
+  // Extract all artists aggregated by canonical artist identity with true database counts & portraits
+  const { allArtists } = useSearchArtists({ safeTracks, safeAlbums });
 
   const normalizeFuzzy = (str) => {
     if (!str || typeof str !== 'string') return '';
@@ -700,8 +656,9 @@ export default function SearchScreen({
                               )}
                             </div>
                             <div className="truncate flex-1 min-w-0">
-                              <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
-                                {art.name}
+                              <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors flex items-center gap-1.5">
+                                <span className="truncate">{art.name}</span>
+                                {art.isVerified && <VerifiedBadge userOrName={art.name} size={13} />}
                               </p>
                               <span className={`text-[11px] font-mono truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                                 {art.count} {art.count === 1 ? 'song' : 'songs'} in library
@@ -892,8 +849,9 @@ export default function SearchScreen({
                             )}
                           </div>
                           <div className="truncate flex-1 min-w-0">
-                            <span className="truncate group-hover:text-[#17a398] transition-colors font-display font-black text-xs block">
-                              {art.name}
+                            <span className="truncate group-hover:text-[#17a398] transition-colors font-display font-black text-xs flex items-center gap-1">
+                              <span className="truncate">{art.name}</span>
+                              {art.isVerified && <VerifiedBadge userOrName={art.name} size={11} />}
                             </span>
                             <span className="text-[10px] font-mono text-zinc-400 truncate block">
                               {art.count} {art.count === 1 ? 'song' : 'songs'}
@@ -1307,8 +1265,9 @@ export default function SearchScreen({
                             )}
                           </div>
                           <div className="truncate flex-1 min-w-0">
-                            <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors">
-                              {art.name}
+                            <p className="font-display font-black text-sm truncate group-hover:text-[#17a398] transition-colors flex items-center gap-1.5">
+                              <span className="truncate">{art.name}</span>
+                              {art.isVerified && <VerifiedBadge userOrName={art.name} size={13} />}
                             </p>
                             <span className={`text-[11px] font-mono truncate block mt-0.5 ${isDark ? 'text-zinc-400' : 'text-zinc-600'}`}>
                               {art.count} {art.count === 1 ? 'song' : 'songs'}

@@ -17,6 +17,8 @@ const TrackSchema = new mongoose.Schema({
   isPodcast: { type: Boolean, default: false },
   isAudiobook: { type: Boolean, default: false },
   plays: { type: Number, default: 0 },
+  views: { type: Number, default: 0 },
+  youtubeViews: { type: Number, default: 0 },
   legacyAudioUrl: String,
   youtubeId: String,
   cloudStorage: {
@@ -46,12 +48,14 @@ const TrackSchema = new mongoose.Schema({
 
 TrackSchema.index({ title: 1, artist: 1 });
 TrackSchema.index({ artist: 1, plays: -1 });
+TrackSchema.index({ artist: 1, views: -1 });
 TrackSchema.index({ artist: 1, createdAt: -1 });
 TrackSchema.index({ album: 1, createdAt: -1 });
 TrackSchema.index({ isQuran: 1, plays: -1 });
 TrackSchema.index({ source: 1, createdAt: -1 });
 TrackSchema.index({ audioUrl: 1 });
 TrackSchema.index({ plays: -1 });
+TrackSchema.index({ views: -1 });
 TrackSchema.index({ createdAt: -1 });
 TrackSchema.index({ isQuran: 1 });
 TrackSchema.index({ genre: 1 });

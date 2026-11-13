@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { Album } = require('../models');
 const { escapeRegex } = require('./quranUtils');
+const { CANONICAL_ARTIST_GROUPS } = require('./canonicalArtistData');
 
 const OFFICIAL_ALBUM_COVERS = {
   'roma': 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/46/81/82/468182bd-6914-bf7d-2f4a-4cb4bd5175cd/196925215671.jpg/1200x1200bb.jpg',
@@ -73,159 +74,29 @@ async function autoFixAlbumCovers(io) {
   }
 }
 
-const CANONICAL_ARTIST_MAP = [
-  {
-    canonical: 'Cairokee',
-    aliases: [
-      'cairokee', 'cairokeeoffical', 'cairokeeofficial', 'cairokee official',
-      'amir eid', 'amireid', 'أمير عيد', 'كايروكي', 'cairokee كايروكي', 'كايروكي cairokee'
-    ]
-  },
-  {
-    canonical: 'Mohamed Hamaki',
-    aliases: ['hamaki', 'mohamed hamaki', 'محمد حماقي', 'حماقي', 'mohamed hamaki محمد حماقي', 'محمد حماقي mohamed hamaki']
-  },
-  {
-    canonical: 'Amr Diab',
-    aliases: ['amr diab', 'عمرو دياب', 'elhadaba', 'el hadaba', 'الهضبة', 'amr diab عمرو دياب', 'عمرو دياب amr diab']
-  },
-  {
-    canonical: 'Tamer Hosny',
-    aliases: ['tamer hosny', 'tamer hosni', 'تامر حسني', 'tamer hosny تامر حسني', 'تامر حسني تامر حسني']
-  },
-  {
-    canonical: 'Marwan Pablo',
-    aliases: ['marwan pablo', 'pablo', 'مروان بابلو', 'بابلو', 'marwan pablo مروان بابلو', 'مروان بابلو marwan pablo']
-  },
-  {
-    canonical: 'Wegz',
-    aliases: ['wegz', 'ويجز', 'wegzz', 'ويجز wegz', 'wegz ويجز']
-  },
-  {
-    canonical: 'Lege-Cy',
-    aliases: ['lege-cy', 'lege cy', 'legecy', 'legi c', 'legi-c', 'legic', 'ليجيسي', 'ليجي', 'ليجسي', 'ليجي سي', 'ليجي-سي', 'lege-cy ليجيسي', 'ليجيسي lege-cy']
-  },
-  {
-    canonical: 'El Joker',
-    aliases: ['el joker', 'eljoker', 'joker', 'الجوكر', 'جوكر', 'el joker الجوكر']
-  },
-  {
-    canonical: 'Tul8te',
-    aliases: ['tul8te', 'toolete', 'tulet', 'تو ليت', 'توليت', 'توو ليت', 'tul8te توليت', 'توليت tul8te']
-  },
-  {
-    canonical: 'Essam Sasa',
-    aliases: ['essam sasa', 'sasa', 'عصام صاصا', 'صاصا', 'عصام صاصا essam sasa']
-  },
-  {
-    canonical: 'Muslim',
-    aliases: ['muslim', 'مسلم', 'مسلم muslim']
-  },
-  {
-    canonical: 'Tamer Ashour',
-    aliases: ['tamer ashour', 'ashour', 'تامر عاشور', 'عاشور', 'تامر عاشور tamer ashour']
-  },
-  {
-    canonical: 'Abyusif',
-    aliases: ['abyusif', 'أبيوسف', 'ابيوسف', 'abyusif أبيوسف']
-  },
-  {
-    canonical: 'Marwan Moussa',
-    aliases: ['marwan moussa', 'marwan mousa', 'مروان موسى', 'مروان موسى marwan moussa']
-  },
-  {
-    canonical: 'Afroto',
-    aliases: ['afroto', 'عفروتو', 'afroto عفروتو']
-  },
-  {
-    canonical: 'Sharmoofers',
-    aliases: ['sharmoofers', 'شارموفرز', 'شارموفرز sharmoofers']
-  },
-  {
-    canonical: 'Massar Egbari',
-    aliases: ['massar egbari', 'مسار إجباري', 'مسار اجباري']
-  },
-  {
-    canonical: 'Ahmed Saad',
-    aliases: ['ahmed saad', 'أحمد سعد', 'احمد سعد', 'ahmed saad أحمد سعد']
-  },
-  {
-    canonical: 'Bahaa Sultan',
-    aliases: ['bahaa sultan', 'بهاء سلطان']
-  },
-  {
-    canonical: 'Sherine',
-    aliases: ['sherine', 'sherine abdel-wahab', 'sherine abdel wahab', 'شيرين', 'شيرين عبد الوهاب']
-  },
-  {
-    canonical: 'Ziad Zaza',
-    aliases: ['ziad zaza', 'زياد ظاظا', 'ظاظا']
-  },
-  {
-    canonical: 'FLX',
-    aliases: ['flx', 'flex', 'فليكس']
-  },
-  {
-    canonical: 'Karim Osama',
-    aliases: ['karim osama', 'كريم اسامة', 'كريم اسامه']
-  },
-  {
-    canonical: 'Arsenic',
-    aliases: ['arsenic', 'ارسينك', 'أرسينك']
-  },
-  {
-    canonical: 'Abo El Anwar',
-    aliases: ['abo el anwar', 'ابو الانوار', 'أبو الأنوار']
-  },
-  {
-    canonical: 'Double Zuksh',
-    aliases: ['double zuksh', 'دبل زوكش']
-  },
-  {
-    canonical: '3enba',
-    aliases: ['3enba', 'enba', 'enaba', 'عنبة', 'عنبه']
-  },
-  {
-    canonical: 'Hamza Namira',
-    aliases: ['hamza namira', 'حمزة نمرة', 'حمزه نمره']
-  },
-  {
-    canonical: 'Santa',
-    aliases: ['santa', 'ahmed santa', 'احمد سانتا', 'سانتا']
-  },
-  {
-    canonical: 'Wingii',
-    aliases: ['wingii', 'wingi', 'وينجي', 'ونجي']
-  },
-  {
-    canonical: 'Hamo Bika',
-    aliases: ['hamo bika', 'حمو بيكا']
-  },
-  {
-    canonical: 'Hassan Shakosh',
-    aliases: ['hassan shakosh', 'حسن شاكوش']
-  },
-  {
-    canonical: 'Angham',
-    aliases: ['angham', 'أنغام', 'انغام']
-  },
-  {
-    canonical: 'Asala',
-    aliases: ['asala', 'assala', 'أصالة', 'اصالة']
-  },
-  {
-    canonical: 'Elissa',
-    aliases: ['elissa', 'إليسا', 'اليسا']
-  },
-  {
-    canonical: 'Nancy Ajram',
-    aliases: ['nancy ajram', 'نانسي عجرم']
-  },
-  {
-    canonical: 'Wael Jassar',
-    aliases: ['wael jassar', 'وائل جسار']
-  }
-];
+const CANONICAL_ARTIST_MAP = CANONICAL_ARTIST_GROUPS;
+
+function normalizeArabicText(str) {
+  if (!str) return '';
+  return str
+    .replace(/[\u064B-\u065F\u0670]/g, '') // remove tashkeel
+    .replace(/[إأآٱ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[^\u0600-\u06FF0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeLatinText(str) {
+  if (!str) return '';
+  return str
+    .replace(/[^a-zA-Z0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
 
 function normalizeArtistName(raw) {
   if (!raw || typeof raw !== 'string') return '';
@@ -237,64 +108,120 @@ function normalizeArtistName(raw) {
   return clean;
 }
 
+function findCanonicalInGroup(text) {
+  if (!text) return null;
+  const lower = text.trim().toLowerCase();
+  const normAr = normalizeArabicText(text);
+  const normLat = normalizeLatinText(text);
+
+  for (const group of CANONICAL_ARTIST_MAP) {
+    if (group.canonical.toLowerCase() === lower) return group.canonical;
+    for (const alias of group.aliases) {
+      const aliasLower = alias.toLowerCase();
+      if (aliasLower === lower) return group.canonical;
+      if (normLat && normLat === normalizeLatinText(alias)) return group.canonical;
+      if (normAr && normAr === normalizeArabicText(alias)) return group.canonical;
+    }
+  }
+  return null;
+}
+
+/**
+ * Universal bilingual artist resolution.
+ * Detects Latin + Arabic variants separated by '-', '/', parentheses, brackets, or pipes.
+ * Ensures that names like "Shehab - شهاب" are NEVER treated as two separate artists.
+ */
+function resolveBilingualArtist(rawStr) {
+  if (!rawStr || typeof rawStr !== 'string') return null;
+  const str = rawStr.trim();
+
+  // Direct alias match first
+  const direct = findCanonicalInGroup(str);
+  if (direct) return direct;
+
+  const hasArabic = /[\u0600-\u06FF]/.test(str);
+  const hasLatin = /[a-zA-Z]/.test(str);
+  if (!hasArabic || !hasLatin) return null;
+
+  // Check parentheses/brackets: e.g. "Shehab (شهاب)", "شهاب (Shehab)", "Tul8te (تووليت)"
+  const parenMatch = str.match(/^([^(]+)\s*\(([^)]+)\)$/) || str.match(/^([^[Block]+)\s*\[([^\]]+)\]$/);
+  if (parenMatch) {
+    const p1 = parenMatch[1].trim();
+    const p2 = parenMatch[2].trim();
+    const c1 = findCanonicalInGroup(p1);
+    const c2 = findCanonicalInGroup(p2);
+    if (c1 && c2 && c1 === c2) return c1;
+    if (c1 && !c2) return c1;
+    if (c2 && !c1) return c2;
+    if (/[a-zA-Z]/.test(p1) && !/[\u0600-\u06FF]/.test(p1)) return p1;
+    if (/[a-zA-Z]/.test(p2) && !/[\u0600-\u06FF]/.test(p2)) return p2;
+  }
+
+  // Check standard bilingual delimiters: - – — / \ | • ~ I
+  const delimMatch = str.split(/\s*[-–—/\\|•~]\s*|\s+I\s+/);
+  if (delimMatch.length === 2) {
+    const left = delimMatch[0].trim();
+    const right = delimMatch[1].trim();
+    const cLeft = findCanonicalInGroup(left);
+    const cRight = findCanonicalInGroup(right);
+    if (cLeft && cRight && cLeft === cRight) return cLeft;
+    if (cLeft && !cRight) return cLeft;
+    if (cRight && !cLeft) return cRight;
+    if (/[a-zA-Z]/.test(left) && !/[\u0600-\u06FF]/.test(left)) return left;
+    if (/[a-zA-Z]/.test(right) && !/[\u0600-\u06FF]/.test(right)) return right;
+  }
+
+  // Generic extraction of Arabic & Latin chunks when separated by spaces
+  const arabicPart = str.replace(/[^\u0600-\u06FF\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const latinPart = str.replace(/[^\u0020-\u007E]/g, ' ').replace(/[-–—/\\|•~()[\]{}]/g, ' ').replace(/[^a-zA-Z0-9\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const cAr = findCanonicalInGroup(arabicPart);
+  const cLat = findCanonicalInGroup(latinPart);
+  if (cAr && cLat && cAr === cLat) return cAr;
+  if (cLat && !cAr) return cLat;
+  if (cAr && !cLat) return cAr;
+
+  return null;
+}
+
+const COLLAB_SPLIT_REGEX = /(?:\s*[,،;&+]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i;
+
 function splitArtistNames(raw) {
   if (!raw || typeof raw !== 'string') return [];
   const rawStr = String(raw).trim();
 
-  // If string contains both Arabic & Latin without delimiters, check if it's the same bilingual artist (e.g. "ويجز Wegz")
-  const hasArabic = /[\u0600-\u06FF]/.test(rawStr);
-  const hasLatin = /[a-zA-Z]/.test(rawStr);
-  const hasDelim = /(?:\s*[,،;&+/]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i.test(rawStr);
-  if (hasArabic && hasLatin && !hasDelim) {
-    const arabicPart = rawStr.replace(/[^\u0600-\u06FF\s]/g, '').trim().toLowerCase();
-    const latinPart = rawStr.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().toLowerCase();
-    let arabicMatch = null;
-    let latinMatch = null;
-    for (const group of CANONICAL_ARTIST_MAP) {
-      if (arabicPart && group.aliases.includes(arabicPart)) arabicMatch = group.canonical;
-      if (latinPart && group.aliases.includes(latinPart)) latinMatch = group.canonical;
-    }
-    if (arabicMatch && latinMatch && arabicMatch === latinMatch) {
-      return [arabicMatch];
-    }
-    if (arabicMatch && !latinMatch) return [arabicMatch];
-    if (latinMatch && !arabicMatch) return [latinMatch];
+  // Protect bilingual slashes (e.g. "Latin / Arabic" or "Arabic / Latin") from being split
+  const sanitized = rawStr.replace(/([a-zA-Z0-9\s]+)\s*\/\s*([\u0600-\u06FF\s]+)/g, '$1 - $2')
+                          .replace(/([\u0600-\u06FF\s]+)\s*\/\s*([a-zA-Z0-9\s]+)/g, '$1 - $2');
+
+  // If there are NO collaboration delimiters, check if this is a single bilingual artist
+  if (!COLLAB_SPLIT_REGEX.test(sanitized)) {
+    const wholeBilingual = resolveBilingualArtist(sanitized);
+    if (wholeBilingual) return [wholeBilingual];
   }
 
-  // Split on comma, Arabic comma, &, +, /, ft., feat., featuring, with, مع, x, and Arabic 'و'
-  const parts = rawStr
-    .split(/(?:\s*[,،;&+/]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i)
-    .map(p => normalizeArtistName(p).trim())
+  // Split on true collaboration delimiters
+  const parts = sanitized
+    .split(COLLAB_SPLIT_REGEX)
+    .map(p => {
+      const clean = normalizeArtistName(p).trim();
+      return getCanonicalArtistName(clean);
+    })
     .filter(p => p.length > 0);
-  return parts.length > 0 ? parts : [normalizeArtistName(raw).trim()];
+
+  const unique = [];
+  for (const p of parts) {
+    if (!unique.includes(p)) unique.push(p);
+  }
+  return unique.length > 0 ? unique : [getCanonicalArtistName(rawStr)];
 }
 
 function getDirectCanonicalArtist(rawName) {
   if (!rawName || typeof rawName !== 'string') return '';
   const trimmed = rawName.trim();
-  const lower = trimmed.toLowerCase();
-  const normalized = normalizeArtistName(trimmed).toLowerCase();
-
-  for (const group of CANONICAL_ARTIST_MAP) {
-    if (group.aliases.includes(lower) || group.aliases.includes(normalized)) {
-      return group.canonical;
-    }
-  }
-
-  // Bilingual extraction (e.g. "ويجز Wegz" -> "Wegz")
-  const hasArabic = /[\u0600-\u06FF]/.test(trimmed);
-  const hasLatin = /[a-zA-Z]/.test(trimmed);
-  if (hasArabic && hasLatin) {
-    const arabicPart = trimmed.replace(/[^\u0600-\u06FF\s]/g, '').trim().toLowerCase();
-    const latinPart = trimmed.replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().toLowerCase();
-    for (const group of CANONICAL_ARTIST_MAP) {
-      if ((arabicPart && group.aliases.includes(arabicPart)) || (latinPart && group.aliases.includes(latinPart))) {
-        return group.canonical;
-      }
-    }
-  }
-
-  return '';
+  const bilingual = resolveBilingualArtist(trimmed);
+  if (bilingual) return bilingual;
+  return findCanonicalInGroup(trimmed) || '';
 }
 
 function getPrimaryArtist(raw) {
@@ -305,7 +232,6 @@ function getPrimaryArtist(raw) {
 
   const parts = splitArtistNames(trimmed);
   if (parts.length > 1) {
-    // If one of the parts matches a canonical artist, prioritize that canonical artist
     for (const part of parts) {
       const can = getDirectCanonicalArtist(part);
       if (can) return can;
@@ -320,13 +246,6 @@ function getCanonicalArtistName(rawName) {
   const trimmed = rawName.trim();
   const direct = getDirectCanonicalArtist(trimmed);
   if (direct) return direct;
-
-  // Handle multi-artist collaborations (e.g. "Cairokee, Sary Hany" -> "Cairokee")
-  const primary = getPrimaryArtist(trimmed);
-  if (primary && primary !== trimmed) {
-    const primaryCanonical = getDirectCanonicalArtist(primary);
-    return primaryCanonical || primary;
-  }
 
   const clean = normalizeArtistName(trimmed);
   return clean || trimmed;
@@ -350,7 +269,8 @@ function isValidAlbumName(albumName) {
     '', 'single', 'single cassette', 'singles', 'single release',
     'unknown', 'unknown album', 'track', 'audio', 'youtube', 'soundcloud',
     'import', 'spotify', 'spotify playlist', 'imported playlist', 'official audio',
-    'playlist', 'my playlist', 'favorites', 'liked songs', 'new playlist'
+    'playlist', 'my playlist', 'favorites', 'liked songs', 'new playlist',
+    'quran', 'holy quran', 'القرآن الكريم', 'القران الكريم', 'مصحف', 'تلاوات'
   ];
   if (invalid.includes(clean)) return false;
   if (clean.startsWith('playlist') || clean.endsWith('playlist')) return false;
@@ -360,6 +280,7 @@ function isValidAlbumName(albumName) {
 
 async function syncTrackToAlbum(track) {
   if (!track || !track.title || !track.artist || !track.album) return null;
+  if (track.isQuran || track.genre === 'Holy Quran') return null;
   const albumTitle = (track.album || '').trim();
   const artistName = track.artist.trim();
   const trackId = String(track._id || track.id);

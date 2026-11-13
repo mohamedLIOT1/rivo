@@ -143,6 +143,7 @@ export default function ScreenRouter({
             isActivityPanelOpen={isActivityPanelOpen}
             toggleActivityPanel={toggleActivityPanel}
             globalTheme={globalTheme}
+            onNavigate={navigateTo}
           />
         )
       )}

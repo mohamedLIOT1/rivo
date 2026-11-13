@@ -4,6 +4,26 @@ import { ArtistLinks } from '../../utils/artistUtils';
 import { useTranslation } from '../../context/PreferencesContext';
 import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils';
 
+/**
+ * Format play metrics into human-readable compact notation (e.g. 1.2M, 540K, 12.5K).
+ * Suppresses misleading single-digit or small unverified play counts (< 100).
+ */
+export function formatCompactPlays(count) {
+  const num = Number(count);
+  if (!num || isNaN(num) || num < 100) return null;
+  if (num >= 1e9) {
+    return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+  }
+  if (num >= 1e6) {
+    return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+  }
+  if (num >= 1e3) {
+    const formatted = (num / 1e3).toFixed(num < 100000 ? 1 : 0).replace(/\.0$/, '');
+    return formatted + 'K';
+  }
+  return num.toLocaleString();
+}
+
 export default function ArtistTrackList({
   artistTracks = [],
   isQuran = false,
@@ -35,54 +55,58 @@ export default function ArtistTrackList({
 
       {artistTracks.length > 0 ? (
         <div className="space-y-1.5 sm:space-y-2">
-          {artistTracks.map((track, i) => (
-            <div
-              key={track.id || track._id || i}
-              onClick={() => onSelectTrack && onSelectTrack(track, artistTracks)}
-              className={`flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group rounded-lg ${
-                isDark 
-                  ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#22332e]' 
-                  : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
-              }`}
-            >
-              <span className={`text-[11px] sm:text-xs font-mono font-black w-5 sm:w-6 text-center shrink-0 ${
-                isDark ? 'text-zinc-400' : 'text-[#082621]'
-              }`}>
-                {String(i + 1).padStart(2, '0')}
-              </span>
-              <img 
-                src={normalizeCoverUrl(track.cover, track)}
-                alt={track.title} 
-                className="w-9 h-9 sm:w-11 sm:h-11 brutal-border rounded-md object-cover bg-black/10 shrink-0" 
-                onError={handleCoverImageError}
-              />
-              <div className="flex-1 truncate">
-                <h4 className={`text-xs sm:text-sm font-bold truncate group-hover:text-[#17a398] transition-colors ${
-                  isDark ? 'text-white' : 'text-[#0b1110]'
-                }`}>
-                  {track.title}
-                </h4>
-                <div className={`text-[11px] truncate font-medium flex items-center gap-1.5 ${
-                  isDark ? 'text-zinc-400' : 'text-[#082621]/70'
-                }`}>
-                  <ArtistLinks
-                    track={track}
-                    onSelectArtist={onSelectArtist}
-                    linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
-                  />
-                  {track.album && <span>• {track.album}</span>}
-                </div>
-              </div>
+          {artistTracks.map((track, i) => {
+            const sitePlays = Number(track.plays) || 0;
+            const formattedPlays = sitePlays > 0 ? (sitePlays >= 1000 ? formatCompactPlays(sitePlays) : String(sitePlays)) : null;
 
-              {Number(track.plays) > 0 && (
-                <div className="text-right hidden sm:block">
-                  <span className={`text-[11px] font-mono font-bold px-2 py-0.5 brutal-border rounded-md ${
-                    isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-black'
+            return (
+              <div
+                key={track.id || track._id || i}
+                onClick={() => onSelectTrack && onSelectTrack(track, artistTracks)}
+                className={`flex items-center gap-2.5 sm:gap-4 p-2 sm:p-3 brutal-border brutal-shadow-sm hover:translate-x-1 transition-transform cursor-pointer group rounded-lg ${
+                  isDark 
+                    ? 'bg-[#182320] border-zinc-700 text-white hover:bg-[#22332e]' 
+                    : 'bg-[#ede5d3] border-black text-[#0b1110] hover:bg-white'
+                }`}
+              >
+                <span className={`text-[11px] sm:text-xs font-mono font-black w-5 sm:w-6 text-center shrink-0 ${
+                  isDark ? 'text-zinc-400' : 'text-[#082621]'
+                }`}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <img 
+                  src={normalizeCoverUrl(track.cover, track)}
+                  alt={track.title} 
+                  className="w-9 h-9 sm:w-11 sm:h-11 brutal-border rounded-md object-cover bg-black/10 shrink-0" 
+                  onError={handleCoverImageError}
+                />
+                <div className="flex-1 truncate">
+                  <h4 className={`text-xs sm:text-sm font-bold truncate group-hover:text-[#17a398] transition-colors ${
+                    isDark ? 'text-white' : 'text-[#0b1110]'
                   }`}>
-                    {Number(track.plays).toLocaleString()} {isQuran ? (t('profile.listens') || 'listens') : (t('profile.plays') || 'plays')}
-                  </span>
+                    {track.title}
+                  </h4>
+                  <div className={`text-[11px] truncate font-medium flex items-center gap-1.5 ${
+                    isDark ? 'text-zinc-400' : 'text-[#082621]/70'
+                  }`}>
+                    <ArtistLinks
+                      track={track}
+                      onSelectArtist={onSelectArtist}
+                      linkClassName="hover:underline hover:text-[#17a398] transition-colors cursor-pointer"
+                    />
+                    {track.album && <span>• {track.album}</span>}
+                  </div>
                 </div>
-              )}
+
+                {formattedPlays && (
+                  <div className="text-right hidden sm:block">
+                    <span className={`text-[11px] font-mono font-bold px-2 py-0.5 brutal-border rounded-md ${
+                      isDark ? 'bg-zinc-800 text-zinc-300 border-zinc-700' : 'bg-[#fdfbf7] text-[#082621] border-black'
+                    }`}>
+                      {formattedPlays} {isQuran ? (t('profile.listens') || 'listens') : (t('profile.plays') || 'plays')}
+                    </span>
+                  </div>
+                )}
 
               <button 
                 type="button"
@@ -113,8 +137,9 @@ export default function ArtistTrackList({
                 <Heart size={15} className={track.liked ? 'fill-[#dc2626] text-[#dc2626]' : ''} />
               </button>
             </div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
       ) : (
         <div className={`text-center py-8 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
           {isQuran ? 'NO SURAHS FOUND FOR THIS RECITER YET.' : 'NO TRACKS FOUND FOR THIS ARTIST YET.'}
