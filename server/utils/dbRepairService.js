@@ -143,6 +143,38 @@ async function runDatabaseRepairs() {
       }
     }
 
+    // 3. Fix 7OB&KASHAT (Belongs to Marwan Pablo, NOT Abyusif)
+    await Album.updateMany({ name: /7OB&KASHAT/i }, { $set: { artist: 'Marwan Pablo' } }).catch(() => {});
+    await Artist.updateMany({ name: /abyusif/i }, { $pull: { albums: { name: /7OB&KASHAT/i } } }).catch(() => {});
+    const pablo = await Artist.findOne({ name: /marwan pablo/i }).catch(() => null);
+    if (pablo) {
+      const kashatAlb = await Album.findOne({ name: /7OB&KASHAT/i }).catch(() => null);
+      if (kashatAlb && !(pablo.albums || []).some(a => String(a.name || '').toLowerCase() === '7ob&kashat')) {
+        await Artist.updateOne({ _id: pablo._id }, { $push: { albums: kashatAlb } }).catch(() => {});
+        console.log('[DBRepair] Reconciled 7OB&KASHAT with Marwan Pablo');
+      }
+    }
+
+    // 4. Fix "مزيكا القرن 21" (Belongs to Sadat, NOT Wegz)
+    await Album.updateMany({ name: /مزيكا القرن 21/i }, { $set: { artist: 'Sadat' } }).catch(() => {});
+    await Artist.updateMany({ name: /wegz/i }, { $pull: { albums: { name: /مزيكا القرن 21/i } } }).catch(() => {});
+
+    // 5. Remove generic 1,000+ "Single" dump album erroneously attributed to Mahmoud El Leithy
+    await Album.deleteMany({ name: /^Single$/i, artist: /mahmoud el leithy|محمود الليث/i }).catch(() => {});
+    await Artist.updateMany({ name: /mahmoud el leithy|محمود الليث/i }, { $pull: { albums: { name: /^Single$/i } } }).catch(() => {});
+
+    // 6. Fix Compilations incorrectly attributed to single artists
+    await Album.updateMany({ name: /Arabic Hits Of The 80's/i }, { $set: { artist: 'Various Artists' } }).catch(() => {});
+    await Artist.updateMany({ name: /amr diab|عمرو دياب/i }, { $pull: { albums: { name: /Arabic Hits Of The 80's/i } } }).catch(() => {});
+
+    await Album.updateMany({ name: /Dalaa for women only/i }, { $set: { artist: 'Various Artists' } }).catch(() => {});
+    await Artist.updateMany({ name: /sherine|شيرين/i }, { $pull: { albums: { name: /Dalaa for women only/i } } }).catch(() => {});
+
+    await Album.updateMany({ name: /Habibi \(Romantic Arabic Hits\)|Riyadh Trio Night/i }, { $set: { artist: 'Various Artists' } }).catch(() => {});
+    await Artist.updateMany({ name: /angham|أنغام/i }, { $pull: { albums: { name: /Habibi|Riyadh Trio Night/i } } }).catch(() => {});
+
+    await Album.updateMany({ name: /KEIF 001/i }, { $set: { artist: 'Lege-Cy' } }).catch(() => {});
+
     console.log('✅ [DBRepair] Catalog reconciliation completed successfully.');
   } catch (err) {
     console.error('⚠️ [DBRepair] Catalog repair encountered notice:', err.message);
