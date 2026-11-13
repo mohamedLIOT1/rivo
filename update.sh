@@ -33,6 +33,7 @@ sed -n '90,110p' "$TARGET_DIR/server/index.js"
 
 echo "=== 7. Start PM2 ==="
 pm2 start server/index.js --name rivo
+pm2 start server/workers/runCloudBot.js --name rivo-cloud-bot -- --watch
 pm2 save
 
 echo "=== 8. Verification (port 5000) ==="

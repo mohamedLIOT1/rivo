@@ -35,7 +35,7 @@ const randomBetween = (minMs, maxMs) => Math.floor(minMs + Math.random() * (maxM
 function extractYouTubeId(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const s = raw.trim();
-  const m1 = s.match(/(?:v=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
+  const m1 = s.match(/(?:v=|videoId=|video_id=|youtu\.be\/|\/embed\/|\/shorts\/)([a-zA-Z0-9_-]{11})/i);
   if (m1?.[1]) return m1[1];
   const m2 = s.match(/^yt[-_]?([a-zA-Z0-9_-]{11})$/i);
   if (m2?.[1]) return m2[1];

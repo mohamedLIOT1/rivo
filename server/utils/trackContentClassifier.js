@@ -245,7 +245,8 @@ async function classifyTrackBeforeMigration(track, videoId, signal) {
     description: ytMeta?.ytDescription
   });
 
-  if (ruleCls.genre === 'Bollywood / Indic' || INDIC_SCRIPT_REGEX.test(combined) || HINDI_HINT_REGEX.test(combined)) {
+  const isConfirmedNonIndicArtist = ruleCls.matchedBy === 'artist_match' && ruleCls.genre !== 'Bollywood / Indic';
+  if (!isConfirmedNonIndicArtist && (ruleCls.genre === 'Bollywood / Indic' || INDIC_SCRIPT_REGEX.test(combined) || HINDI_HINT_REGEX.test(combined))) {
     return { category: 'hindi', genre: 'Bollywood / Indic', reason: 'indian_bollywood_rule', source: 'rules', ytMeta };
   }
 
