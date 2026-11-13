@@ -80,6 +80,26 @@ export default function AdminScreen({
   const [analyticsData, setAnalyticsData] = useState(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
+  // Real Database Catalog Totals (Fast countDocuments, zero-lag)
+  const [catalogCounts, setCatalogCounts] = useState(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const tk = localStorage.getItem('rivo_token') || localStorage.getItem('liofy_token') || localStorage.getItem('token') || '';
+    fetch(`${API_BASE_URL}/api/admin/catalog-counts`, {
+      headers: { Authorization: `Bearer ${tk}` },
+      signal: controller.signal
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!controller.signal.aborted && d?.success && d.counts) {
+          setCatalogCounts(d.counts);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'analytics') return;
     setIsLoadingAnalytics(true);
@@ -383,6 +403,14 @@ export default function AdminScreen({
     return { albumsQuranCount: q, albumsPodcastCount: p, albumsSongsCount: s };
   }, [adminAlbums, isPodcast]);
 
+  // True database counts prioritized (zero lag)
+  const displayTotalTracks = catalogCounts?.total ?? tracks.length;
+  const displaySongsCount = catalogCounts?.songs ?? tracksSongsCount;
+  const displayQuranCount = catalogCounts?.quran ?? tracksQuranCount;
+  const displayPodcastCount = catalogCounts?.podcasts ?? tracksPodcastCount;
+  const displayAlbumsCount = catalogCounts?.albums ?? adminAlbums.length;
+  const displayUsersCount = catalogCounts?.users ?? users.length;
+
   // Non-blocking responsive search queries
   const deferredUserFilter = useDeferredValue(userFilterQuery);
   const deferredSongFilter = useDeferredValue(songFilterQuery);
@@ -492,19 +520,19 @@ export default function AdminScreen({
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Users size={14} className="text-[#17a398]" />
-            <span>{t('admin.usersCount', { count: users.length })}</span>
+            <span>{t('admin.usersCount', { count: displayUsersCount })}</span>
           </div>
           <div className={`px-3 py-1.5 rounded-xl brutal-border flex items-center gap-1.5 ${
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Music2 size={14} className="text-[#f59e0b]" />
-            <span>{t('admin.songsCount', { count: tracks.length })}</span>
+            <span>{t('admin.songsCount', { count: displayTotalTracks })}</span>
           </div>
           <div className={`px-3 py-1.5 rounded-xl brutal-border flex items-center gap-1.5 ${
             isDark ? 'bg-[#182320] border-zinc-700' : 'bg-[#ede5d3] border-black'
           }`}>
             <Disc size={14} className="text-[#26c4b7]" />
-            <span>{t('admin.albumsCount', { count: adminAlbums.length })}</span>
+            <span>{t('admin.albumsCount', { count: displayAlbumsCount })}</span>
           </div>
         </div>
       </div>
@@ -528,7 +556,7 @@ export default function AdminScreen({
           }`}
         >
           <Users size={14} />
-          <span>{t('admin.tabAccounts', { count: users.length })}</span>
+          <span>{t('admin.tabAccounts', { count: displayUsersCount })}</span>
         </button>
 
         <button
@@ -542,7 +570,7 @@ export default function AdminScreen({
           }`}
         >
           <Music2 size={14} />
-          <span>{t('admin.tabTracks', { count: tracks.length })}</span>
+          <span>{t('admin.tabTracks', { count: displayTotalTracks })}</span>
         </button>
 
         <button
@@ -556,7 +584,7 @@ export default function AdminScreen({
           }`}
         >
           <Disc size={14} />
-          <span>{t('admin.tabAlbums', { count: adminAlbums.length })}</span>
+          <span>{t('admin.tabAlbums', { count: displayAlbumsCount })}</span>
         </button>
 
         <button
@@ -598,7 +626,7 @@ export default function AdminScreen({
           }`}
         >
           <FileText size={14} />
-          <span>{t('admin.tabLyrics', { count: tracks.length })}</span>
+          <span>{t('admin.tabLyrics', { count: displayTotalTracks })}</span>
         </button>
 
         <button
@@ -803,7 +831,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                All ({tracks.length})
+                All ({displayTotalTracks})
               </button>
               <button
                 type="button"
@@ -814,7 +842,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Songs ({tracksSongsCount})
+                Songs ({displaySongsCount})
               </button>
               <button
                 type="button"
@@ -825,7 +853,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Quran ({tracksQuranCount})
+                Quran ({displayQuranCount})
               </button>
               <button
                 type="button"
@@ -836,7 +864,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Podcast ({tracksPodcastCount})
+                Podcast ({displayPodcastCount})
               </button>
             </div>
 
@@ -1351,7 +1379,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                All ({tracks.length})
+                All ({displayTotalTracks})
               </button>
               <button
                 type="button"
@@ -1362,7 +1390,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Songs ({tracksSongsCount})
+                Songs ({displaySongsCount})
               </button>
               <button
                 type="button"
@@ -1373,7 +1401,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Quran ({tracksQuranCount})
+                Quran ({displayQuranCount})
               </button>
               <button
                 type="button"
@@ -1384,7 +1412,7 @@ export default function AdminScreen({
                     : isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-700 hover:text-black'
                 }`}
               >
-                Podcast ({tracksPodcastCount})
+                Podcast ({displayPodcastCount})
               </button>
             </div>
 

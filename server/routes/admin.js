@@ -351,4 +351,42 @@ router.post('/repair-tracks', adminAuth, async (req, res) => {
   }
 });
 
+// Catalog Counts Endpoint (Fast, zero-lag database totals)
+router.get('/catalog-counts', adminAuth, async (req, res) => {
+  try {
+    const [
+      totalTracks,
+      quranTracks,
+      podcastTracks,
+      totalAlbums,
+      totalUsers,
+      telegramTracks
+    ] = await Promise.all([
+      Track.countDocuments(),
+      Track.countDocuments({ isQuran: true }),
+      Track.countDocuments({ isPodcast: true }),
+      Album.countDocuments(),
+      User.countDocuments(),
+      Track.countDocuments({ 'cloudStorage.provider': 'telegram' })
+    ]);
+
+    const musicTracks = Math.max(0, totalTracks - quranTracks - podcastTracks);
+
+    res.json({
+      success: true,
+      counts: {
+        total: totalTracks,
+        songs: musicTracks,
+        quran: quranTracks,
+        podcasts: podcastTracks,
+        albums: totalAlbums,
+        users: totalUsers,
+        telegram: telegramTracks
+      }
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 module.exports = router;

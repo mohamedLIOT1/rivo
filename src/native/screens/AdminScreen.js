@@ -84,6 +84,27 @@ export default function AdminScreen() {
   const [analyticsData, setAnalyticsData] = useState(null);
   const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
+  // Real Database Catalog Totals (Fast countDocuments, zero-lag)
+  const [catalogCounts, setCatalogCounts] = useState(null);
+
+  const fetchCatalogCounts = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/admin/catalog-counts`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.counts) {
+          setCatalogCounts(data.counts);
+        }
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    fetchCatalogCounts();
+  }, []);
+
   const [deletingId, setDeletingId] = useState(null);
 
   // Pagination for smooth 60fps rendering without UI lockup
@@ -191,6 +212,7 @@ export default function AdminScreen() {
   }, [activeTab]);
 
   const handleRefreshCurrent = () => {
+    fetchCatalogCounts();
     if (activeTab === 'tracks') fetchPublicTracks();
     else if (activeTab === 'accounts') fetchUsers();
     else if (activeTab === 'albums') fetchAlbums();
@@ -453,10 +475,14 @@ export default function AdminScreen() {
     );
   }, [adminPlaylists, playlistQuery]);
 
+  const displayTotalTracks = catalogCounts?.total ?? tracks.length;
+  const displayTotalUsers = catalogCounts?.users ?? users.length;
+  const displayTotalAlbums = catalogCounts?.albums ?? albums.length;
+
   const TABS = [
-    { id: 'tracks', label: isRTL ? 'الأغاني' : 'SONGS', count: tracks.length, icon: Music2 },
-    { id: 'accounts', label: isRTL ? 'الحسابات' : 'ACCOUNTS', count: users.length, icon: Users },
-    { id: 'albums', label: isRTL ? 'الألبومات' : 'ALBUMS', count: albums.length, icon: Disc },
+    { id: 'tracks', label: isRTL ? 'الأغاني' : 'SONGS', count: displayTotalTracks, icon: Music2 },
+    { id: 'accounts', label: isRTL ? 'الحسابات' : 'ACCOUNTS', count: displayTotalUsers, icon: Users },
+    { id: 'albums', label: isRTL ? 'الألبومات' : 'ALBUMS', count: displayTotalAlbums, icon: Disc },
     { id: 'artists', label: isRTL ? 'الفنانون' : 'ARTISTS', count: artists.length, icon: UserCheck },
     { id: 'playlists', label: isRTL ? 'القوائم' : 'PLAYLISTS', count: adminPlaylists.length, icon: ListMusic },
     { id: 'analytics', label: isRTL ? 'الإحصائيات' : 'ANALYTICS', count: null, icon: BarChart2 },
@@ -584,7 +610,7 @@ export default function AdminScreen() {
 
             <View style={{ marginBottom: 10 }}>
               <Text style={styles.resultsCountText}>
-                SHOWING {filteredTracks.length} OF {tracks.length}
+                SHOWING {filteredTracks.length} OF {displayTotalTracks}
               </Text>
             </View>
 
