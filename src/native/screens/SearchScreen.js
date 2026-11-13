@@ -977,10 +977,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={10}
-        maxToRenderPerBatch={8}
-        windowSize={7}
-        updateCellsBatchingPeriod={30}
+        initialNumToRender={isLiteMode ? 6 : 8}
+        maxToRenderPerBatch={isLiteMode ? 6 : 8}
+        windowSize={isLiteMode ? 3 : 5}
+        updateCellsBatchingPeriod={40}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl

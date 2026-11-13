@@ -53,20 +53,14 @@ export const deduplicateTrackList = (list) => {
 };
 
 export const listeners = new Set();
-
 export const subscribeToDownloadedTracks = (listener) => {
   listeners.add(listener);
-  return () => {
-    listeners.delete(listener);
-  };
+  return () => { listeners.delete(listener); };
 };
-
 export const notifyDownloadedTracksChanged = (tracks) => {
   const safeList = deduplicateTrackList(tracks || []);
   for (const listener of listeners) {
-    try {
-      listener(safeList);
-    } catch {}
+    try { listener(safeList); } catch {}
   }
 };
 
@@ -75,6 +69,15 @@ let pendingSaveList = null;
 let inMemoryDownloadedTracks = null;
 let isCommittingSave = false;
 let needsRecommitSave = false;
+
+const normalizeFuzzy = (s) => (s || '')
+  .toLowerCase()
+  .replace(/https?:\/\/\S+/gi, '')
+  .replace(/[\[\(]?(?:official|audio|video|lyrics|hd|4k|remastered|remix|clip|prod|prod\..*?|feat\..*?|ft\..*?)[\]\)]?/gi, '')
+  .replace(/[/\\?%*:|"<>]/g, '')
+  .replace(/[^\p{L}\p{N}\s]/gu, '')
+  .trim()
+  .replace(/\s+/g, ' ');
 
 /**
  * Synchronous in-memory lookup so online playback never blocks on AsyncStorage or FileSystem checks.
@@ -88,6 +91,9 @@ export const findDownloadedTrackFast = (track) => {
   }
   const trackId = String(track._id || track.id || '');
   const dedupeKey = getTrackDedupeKey(track);
+  const cleanT = normalizeFuzzy(track.title);
+  const cleanA = normalizeFuzzy(track.artist);
+
   for (let i = 0; i < inMemoryDownloadedTracks.length; i++) {
     const item = inMemoryDownloadedTracks[i];
     if (!item) continue;
@@ -98,6 +104,14 @@ export const findDownloadedTrackFast = (track) => {
       (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
     ) {
       return { ready: true, match: item };
+    }
+
+    if (cleanT) {
+      const itemT = normalizeFuzzy(item.title);
+      const itemA = normalizeFuzzy(item.artist);
+      if (itemT && cleanT === itemT && (!cleanA || !itemA || cleanA.includes(itemA) || itemA.includes(cleanA))) {
+        return { ready: true, match: item };
+      }
     }
   }
   return { ready: true, match: null };
@@ -254,37 +268,56 @@ export const getDownloadedTracks = async (forceRefresh = false) => {
     return inMemoryDownloadedTracks;
   }
 
-  let raw = await AsyncStorage.getItem(STORAGE_KEY).catch(() => null);
+  const candidateLists = [];
 
-  if (!raw) {
-    for (const legacyKey of LEGACY_STORAGE_KEYS) {
-      try {
-        const legRaw = await AsyncStorage.getItem(legacyKey);
-        if (legRaw) {
-          raw = legRaw;
-          break;
-        }
-      } catch {}
+  // 1. Primary current v3 storage
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) candidateLists.push(parsed);
     }
-  }
+  } catch {}
 
-  if (!raw) {
+  // 2. Scan all legacy keys to rescue older downloads
+  for (const legacyKey of LEGACY_STORAGE_KEYS) {
     try {
-      const fileInfo = await FileSystem.getInfoAsync(MANIFEST_FILE);
-      if (fileInfo.exists) {
-        raw = await FileSystem.readAsStringAsync(MANIFEST_FILE);
+      const legRaw = await AsyncStorage.getItem(legacyKey);
+      if (legRaw) {
+        const parsed = JSON.parse(legRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) candidateLists.push(parsed);
       }
     } catch {}
   }
 
-  let list = [];
+  // 3. Scan filesystem manifest files
   try {
-    list = raw ? JSON.parse(raw) : [];
-  } catch {
-    list = [];
+    const fileInfo = await FileSystem.getInfoAsync(MANIFEST_FILE);
+    if (fileInfo.exists) {
+      const manRaw = await FileSystem.readAsStringAsync(MANIFEST_FILE);
+      if (manRaw) {
+        const parsed = JSON.parse(manRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) candidateLists.push(parsed);
+      }
+    }
+  } catch {}
+
+  if (PERSISTENT_MANIFEST) {
+    try {
+      const pInfo = await FileSystem.getInfoAsync(PERSISTENT_MANIFEST);
+      if (pInfo.exists) {
+        const pRaw = await FileSystem.readAsStringAsync(PERSISTENT_MANIFEST);
+        if (pRaw) {
+          const parsed = JSON.parse(pRaw);
+          if (Array.isArray(parsed) && parsed.length > 0) candidateLists.push(parsed);
+        }
+      }
+    } catch {}
   }
 
-  let hasClassificationUpdates = false;
+  const list = deduplicateTrackList(candidateLists.flat());
+  const primaryCount = candidateLists[0] ? candidateLists[0].length : 0;
+  let hasClassificationUpdates = list.length > primaryCount;
   const cleaned = deduplicateTrackList(list).map(t => {
     if (!t) return t;
     const isQ = Boolean(
@@ -343,11 +376,18 @@ export const isTrackDownloaded = async (trackIdOrObj) => {
     const tid = String(trackIdOrObj._id || trackIdOrObj.id || '');
     const ytId = String(trackIdOrObj.youtubeId || '');
     const key = getTrackDedupeKey(trackIdOrObj);
+    const cleanT = normalizeFuzzy(trackIdOrObj.title);
+    const cleanA = normalizeFuzzy(trackIdOrObj.artist);
     return list.some(t => {
       const did = String(t._id || t.id || '');
       if (tid && did && did === tid) return true;
       if (ytId && t.youtubeId && t.youtubeId === ytId) return true;
       if (key && getTrackDedupeKey(t) === key) return true;
+      if (cleanT) {
+        const itemT = normalizeFuzzy(t.title);
+        const itemA = normalizeFuzzy(t.artist);
+        if (itemT && cleanT === itemT && (!cleanA || !itemA || cleanA.includes(itemA) || itemA.includes(cleanA))) return true;
+      }
       return false;
     });
   }

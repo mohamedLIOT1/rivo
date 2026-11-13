@@ -44,6 +44,8 @@ import {
   saveDownloadedTracks,
   deduplicateTrackList,
   getTrackDedupeKey,
+  findDownloadedTrackFast,
+  reanchorDocumentUri,
   PERSISTENT_DIR,
 } from './download/storageManifestService';
 import { embedId3v2TagsToMp3File as rawEmbedId3v2TagsToMp3File } from './download/id3TagService';
@@ -99,14 +101,28 @@ export const downloadTrack = async (track, onProgress) => {
   const coverFileUri = `${COVERS_DIR}${trackId}.jpg`;
 
   let existingLocalUri = null;
-  try {
-    const infoM4a = await FileSystem.getInfoAsync(audioFileUriM4a);
-    if (infoM4a.exists && infoM4a.size > 8000) existingLocalUri = audioFileUriM4a;
-    if (!existingLocalUri) {
-      const infoMp3 = await FileSystem.getInfoAsync(audioFileUriMp3);
-      if (infoMp3.exists && infoMp3.size > 8000) existingLocalUri = audioFileUriMp3;
+  const fastExisting = findDownloadedTrackFast(track);
+  if (fastExisting?.match) {
+    const rawMatchUri = fastExisting.match.localAudioUri || fastExisting.match.nativeAudioUri || fastExisting.match.audioUrl;
+    if (rawMatchUri) {
+      const reanchored = reanchorDocumentUri(rawMatchUri);
+      try {
+        const check = await FileSystem.getInfoAsync(reanchored);
+        if (check?.exists && check?.size > 8000) existingLocalUri = reanchored;
+      } catch {}
     }
-  } catch {}
+  }
+
+  if (!existingLocalUri) {
+    try {
+      const infoM4a = await FileSystem.getInfoAsync(audioFileUriM4a);
+      if (infoM4a.exists && infoM4a.size > 8000) existingLocalUri = audioFileUriM4a;
+      if (!existingLocalUri) {
+        const infoMp3 = await FileSystem.getInfoAsync(audioFileUriMp3);
+        if (infoMp3.exists && infoMp3.size > 8000) existingLocalUri = audioFileUriMp3;
+      }
+    } catch {}
+  }
 
   let audioFileUri = existingLocalUri || audioFileUriMp3;
 

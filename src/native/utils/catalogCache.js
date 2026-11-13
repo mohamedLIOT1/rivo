@@ -3,6 +3,7 @@ import { sortTracksByPopularity } from '../../utils/trackPopularity';
 import { isQuranContent, getQuranReciterName, cleanQuranTrackTitle, normalizeArabicText, isRadioTrack } from '../../utils/quranUtils';
 import { getQuranRecitersList } from '../../utils/quranRecitersService';
 import { get12hBucket, rotateAlbumsForWindow } from './aiMoodMixCache';
+import { curateFeaturedAlbums } from '../../utils/aiMoodMixCache';
 
 // Nested WeakMap memoization keyed by array references so switching tabs never re-sorts or re-dedupes static catalogs.
 const downloadedMusicCache = new WeakMap();
@@ -61,7 +62,7 @@ export function getCachedHomeAlbums(albums, userTracks, ownerId = 'guest') {
     if (entry && entry.bucket === bucket12h && entry.ownerId === ownerId) {
       return entry.list;
     }
-    const list = rotateAlbumsForWindow(dbAlbums, ownerId);
+    const list = curateFeaturedAlbums(dbAlbums, { ownerId, limit: 16 });
     rotatedAlbumsWindowCache.set(safeAlbums, { bucket: bucket12h, ownerId, list });
     return list;
   }
@@ -96,7 +97,7 @@ export function getCachedHomeAlbums(albums, userTracks, ownerId = 'guest') {
   if (derivedEntry && derivedEntry.bucket === bucket12h && derivedEntry.ownerId === ownerId) {
     return derivedEntry.list;
   }
-  const rotatedDerived = rotateAlbumsForWindow(cached, ownerId);
+  const rotatedDerived = curateFeaturedAlbums(cached, { ownerId, limit: 16 });
   rotatedAlbumsWindowCache.set(cached, { bucket: bucket12h, ownerId, list: rotatedDerived });
   return rotatedDerived;
 }

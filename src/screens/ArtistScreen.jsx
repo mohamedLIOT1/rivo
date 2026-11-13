@@ -12,6 +12,8 @@ import ArtistAlbumsGrid from '../components/artist/ArtistAlbumsGrid';
 import ArtistTrackList from '../components/artist/ArtistTrackList';
 import ArtistBioSection from '../components/artist/ArtistBioSection';
 import { useTranslation } from '../context/PreferencesContext';
+import { API_BASE_URL } from '../config';
+import { normalizeCoverUrl } from '../utils/coverUtils';
 
 export const OFFICIAL_ALBUM_COVERS = {
   // Cairokee
@@ -84,11 +86,20 @@ export const OFFICIAL_ALBUM_COVERS = {
 };
 
 export function getAlbumArtwork(albumOrName, fallbackCover = '') {
-  const cover = (typeof albumOrName === 'object' && albumOrName?.cover) ? albumOrName.cover : fallbackCover;
-  if (cover && cover.startsWith('http') && !cover.includes('hqdefault.jpg') && !cover.includes('i.ytimg.com/vi/')) {
+  let cover = (typeof albumOrName === 'object' && (albumOrName?.cover || albumOrName?.coverUrl))
+    ? (albumOrName.cover || albumOrName.coverUrl)
+    : fallbackCover;
+
+  if (cover && typeof cover === 'string') {
+    if (cover.startsWith('/')) {
+      cover = `${API_BASE_URL}${cover}`;
+    }
+  }
+
+  if (cover && typeof cover === 'string' && cover.startsWith('http') && !cover.includes('hqdefault.jpg') && !cover.includes('i.ytimg.com/vi/')) {
     return cover;
   }
-  const name = typeof albumOrName === 'string' ? albumOrName : (albumOrName?.name || '');
+  const name = typeof albumOrName === 'string' ? albumOrName : (albumOrName?.name || albumOrName?.title || '');
   const cleanKey = name.replace(/^Album\s*[-–—:]\s*/i, '').trim().toLowerCase();
   if (OFFICIAL_ALBUM_COVERS[cleanKey]) {
     return OFFICIAL_ALBUM_COVERS[cleanKey];
@@ -98,7 +109,10 @@ export function getAlbumArtwork(albumOrName, fallbackCover = '') {
       return val;
     }
   }
-  return cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
+  if (cover && typeof cover === 'string' && cover.trim().length > 0) {
+    return normalizeCoverUrl(cover);
+  }
+  return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80';
 }
 
 export default function ArtistScreen({

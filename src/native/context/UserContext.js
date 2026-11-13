@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { InteractionManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_BASE_URL } from '../config';
 import { deduplicateTrackList } from '../services/downloadManager';
@@ -201,8 +202,17 @@ export const UserProvider = ({ children }) => {
             return cleaned;
           });
           if (didChange) {
-            const compact = cleaned.map(({ lyrics, ...rest }) => rest);
-            AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(compact)).catch(() => {});
+            const saveTask = () => {
+              setTimeout(() => {
+                const compact = cleaned.map(({ lyrics, ...rest }) => rest);
+                AsyncStorage.setItem(CACHE_TRACKS_KEY, JSON.stringify(compact)).catch(() => {});
+              }, 3000);
+            };
+            if (InteractionManager?.runAfterInteractions) {
+              InteractionManager.runAfterInteractions(saveTask);
+            } else {
+              saveTask();
+            }
           }
         }
       }
@@ -229,7 +239,16 @@ export const UserProvider = ({ children }) => {
             return albList;
           });
           if (albChanged) {
-            AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
+            const saveAlbTask = () => {
+              setTimeout(() => {
+                AsyncStorage.setItem(CACHE_ALBUMS_KEY, JSON.stringify(albList)).catch(() => {});
+              }, 4000);
+            };
+            if (InteractionManager?.runAfterInteractions) {
+              InteractionManager.runAfterInteractions(saveAlbTask);
+            } else {
+              saveAlbTask();
+            }
           }
         }
       }

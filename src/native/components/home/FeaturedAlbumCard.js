@@ -15,8 +15,9 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
   onSelect,
   onPlay,
 }) {
+  const [imgError, setImgError] = React.useState(false);
   const coverUri = album.cover || album.coverUrl || album.tracks?.[0]?.cover || album.tracks?.[0]?.coverUrl;
-  const normalizedCover = useMemo(() => normalizeCoverUri(coverUri), [coverUri]);
+  const normalizedCover = useMemo(() => normalizeCoverUri(imgError ? null : coverUri), [coverUri, imgError]);
 
   const handleSelect = useCallback(() => {
     onSelect(album);
@@ -45,6 +46,7 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
             resizeMode="cover"
             fadeDuration={0}
             resizeMethod={Platform.OS === 'android' ? 'resize' : 'auto'}
+            onError={() => setImgError(true)}
           />
         </TouchableOpacity>
 

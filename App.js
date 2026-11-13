@@ -544,6 +544,7 @@ function NativeAppShell() {
               onOpenFullPlayer={handleOpenFullPlayer}
               onSelectAlbum={handleSelectAlbum}
               onSelectArtist={handleSelectArtist}
+              onViewAllAlbums={handleSelectPlaylist}
             />
           </View>
         )}

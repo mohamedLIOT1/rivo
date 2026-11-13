@@ -164,33 +164,55 @@ router.get('/download', async (req, res) => {
         });
         return fs.createReadStream(localCachedFile).pipe(res);
       } else {
+        const attemptPipeStream = async (target) => {
+          if (!target || !target.startsWith('http')) return false;
+          const safeStream = await validateSafeUrl(target);
+          if (!safeStream || !safeStream.valid) return false;
+          const userAgent = target.includes('googlevideo.com')
+            ? 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'
+            : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+          const streamRes = await axios({
+            method: 'get',
+            url: safeStream.parsed.href,
+            responseType: 'stream',
+            headers: { 'User-Agent': userAgent },
+            timeout: 180000,
+            validateStatus: (status) => status < 400
+          });
+          const ext = target.includes('.m4a') ? '.m4a' : '.mp3';
+          const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
+          res.set({
+            'Content-Type': ext === '.m4a' ? 'audio/mp4' : 'audio/mpeg',
+            'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`,
+            'Access-Control-Allow-Origin': '*'
+          });
+          streamRes.data.pipe(res);
+          return true;
+        };
+
         try {
           const directAudio = await resolveOfficialYouTubeAudioStream(videoId, cleanTitle, cleanArtist, { duration });
-          if (directAudio) {
-            const streamTarget = directAudio.url || String(directAudio);
-            if (streamTarget.startsWith('http')) {
-              const safeStream = await validateSafeUrl(streamTarget);
-              if (safeStream && safeStream.valid) {
-                const streamRes = await axios({
-                  method: 'get',
-                  url: safeStream.parsed.href,
-                  responseType: 'stream',
-                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-                  timeout: 180000
-                });
-                const ext = streamTarget.includes('.m4a') ? '.m4a' : '.mp3';
-                const safeAscii = cleanFilename.replace(/[^\x20-\x7E]/g, '').trim() || 'track';
-                res.set({
-                  'Content-Type': ext === '.m4a' ? 'audio/mp4' : 'audio/mpeg',
-                  'Content-Disposition': `attachment; filename="${safeAscii}${ext}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}${ext}`,
-                  'Access-Control-Allow-Origin': '*'
-                });
-                return streamRes.data.pipe(res);
-              }
-            }
+          const streamTarget = directAudio ? (directAudio.url || String(directAudio)) : null;
+          if (streamTarget && await attemptPipeStream(streamTarget)) {
+            return;
           }
         } catch (streamErr) {
-          console.warn('Direct stream resolution in /download failed:', streamErr.message);
+          console.warn('Initial download stream attempt failed, attempting recovery:', streamErr.message);
+        }
+
+        // Automatic stream recovery for 403 / Token Expiry
+        try {
+          const freshAudio = await resolveOfficialYouTubeAudioStream(videoId, cleanTitle, cleanArtist, {
+            duration,
+            bypassCache: true,
+            bypassInnertube: true
+          });
+          const freshTarget = freshAudio ? (freshAudio.url || String(freshAudio)) : null;
+          if (freshTarget && await attemptPipeStream(freshTarget)) {
+            return;
+          }
+        } catch (recoveryErr) {
+          console.warn('Recovered download stream attempt failed:', recoveryErr.message);
         }
       }
     }

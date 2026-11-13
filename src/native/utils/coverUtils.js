@@ -158,10 +158,9 @@ function _computeNormalizeCoverUri(uri, track = null) {
       ) {
         return downscaleCoverUri(trimmed);
       }
-      if (trimmed.startsWith('/')) {
-        return downscaleCoverUri(`${API_BASE_URL}${trimmed}`);
-      }
-      return downscaleCoverUri(`${API_BASE_URL}/${trimmed}`);
+      const base = String(API_BASE_URL || '').replace(/\/+$/, '');
+      const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      return downscaleCoverUri(`${base}${cleanPath}`);
     }
   }
 

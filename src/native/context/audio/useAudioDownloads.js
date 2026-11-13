@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   downloadTrack,
   getDownloadedTracks,
+  scanOfflineVault,
   removeDownloadedTrack as rawRemoveDownloadedTrack,
   removeDownloadedTracksBatch as rawRemoveDownloadedTracksBatch,
   deduplicateTrackList,
@@ -55,7 +56,16 @@ export const useAudioDownloads = ({
       setDownloadedTracks(cleaned);
       downloadedTracksRef.current = cleaned;
     });
-    return unsub;
+
+    // Background offline vault reconciliation to rescue orphaned audio files from previous versions
+    const timer = setTimeout(() => {
+      scanOfflineVault().catch(() => {});
+    }, 2500);
+
+    return () => {
+      unsub();
+      clearTimeout(timer);
+    };
   }, [refreshDownloadedTracks]);
 
   const refreshDownloadedTracks = useCallback(async () => {

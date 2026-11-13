@@ -1451,6 +1451,11 @@ function LibraryScreen({
           renderItem={renderTrackItem}
           scrollEnabled={draggingIdx === null}
           extraData={[isReordering, draggingIdx, hoverIdx]}
+          initialNumToRender={isLiteMode ? 6 : 10}
+          maxToRenderPerBatch={isLiteMode ? 6 : 8}
+          windowSize={isLiteMode ? 3 : 5}
+          updateCellsBatchingPeriod={40}
+          removeClippedSubviews={Platform.OS === 'android'}
           ListHeaderComponent={
             selectedView === 'liked' ? (
               <View>

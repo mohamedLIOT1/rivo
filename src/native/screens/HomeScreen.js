@@ -10,7 +10,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Play, Plus, Disc } from 'lucide-react-native';
+import { Play, Plus, Disc, ChevronRight, ChevronLeft } from 'lucide-react-native';
 import { useAudioPlayer } from '../context/AudioContext';
 import { useUser } from '../context/UserContext';
 import { useConnectivity } from '../context/ConnectivityContext';
@@ -49,6 +49,7 @@ function HomeScreen({
   onOpenFullPlayer,
   onSelectAlbum,
   onSelectArtist,
+  onViewAllAlbums,
   initialFilter = 'all',
 }) {
   const { width } = useWindowDimensions();
@@ -408,7 +409,7 @@ function HomeScreen({
             <View style={styles.albumsTitleGroup}>
               <Disc size={18} color="#f59e0b" strokeWidth={2.4} />
               <Text style={[styles.albumsSectionTitle, !isDark && styles.albumsSectionTitleLight, rtlTextStyle]}>
-                {isRTL ? 'ألبومات مميزة' : 'Featured Albums'}
+                {isRTL ? 'ألبومات مختارة' : 'Featured Albums'}
               </Text>
               <View style={styles.albumsCountPill}>
                 <Text style={[styles.albumsCountText, rtlTextStyle]}>
@@ -418,7 +419,23 @@ function HomeScreen({
                 </Text>
               </View>
             </View>
+            {onViewAllAlbums && (
+              <TouchableOpacity
+                style={styles.viewAllAlbumsBtn}
+                onPress={onViewAllAlbums}
+                activeOpacity={0.8}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.viewAllAlbumsBtnText, rtlTextStyle]}>
+                  {isRTL ? 'عرض الكل' : 'View All'}
+                </Text>
+                {isRTL ? <ChevronLeft size={13} color="#17a398" /> : <ChevronRight size={13} color="#17a398" />}
+              </TouchableOpacity>
+            )}
           </View>
+          <Text style={[styles.albumsSubtitle, rtlTextStyle]}>
+            {isRTL ? '١٦ ألبوم مختار • يتجدد كل ١٢ ساعة' : '16 Curated Albums • Refreshes every 12h'}
+          </Text>
 
           {/* 2-Column Grid */}
           <View style={styles.albumsGrid}>
@@ -485,7 +502,7 @@ function HomeScreen({
         )}
       </View>
     </View>
-  ), [currentUser?.name, aiMoodMix, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
+  ), [currentUser?.name, aiMoodMix, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, onViewAllAlbums, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
     if (displayTracks.length > visibleCount) {
@@ -803,6 +820,30 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '900',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  albumsSubtitle: {
+    fontSize: 11,
+    color: '#34d399',
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 10,
+    letterSpacing: 0.2,
+  },
+  viewAllAlbumsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#0b1110',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#17a398',
+  },
+  viewAllAlbumsBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#17a398',
   },
   albumsGrid: {
     flexDirection: 'row',

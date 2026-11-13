@@ -99,14 +99,22 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
               const downloadedList = await getDownloadedTracks();
               if (signal?.aborted || !Array.isArray(downloadedList) || downloadedList.length === 0) return null;
               const dedupeKey = getTrackDedupeKey(track);
+              const cleanT = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+              const cleanA = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
               return downloadedList.find((item) => {
                 if (!item) return false;
                 const itemId = String(item._id || item.id || '');
-                return Boolean(
+                if (
                   (trackId && itemId && itemId === trackId) ||
                   (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) ||
                   (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
-                );
+                ) return true;
+                if (cleanT) {
+                  const iT = (item.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+                  const iA = (item.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
+                  if (iT && cleanT === iT && (!cleanA || !iA || cleanA.includes(iA) || iA.includes(cleanA))) return true;
+                }
+                return false;
               });
             })();
         if (signal?.aborted) return null;

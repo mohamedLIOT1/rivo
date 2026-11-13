@@ -125,10 +125,9 @@ function _computeNormalizeCoverUrl(cover, track = null) {
       ) {
         return trimmed;
       }
-      if (trimmed.startsWith('/')) {
-        return `${API_BASE_URL}${trimmed}`;
-      }
-      return `${API_BASE_URL}/${trimmed}`;
+      const base = String(API_BASE_URL || '').replace(/\/+$/, '');
+      const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+      return `${base}${cleanPath}`;
     }
   }
 
