@@ -1,13 +1,12 @@
 {
-  "pub_date": "2026-11-11T10:27:50Z",
-  "version": "2.4.10",
-  "notes": "Update v2.4.10: Spotify-grade Web Queue, zero-lag audio progress isolation, overnight Quran stability, H:MM:SS duration, and lock screen sync.",
+  "pub_date": "2026-11-13T19:10:00Z",
+  "version": "2.4.23",
+  "notes": "تحديث v2.4.23: عرض 16 ألبوم مختار بالرئيسية، حل مشكلة تشغيل الأغاني المنزلة القديمة، وتحسين سلاسة واستجابة الواجهة وإلغاء اللاج",
   "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe",
-  "size": 6013290,
+  "size": 52448310,
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTblNNUk1CalZTc2NzTHpzR2dDTXlCS2svQVZodjkvV0pXcUJBNnczNHk1aDIwRmNjOUMyaTQwU1RHZEZVdVE5NFNvRHRMbnRrcjJVcm93N3I0dFprZjEvMmRzby9lakFNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0MzkyODY5CWZpbGU6Uml2b18yLjQuMTBfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjIuNC4xMApHYXV5aVNENDZyK254RWFMWGlpYW1IcW9PT3I5QzBhQkgxOGJjR2hjbUNHUmEzUzArSXAvTDNWcVdHVkdTa05KdUhQdHR2VUNTUVNPRkUwMDJaZmNBQT09Cg==",
-      "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.4.10.exe"
+      "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.4.23.exe"
     }
   }
 }

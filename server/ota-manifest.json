@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.38",
+  "version": "2.4.39",
   "bundleUrl": "/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحسين سرعة استجابة الأزرار وحل تأخير اللمس لهواتف سامسونج A12 والأجهزة الاقتصادية",
-  "notesEn": "Fix touch lag, set delayPressIn to 0, and optimize FlatList memory virtualization for Galaxy A12 & budget Android devices",
-  "bundleSize": 5335038,
-  "sizeMb": "5.09 MB",
-  "updatedAt": "2026-11-13T16:52:31.769Z"
+  "notes": "إصلاح تشغيل الأغاني المنزلة القديمة وعرض 16 ألبوم مختار بالرئيسية وحل تعليق Galaxy A12 والآيفون",
+  "notesEn": "Fix downloaded tracks playback, curated 16 home albums, fix A12 and iPhone lag",
+  "bundleSize": 5365864,
+  "sizeMb": "5.12 MB",
+  "updatedAt": "2026-11-13T17:11:19.682Z"
 }
