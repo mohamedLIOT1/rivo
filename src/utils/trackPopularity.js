@@ -194,3 +194,77 @@ export function sortTracksByPopularity(trackList = []) {
   popularitySortCache.set(trackList, { length: n, result });
   return result;
 }
+
+export function get12hTrackBucket(now = Date.now()) {
+  return Math.floor(now / (12 * 60 * 60 * 1000));
+}
+
+function seededTrackHash(str) {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * Curates top rotating hits for the homepage (12-hour deterministic rotation).
+ * Combines YouTube views, site plays, cultural hits, and artist interleaving.
+ */
+export function curateRotatingPopularTracks(trackList = [], { limit = 24, now = Date.now(), maxPerArtist = 2 } = {}) {
+  if (!Array.isArray(trackList) || trackList.length === 0) return [];
+  const bucket12h = get12hTrackBucket(now);
+
+  const n = trackList.length;
+  const scored = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = trackList[i];
+    const baseScore = getGlobalTrackScore(t);
+    const idKey = String(t.id || t._id || t.title || i);
+    const seed = seededTrackHash(`${idKey}:${bucket12h}`);
+    // Deterministic jitter to rotate top-tier tracks twice daily
+    const jitter = (seed % 12000000);
+    scored[i] = {
+      track: t,
+      score: baseScore + jitter,
+      normArtist: normalizeArabicText(t?.artist || 'unknown'),
+    };
+  }
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const result = [];
+  const artistCounts = new Map();
+  let lastArtist = '';
+
+  for (let i = 0; i < scored.length && result.length < limit; i++) {
+    const item = scored[i];
+    const art = item.normArtist;
+    const count = artistCounts.get(art) || 0;
+    
+    // Strict diversity: no more than maxPerArtist in the top shelf, and never back-to-back
+    if (count >= maxPerArtist || (art && art === lastArtist)) {
+      continue;
+    }
+
+    result.push(item.track);
+    artistCounts.set(art, count + 1);
+    lastArtist = art;
+  }
+
+  // Fallback fill if strict rules left spots open
+  if (result.length < limit) {
+    const seenIds = new Set(result.map(t => String(t.id || t._id)));
+    for (let i = 0; i < scored.length && result.length < limit; i++) {
+      const t = scored[i].track;
+      const id = String(t.id || t._id);
+      if (!seenIds.has(id)) {
+        result.push(t);
+        seenIds.add(id);
+      }
+    }
+  }
+
+  return result;
+}

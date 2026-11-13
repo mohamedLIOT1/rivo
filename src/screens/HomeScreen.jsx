@@ -4,12 +4,12 @@ import { useNavigation } from '../context/NavigationContext';
 import { API_BASE_URL } from '../config';
 import ConfirmModal from '../components/ConfirmModal';
 import TrackActionMenuModal from '../components/TrackActionMenuModal';
-import HomeTrackCard from '../components/HomeTrackCard';
 import HomeHeroBanner from '../components/HomeHeroBanner';
 import HomeFeaturedAlbums from '../components/HomeFeaturedAlbums';
+import HomePopularTracks from '../components/HomePopularTracks';
 import { isQuranContent } from '../utils/quranUtils';
 import { useAudioPlayer } from '../context/AudioContext';
-import { sortTracksByPopularity, getGlobalTrackScore } from '../utils/trackPopularity';
+import { sortTracksByPopularity, curateRotatingPopularTracks, getGlobalTrackScore } from '../utils/trackPopularity';
 import { getCurrentTimeMood } from '../utils/tasteAlgorithm';
 import { useHomeAiMoodMix } from '../hooks/useHomeAiMoodMix';
 import {
@@ -45,7 +45,6 @@ export default function HomeScreen({
 
   const [deleteConfirmTrackId, setDeleteConfirmTrackId] = useState(null);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
-  const [visibleCount, setVisibleCount] = useState(36);
 
   // Filtered tracks (Strictly excluding Quran content from Music Home)
   const displayTracks = useMemo(() => (tracks || []).filter(tr => !isQuranContent(tr)), [tracks]);
@@ -163,6 +162,21 @@ export default function HomeScreen({
     }
   }, [onNavigate, navigateTo]);
 
+  // Curation: Top 24 Curated Popular Tracks with 12-hour deterministic rotation & diversity
+  const curated24Tracks = useMemo(() => {
+    return curateRotatingPopularTracks(displayTracks, { limit: 24 });
+  }, [displayTracks, bucket12h]);
+
+  const handleViewAllTracks = useCallback(() => {
+    if (onNavigate) {
+      onNavigate('library', { filter: 'songs' });
+      return;
+    }
+    if (navigateTo) {
+      navigateTo('library', { filter: 'songs' });
+    }
+  }, [onNavigate, navigateTo]);
+
   const badgeColors = ['#0f756d', '#111615', '#17a398', '#dc2626', '#f59e0b', '#1e3a8a', '#082621', '#3b82f6'];
 
   const getGreetingPrefix = useCallback(() => {
@@ -208,50 +222,21 @@ export default function HomeScreen({
           t={t}
         />
 
-        {/* MOST POPULAR & TOP LISTENED TRACKS */}
-        <section>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
-            <div className="flex items-center gap-2">
-              <h2 className="font-display font-black text-xl text-[#fdfbf7] tracking-tight drop-shadow-[1.5px_1.5px_0px_#082621]">
-                {t('home.mostPopular')}
-              </h2>
-              <span className="text-[10px] font-mono font-bold bg-[#0b1110] text-[#17a398] px-2 py-0.5 rounded-full brutal-border">
-                {t('home.topChartsBadge')}
-              </span>
-            </div>
-            <span className="text-[11px] font-mono font-bold text-emerald-100/70">
-              {t('home.tracksCount', { count: popularTracks.length })}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-4">
-            {popularTracks.slice(0, visibleCount).map((track, index) => (
-              <HomeTrackCard
-                key={track.id || track._id || index}
-                track={track}
-                index={index}
-                isActive={isTrackActive(track)}
-                isPlaying={isPlaying}
-                isDark={isDark}
-                color={badgeColors[index % badgeColors.length]}
-                onSelectTrack={() => onSelectTrack(track, popularTracks)}
-                toggleLike={toggleLike}
-                onOpenActionMenu={setActionMenuTrack}
-                onSelectArtist={onSelectArtist}
-                t={t}
-              />
-            ))}
-          </div>
-          {visibleCount < popularTracks.length && (
-            <div className="mt-6 flex justify-center pb-2">
-              <button
-                onClick={() => setVisibleCount(prev => prev + 36)}
-                className="px-6 py-2.5 rounded-xl brutal-border brutal-shadow-sm font-display font-black text-xs uppercase bg-[#17a398] hover:bg-[#26c4b7] text-[#0b1110] cursor-pointer transition active:scale-95"
-              >
-                {t('home.loadMoreTracks', { count: popularTracks.length - visibleCount })}
-              </button>
-            </div>
-          )}
-        </section>
+        {/* 24 CURATED ROTATING POPULAR TRACKS */}
+        <HomePopularTracks
+          tracks={curated24Tracks}
+          totalCount={displayTracks.length}
+          isActive={isTrackActive}
+          isPlaying={isPlaying}
+          isDark={isDark}
+          onSelectTrack={onSelectTrack}
+          toggleLike={toggleLike}
+          onOpenActionMenu={setActionMenuTrack}
+          onSelectArtist={onSelectArtist}
+          onViewAll={handleViewAllTracks}
+          t={t}
+          isRTL={isRTL}
+        />
 
         {deleteConfirmTrackId && (
           <ConfirmModal
