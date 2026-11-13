@@ -64,13 +64,13 @@ const APP_VERSIONS_DATA = {
       notesEn: 'Update v2.4.22 • 3-way stem isolation, official artist album organizer, staged playlist reorder, instant playback response.',
       ota: {
         enabled: true,
-        version: '2.4.32',
-        bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
+        version: '2.4.39',
+        bundleUrl: 'https://rivo-m.duckdns.org/api/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.32 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
-        notesEn: 'Instant OTA v2.4.32 • 3-way stem isolation, artist album organizer, and staged reordering',
-        bundleSize: 5298755,
-        sizeMb: '5.05 MB'
+        notes: 'تحديث هوائي فوري v2.4.39 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.39 • 3-way stem isolation, artist album organizer, and staged reordering',
+        bundleSize: 5365864,
+        sizeMb: '5.12 MB'
       }
     },
     ios: {
@@ -120,13 +120,13 @@ const BETA_VERSIONS_DATA = {
       notesEn: 'Update v2.4.22 • 3-way stem isolation, artist album organizer, and staged reordering.',
       ota: {
         enabled: true,
-        version: '2.4.32',
-        bundleUrl: 'https://rivo-m.duckdns.org/downloads/ota/index.android.bundle',
+        version: '2.4.39',
+        bundleUrl: 'https://rivo-m.duckdns.org/api/downloads/ota/index.android.bundle',
         minAppVersion: '1.0.0',
-        notes: 'تحديث هوائي فوري v2.4.32 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
-        notesEn: 'Instant OTA v2.4.32 • 3-way stem isolation, artist album organizer, and staged reordering',
-        bundleSize: 5298755,
-        sizeMb: '5.05 MB'
+        notes: 'تحديث هوائي فوري v2.4.39 • عزل الأصوات الثلاثي، تنظيم ألبومات الفنانين، وترتيب القوائم',
+        notesEn: 'Instant OTA v2.4.39 • 3-way stem isolation, artist album organizer, and staged reordering',
+        bundleSize: 5365864,
+        sizeMb: '5.12 MB'
       }
     },
     ios: {
@@ -262,7 +262,7 @@ router.get('/api/app/ota', optionalAuth, (req, res) => {
     version: dynamicOta.version || '2.4.1',
     bundleUrl: dynamicOta.bundleUrl?.startsWith('http')
       ? dynamicOta.bundleUrl
-      : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl || '/downloads/ota/index.android.bundle'}`,
+      : `https://rivo-m.duckdns.org${dynamicOta.bundleUrl || '/api/downloads/ota/index.android.bundle'}`,
     minAppVersion: dynamicOta.minAppVersion || '1.0.0',
     notes: dynamicOta.notes || 'تحديث هوائي فوري v2.4.1 • أحدث التحسينات والإصلاحات',
     notesEn: dynamicOta.notesEn || 'Instant OTA update v2.4.1 • Smart Queue & performance fixes',
@@ -409,7 +409,8 @@ router.post('/api/deploy-webhook', (req, res) => {
     'git config --global --add safe.directory "*" 2>/dev/null || true',
     'if [ -d /home/ubuntu/.git ]; then cd /home/ubuntu && (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main && if [ -d /home/ubuntu/rivo ] && [ ! /home/ubuntu -ef /home/ubuntu/rivo ]; then cp -rf src server public package.json vite.config.js index.html /home/ubuntu/rivo/ 2>/dev/null || true; cp -a cookies.txt /home/ubuntu/rivo/cookies.txt 2>/dev/null || true; fi; fi',
     `cd "${projectRoot}" && if [ -d .git ]; then (git remote set-url origin https://github.com/mohamedLIOT1/rivo.git 2>/dev/null || true) && git fetch origin main --force && git reset --hard origin/main; fi`,
-    'if curl -fsSL -L "https://github.com/mohamedLIOT1/rivo/releases/download/web-latest/web-dist.tar.gz" -o /tmp/web-dist.tar.gz && [ -s /tmp/web-dist.tar.gz ]; then mkdir -p /home/ubuntu/dist /home/ubuntu/rivo/dist && rm -rf /home/ubuntu/dist/assets /home/ubuntu/rivo/dist/assets && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/dist && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/rivo/dist && (tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || sudo -n tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || true) && rm -f /tmp/web-dist.tar.gz; fi'
+    'if curl -fsSL -L "https://github.com/mohamedLIOT1/rivo/releases/download/web-latest/web-dist.tar.gz" -o /tmp/web-dist.tar.gz && [ -s /tmp/web-dist.tar.gz ]; then mkdir -p /home/ubuntu/dist /home/ubuntu/rivo/dist && rm -rf /home/ubuntu/dist/assets /home/ubuntu/rivo/dist/assets && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/dist && tar -xzf /tmp/web-dist.tar.gz -C /home/ubuntu/rivo/dist && (tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || sudo -n tar -xzf /tmp/web-dist.tar.gz -C /var/www/html 2>/dev/null || true) && rm -f /tmp/web-dist.tar.gz; fi',
+    'mkdir -p /var/www/html/downloads/ota && (cp -rf public/downloads/* /var/www/html/downloads/ 2>/dev/null || sudo -n cp -rf public/downloads/* /var/www/html/downloads/ 2>/dev/null || true)'
   ].join(' ; ');
 
   console.log('[DeployWebhook] Starting auto-deployment with bash...');

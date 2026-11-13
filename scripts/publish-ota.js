@@ -112,7 +112,7 @@ try {
   const manifest = {
     enabled: true,
     version: targetVersion,
-    bundleUrl: '/downloads/ota/index.android.bundle',
+    bundleUrl: '/api/downloads/ota/index.android.bundle',
     minAppVersion: '1.0.0',
     notes,
     notesEn,

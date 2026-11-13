@@ -18,6 +18,10 @@ async function connectDB() {
     if (!process.env.SKIP_STARTUP_USER_RESET) {
       await User.updateMany({}, { $set: { 'currentListening.isPlaying': false } }).catch(() => {});
     }
+    try {
+      const { runDatabaseRepairs } = require('../utils/dbRepairService');
+      runDatabaseRepairs().catch(() => {});
+    } catch (e) {}
   } catch (err) { 
     console.error('DB connect error:', err.message);
     setTimeout(connectDB, 5000); 

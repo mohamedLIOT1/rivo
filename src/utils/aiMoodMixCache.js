@@ -284,7 +284,7 @@ export function cacheAlbumsToStorage(albumsList) {
 
   const persist = () => {
     try {
-      const sliceLimit = Math.min(albumsList.length, 30);
+      const sliceLimit = Math.min(albumsList.length, 150);
       const slim = [];
       for (let i = 0; i < sliceLimit; i++) {
         const a = albumsList[i];
@@ -309,6 +309,27 @@ export function cacheAlbumsToStorage(albumsList) {
     window.requestIdleCallback(persist, { timeout: 3000 });
   } else {
     setTimeout(persist, 1000);
+  }
+}
+
+export function cacheFeatured16ToStorage(featuredList, ownerId = 'guest', bucket12h = get12hBucket()) {
+  if (!Array.isArray(featuredList) || featuredList.length === 0 || typeof window === 'undefined') return;
+  try {
+    const key = `rivo_featured_16_${ownerId}_${bucket12h}`;
+    localStorage.setItem(key, JSON.stringify(featuredList.slice(0, 16)));
+  } catch {}
+}
+
+export function getCachedFeatured16FromStorage(ownerId = 'guest', bucket12h = get12hBucket()) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const key = `rivo_featured_16_${ownerId}_${bucket12h}`;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
   }
 }
 

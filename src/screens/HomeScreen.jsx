@@ -16,6 +16,8 @@ import {
   get12hBucket,
   curateFeaturedAlbums,
   cacheAlbumsToStorage,
+  cacheFeatured16ToStorage,
+  getCachedFeatured16FromStorage,
 } from '../utils/aiMoodMixCache';
 
 export { getGlobalTrackScore };
@@ -80,77 +82,49 @@ export default function HomeScreen({
     onSelectTrack,
   });
 
-  const [fetchedAlbums, setFetchedAlbums] = useState(() => {
-    try {
-      const raw = localStorage.getItem('rivo_albums');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const valid = parsed.filter(a => {
-            const count = Number(a.trackCount || a.songsCount || 0);
-            const type = (a.releaseType || '').toLowerCase();
-            return type !== 'single' && count > 1;
-          });
-          if (valid.length > 0) return valid;
-        }
-      }
-    } catch {}
-    return (Array.isArray(albums) && albums.length > 0) ? albums : [];
+  // Persistent 16 Featured Albums state to guarantee 0ms instant display without layout shift
+  const [featured16Albums, setFeatured16Albums] = useState(() => {
+    const cached16 = getCachedFeatured16FromStorage(cacheOwnerId, bucket12h);
+    if (cached16 && cached16.length > 0) return cached16;
+    const base = (Array.isArray(albums) && albums.length > 0) ? albums : [];
+    return curateFeaturedAlbums(base, { ownerId: cacheOwnerId, limit: 16 });
   });
 
   const prevAlbumsLenRef = useRef(0);
   useEffect(() => {
-    if (albums && albums.length > 0) {
-      if (fetchedAlbums.length > 0 && albums.length === prevAlbumsLenRef.current) {
-        return;
-      }
+    if (Array.isArray(albums) && albums.length > 0) {
+      if (albums.length === prevAlbumsLenRef.current) return;
       prevAlbumsLenRef.current = albums.length;
-      const valid = albums.filter(a => {
-        const count = Number(a.trackCount || a.songsCount || 0);
-        const type = (a.releaseType || '').toLowerCase();
-        return type !== 'single' && count > 1;
-      });
-      if (valid.length > 0) {
-        setFetchedAlbums(prev => {
-          if (prev && prev.length === valid.length && prev[0]?.id === valid[0]?.id) return prev;
-          return valid;
+      const curated = curateFeaturedAlbums(albums, { ownerId: cacheOwnerId, limit: 16 });
+      if (curated && curated.length > 0) {
+        setFeatured16Albums(prev => {
+          if (prev && prev.length === curated.length && prev[0]?.id === curated[0]?.id) return prev;
+          return curated;
         });
+        cacheFeatured16ToStorage(curated, cacheOwnerId, bucket12h);
       }
     }
-  }, [albums, fetchedAlbums.length]);
+  }, [albums, cacheOwnerId, bucket12h]);
 
+  // Fast background fetch for curated 16 featured albums (< 3KB payload, 0ms freeze)
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`${API_BASE_URL}/api/albums`, { signal: controller.signal })
+    fetch(`${API_BASE_URL}/api/albums?featured=true`, { signal: controller.signal })
       .then(r => (r.ok ? r.json() : null))
       .then(d => {
-        if (!controller.signal.aborted && d?.success && Array.isArray(d.albums)) {
-          const valid = d.albums.filter(a => {
-            const count = Number(a.trackCount || a.songsCount || 0);
-            const type = (a.releaseType || '').toLowerCase();
-            return type !== 'single' && count > 1;
+        if (!controller.signal.aborted && d?.success && Array.isArray(d.albums) && d.albums.length > 0) {
+          setFeatured16Albums(prev => {
+            if (prev && prev.length === d.albums.length && prev[0]?.id === d.albums[0]?.id) return prev;
+            return d.albums;
           });
-          setFetchedAlbums(valid);
-          cacheAlbumsToStorage(valid);
+          cacheFeatured16ToStorage(d.albums, cacheOwnerId, bucket12h);
         }
       })
       .catch(() => {});
     return () => controller.abort();
-  }, []);
+  }, [cacheOwnerId, bucket12h]);
 
-  // Curation: Exactly top 16 curated Featured Albums with prestige ranking and 12-hour deterministic rotation
-  const allAvailableAlbums = useMemo(() => {
-    return (fetchedAlbums && fetchedAlbums.length > 0) ? fetchedAlbums : (albums || []);
-  }, [fetchedAlbums, albums]);
-
-  const totalAlbumsCount = allAvailableAlbums.length;
-
-  const featured16Albums = useMemo(() => {
-    return curateFeaturedAlbums(allAvailableAlbums, {
-      ownerId: cacheOwnerId,
-      limit: 16,
-    });
-  }, [allAvailableAlbums, cacheOwnerId, bucket12h]);
+  const totalAlbumsCount = Math.max(albums?.length || 0, featured16Albums?.length || 0);
 
   const handleViewAllAlbums = useCallback(() => {
     if (onNavigate) {
