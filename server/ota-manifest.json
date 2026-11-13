@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.42",
+  "version": "2.4.43",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "حذف كامل لمحمود الليثي وبودكاست أوعى، وتسريع أداء التطبيق و120Hz",
-  "notesEn": "Purge Mahmoud El Leithy, podcast fix, and extreme mobile fluidity",
-  "bundleSize": 5364878,
+  "notes": "تحديث v2.4.43 • إصلاح زر عرض كل الألبومات وتصفح جميع الألبومات بسلاسة، ومزامنة مكتبة الألبومات",
+  "notesEn": "Instant in-app OTA update (5.12 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 5365049,
   "sizeMb": "5.12 MB",
-  "updatedAt": "2026-11-13T20:31:08.769Z"
+  "updatedAt": "2026-11-13T21:05:30.395Z"
 }

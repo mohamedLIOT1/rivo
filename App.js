@@ -283,6 +283,13 @@ function NativeAppShell() {
   }, [currentUser]);
 
   const [headerSearchText, setHeaderSearchText] = useState('');
+  const [searchInitialFilter, setSearchInitialFilter] = useState('all');
+
+  const handleViewAllAlbums = useCallback(() => {
+    setSearchInitialFilter('albums');
+    setHeaderSearchText('');
+    setActiveTab('search');
+  }, []);
   const { isDark, toggleTheme } = useTheme();
   const { socket } = useSocket();
   const { showToast } = useToast();
@@ -559,7 +566,7 @@ function NativeAppShell() {
               onOpenFullPlayer={handleOpenFullPlayer}
               onSelectAlbum={handleSelectAlbum}
               onSelectArtist={handleSelectArtist}
-              onViewAllAlbums={handleSelectPlaylist}
+              onViewAllAlbums={handleViewAllAlbums}
             />
           </View>
         )}
@@ -570,6 +577,7 @@ function NativeAppShell() {
             <View style={{ flex: 1 }}>
               <SearchScreenComp
                 initialQuery={headerSearchText}
+                initialFilter={searchInitialFilter}
                 onQueryChange={handleQueryChange}
                 onTrackAction={handleTrackAction}
                 onOpenChat={handleOpenChat}

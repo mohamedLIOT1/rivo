@@ -51,6 +51,7 @@ export default function ScreenRouter({
   const {
     currentScreen,
     topSearchQuery,
+    topSearchFilter,
     selectedArtist,
     selectedPlaylist,
     viewingProfileUserId,
@@ -153,6 +154,7 @@ export default function ScreenRouter({
           tracks={musicTracks}
           albums={musicAlbums}
           initialQuery={topSearchQuery}
+          initialFilter={topSearchFilter}
           onSelectTrack={playTrack}
           onSelectPlaylist={handleSelectPlaylistView}
           onSelectArtist={handleSelectArtist}

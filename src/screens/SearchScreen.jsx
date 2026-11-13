@@ -67,6 +67,7 @@ export default function SearchScreen({
   tracks = [], 
   albums = [],
   initialQuery = '', 
+  initialFilter = 'all',
   onSelectTrack, 
   onSelectPlaylist,
   onSelectArtist,
@@ -86,7 +87,7 @@ export default function SearchScreen({
   const currentGenres = !showMusic ? ISLAMIC_GENRE_CATEGORIES : GENRE_CATEGORIES;
   const { currentTrack, isPlaying, addToQueue, isLoadingTrack, togglePlayPause } = useAudioPlayer();
   const [query, setQuery] = useState(initialQuery);
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
+  const [filterType, setFilterType] = useState(initialFilter || 'all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [onlineResults, setOnlineResults] = useState([]);
   const [isSearchingOnline, setIsSearchingOnline] = useState(false);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
@@ -101,6 +102,12 @@ export default function SearchScreen({
       setQuery(initialQuery);
     }
   }, [initialQuery]);
+
+  useEffect(() => {
+    if (initialFilter) {
+      setFilterType(initialFilter);
+    }
+  }, [initialFilter]);
 
   const cleanQuery = (query || '').trim().toLowerCase();
   const isPopSearch = /^(pop|the pop|pop music|pops|بوب|بوب عربي|arabic pop|أغاني بوب عربي)$/i.test(cleanQuery);

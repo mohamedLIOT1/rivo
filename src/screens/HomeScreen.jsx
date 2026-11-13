@@ -119,11 +119,11 @@ export default function HomeScreen({
 
   const handleViewAllAlbums = useCallback(() => {
     if (onNavigate) {
-      onNavigate('library', { filter: 'albums' });
+      onNavigate('search', { filter: 'albums' });
       return;
     }
     if (navigateTo) {
-      navigateTo('library', { filter: 'albums' });
+      navigateTo('search', { filter: 'albums' });
     }
   }, [onNavigate, navigateTo]);
 

@@ -8,6 +8,7 @@ import { usePreferences, useTranslation } from '../context/PreferencesContext';
 import { useMixAutoSync } from '../hooks/useMixAutoSync';
 import LibraryMixesSection from '../components/library/LibraryMixesSection';
 import LibraryPlaylistsGrid from '../components/library/LibraryPlaylistsGrid';
+import LibraryAlbumsGrid from '../components/library/LibraryAlbumsGrid';
 import LibraryTracksList from '../components/library/LibraryTracksList';
 
 export default function LibraryScreen({ 
@@ -26,7 +27,8 @@ export default function LibraryScreen({
   onDeletePlaylist, 
   toggleLike, 
   globalTheme = 'dark', 
-  libraryTitle = 'Your Library' 
+  libraryTitle = 'Your Library',
+  initialFilter = 'all'
 }) {
   const isDark = globalTheme === 'dark';
   const { showMusic, showQuran } = usePreferences();
@@ -35,22 +37,18 @@ export default function LibraryScreen({
   // Section selector: 'music' | 'quran'
   const defaultSection = !showMusic ? 'quran' : 'music';
   const [activeSection, setActiveSection] = useState(defaultSection);
-  const [filter, setFilter] = useState('all'); // 'all' | 'playlists' | 'albums' | 'downloads'
+  const [filter, setFilter] = useState(initialFilter || 'all'); // 'all' | 'playlists' | 'albums' | 'downloads'
   const [search, setSearch] = useState('');
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
 
+  React.useEffect(() => {
+    if (initialFilter) setFilter(initialFilter);
+  }, [initialFilter]);
+
   // ── 1. QURAN DATA ──
-  const quranPlaylists = useMemo(() => {
-    return (playlists || []).filter(isQuranContent);
-  }, [playlists]);
-
-  const quranAlbums = useMemo(() => {
-    return (albums || []).filter(isQuranContent);
-  }, [albums]);
-
-  const quranTracks = useMemo(() => {
-    return (tracks || []).filter(isQuranContent);
-  }, [tracks]);
+  const quranPlaylists = useMemo(() => (playlists || []).filter(isQuranContent), [playlists]);
+  const quranAlbums = useMemo(() => (albums || []).filter(isQuranContent), [albums]);
+  const quranTracks = useMemo(() => (tracks || []).filter(isQuranContent), [tracks]);
 
   // ── 2. MUSIC DATA ──
   const mixPlaylists = useMemo(() => {
@@ -88,13 +86,8 @@ export default function LibraryScreen({
     return [likedPl, ...list];
   }, [playlists, likedTrackIds, tracks, isRTL]);
 
-  const musicAlbums = useMemo(() => {
-    return (albums || []).filter(item => !isQuranContent(item));
-  }, [albums]);
-
-  const musicTracks = useMemo(() => {
-    return (tracks || []).filter(item => !isQuranContent(item));
-  }, [tracks]);
+  const musicAlbums = useMemo(() => (albums || []).filter(item => !isQuranContent(item)), [albums]);
+  const musicTracks = useMemo(() => (tracks || []).filter(item => !isQuranContent(item)), [tracks]);
 
   // Set of all track IDs belonging to user's saved playlists & liked songs
   const savedPlaylistTrackIds = useMemo(() => {
@@ -124,6 +117,12 @@ export default function LibraryScreen({
     const s = search.toLowerCase();
     return mixPlaylists.filter(item => item.name && item.name.toLowerCase().includes(s));
   }, [mixPlaylists, search]);
+
+  const filteredAlbums = useMemo(() => {
+    if (!search.trim()) return musicAlbums;
+    const s = search.toLowerCase();
+    return musicAlbums.filter(a => (a.name && a.name.toLowerCase().includes(s)) || (a.artist && a.artist.toLowerCase().includes(s)));
+  }, [musicAlbums, search]);
 
   const filteredPlaylists = activePlaylists.filter(item => {
     if (!search) return true;
@@ -303,6 +302,7 @@ export default function LibraryScreen({
           {[
             { id: 'all', label: isRTL ? 'الكل' : 'All' },
             { id: 'playlists', label: activeSection === 'quran' ? (isRTL ? 'السور والمصاحف' : 'Surahs & Playlists') : (isRTL ? 'قوائم التشغيل' : 'Playlists') },
+            ...(activeSection === 'music' ? [{ id: 'albums', label: isRTL ? `الألبومات (${musicAlbums.length})` : `Albums (${musicAlbums.length})` }] : []),
             { id: 'downloads', label: isRTL ? `التنزيلات (${downloadedTracks.length})` : `Downloads (${downloadedTracks.length})` }
           ].map(chip => {
             const active = filter === chip.id;
@@ -353,11 +353,21 @@ export default function LibraryScreen({
         />
       )}
 
-      {/* ── 1. PLAYLISTS & ALBUMS GRID ── */}
+      {/* ── 1. PLAYLISTS GRID ── */}
       {(filter === 'all' || filter === 'playlists') && (
         <LibraryPlaylistsGrid
           playlists={filteredPlaylists}
           activeSection={activeSection}
+          isDark={isDark}
+          isRTL={isRTL}
+          onSelectPlaylist={onSelectPlaylist}
+        />
+      )}
+
+      {/* ── 2. ALBUMS GRID (MUSIC ONLY) ── */}
+      {(filter === 'all' || filter === 'albums') && activeSection === 'music' && (
+        <LibraryAlbumsGrid
+          albums={filteredAlbums}
           isDark={isDark}
           isRTL={isRTL}
           onSelectPlaylist={onSelectPlaylist}

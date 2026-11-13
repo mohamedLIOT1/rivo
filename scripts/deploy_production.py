@@ -160,12 +160,8 @@ def sync_assets_and_metadata():
         ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
+        ("public/downloads/Rivo-v2.4.43.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.43.ipa"),
         ("public/downloads/Rivo-v2.4.42.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.42.ipa"),
-        ("public/downloads/Rivo-v2.4.41.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.41.ipa"),
-        ("public/downloads/Rivo-v2.4.2.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.2.ipa"),
-        ("public/downloads/Rivo.exe", f"{REMOTE_DIR}/public/downloads/Rivo.exe"),
-        ("public/downloads/Rivo-v2.4.2.exe", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.2.exe"),
-        ("public/downloads/Rivo.apk", f"{REMOTE_DIR}/public/downloads/Rivo.apk"),
         ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
         ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
         ("cookies.txt", f"{REMOTE_DIR}/cookies.txt"),
@@ -174,7 +170,7 @@ def sync_assets_and_metadata():
     for local_rel, remote_path in meta_files:
         p = os.path.join(BASE_DIR, local_rel)
         if os.path.exists(p):
-            if p.endswith('.exe'):
+            if p.endswith(('.exe', '.apk')):
                 continue
             upload_file(p, remote_path)
     run_ssh(f"sudo cp -rf {REMOTE_DIR}/public/downloads/* /var/www/html/downloads/ 2>/dev/null || true")

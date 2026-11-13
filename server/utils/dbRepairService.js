@@ -4,7 +4,7 @@
  * Strictly modularized (< 400 lines).
  */
 
-const { Album, Artist } = require('../models');
+const { Album, Artist, Track } = require('../models');
 
 const VERIFIED_SAHRAN_COVER = 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/69/2f/b0/692fb07e-6ab9-467a-01f4-f12ec0a39a41/194660835758.jpg/600x600bb.jpg';
 const VERIFIED_ABDULRAHMAN_AVATAR = 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/6d/ee/53/6dee53f8-d3ef-756b-18cc-d1d6dd20edc2/cover.jpg/600x600bb.jpg';

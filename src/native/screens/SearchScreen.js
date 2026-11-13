@@ -165,7 +165,7 @@ const DISPENSARY_GENRES = [
   { id: 'ambient', label: 'NIGHT AMBIENT', labelAr: 'أجواء ليلية', color: '#6366f1', tag: 'FOCUS DEEP', tagAr: 'أجواء ليلية' },
 ];
 
-function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', onQueryChange }) {
+function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', initialFilter = 'all', onQueryChange }) {
   const { width } = useWindowDimensions();
   const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
   const albumGap = 10;
@@ -208,11 +208,16 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const handleQueryChange = (txt) => {
     setQuery(txt);
     if (onQueryChange) onQueryChange(txt);
-    if (activeFilter !== 'all' && !txt.trim()) setActiveFilter('all');
   };
   const [selectedGenre, setSelectedGenre] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
+  const [activeFilter, setActiveFilter] = useState(initialFilter || 'all'); // 'all' | 'songs' | 'artists' | 'albums' | 'people'
   const [remoteResults, setRemoteResults] = useState([]);
+
+  useEffect(() => {
+    if (initialFilter && initialFilter !== activeFilter) {
+      setActiveFilter(initialFilter);
+    }
+  }, [initialFilter]);
   const [isSearchingRemote, setIsSearchingRemote] = useState(false);
   const [userResults, setUserResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
@@ -444,9 +449,8 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     });
   }, [allTracks, query]);
 
-  // Matching Albums
+  // Matching Albums (all albums when query is empty)
   const matchingAlbums = useMemo(() => {
-    if (!query.trim()) return [];
     const q = query.toLowerCase().trim();
     const fq = normalizeFuzzy(q);
     const map = new Map();
@@ -487,7 +491,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       }
     });
 
-    return Array.from(map.values()).filter(
+    const all = Array.from(map.values());
+    if (!q) return all;
+
+    return all.filter(
       (a) =>
         (a.name && a.name.toLowerCase().includes(q)) ||
         (a.artist && a.artist.toLowerCase().includes(q)) ||
@@ -617,7 +624,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
   const renderHeader = useCallback(() => (
     <View>
       {/* If no query and no selected genre: Show Genre Blister Packs */}
-      {!hasSearch && activeFilter !== 'people' && (
+      {!hasSearch && activeFilter === 'all' && (
         <View style={styles.genresSection}>
           <View style={styles.sectionTitleRow}>
             <Disc size={16} color={colors.mint} />
@@ -719,7 +726,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       )}
 
       {/* ── ALBUMS SECTION ── */}
-      {hasSearch && (activeFilter === 'all' || activeFilter === 'albums') && matchingAlbums.length > 0 && (
+      {((hasSearch && activeFilter === 'all') || activeFilter === 'albums') && matchingAlbums.length > 0 && (
         <View style={styles.albumsSection}>
           <View style={styles.sectionTitleRow}>
             <Layers size={16} color="#f59e0b" strokeWidth={2.4} />
@@ -822,10 +829,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             placeholder={isRTL ? 'ابحث عن أغاني، فنانين، ألبومات...' : t('search.placeholder')}
             placeholderTextColor={!isDark ? '#78716c' : colors.grayText}
             value={query}
-            onChangeText={(txt) => {
-              setQuery(txt);
-              if (activeFilter !== 'all' && !txt.trim()) setActiveFilter('all');
-            }}
+            onChangeText={handleQueryChange}
             autoCorrect={false}
           />
           {isSearchingRemote && (
@@ -937,7 +941,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
             : activeFilter === 'artists'
               ? (hasSearch ? matchingArtists : [])
               : activeFilter === 'albums'
-                ? (hasSearch ? matchingAlbums : [])
+                ? matchingAlbums
                 : songData
         }
         numColumns={

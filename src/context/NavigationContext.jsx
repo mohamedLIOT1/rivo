@@ -65,6 +65,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     initialNav.screen === 'quran' ? 'quran' : initialNav.screen === 'podcasts' ? 'podcasts' : 'music'
   );
   const [viewingProfileUserId, setViewingProfileUserId] = useState(initialNav.params?.userId || null);
+  const [topSearchFilter, setTopSearchFilter] = useState('all');
 
   const getLikedSongsPlaylist = useCallback(() => ({
     id: 'liked',
@@ -101,6 +102,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
       setViewingProfileUserId(null);
     } else if (screen === 'search') {
       if (params.query !== undefined) setTopSearchQuery(params.query);
+      if (params.filter !== undefined) setTopSearchFilter(params.filter);
       setSelectedArtist(null);
       setSelectedPlaylist(null);
       setViewingProfileUserId(null);
@@ -268,6 +270,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
         setViewingProfileUserId(null);
       } else if (screen === 'search') {
         setTopSearchQuery(params.query || '');
+        if (params.filter !== undefined) setTopSearchFilter(params.filter);
         setSelectedArtist(null);
         setSelectedPlaylist(null);
         setViewingProfileUserId(null);
@@ -347,6 +350,8 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     setCurrentScreen,
     topSearchQuery,
     setTopSearchQuery,
+    topSearchFilter,
+    setTopSearchFilter,
     selectedArtist,
     setSelectedArtist,
     selectedPlaylist,
@@ -364,6 +369,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
   }), [
     currentScreen,
     topSearchQuery,
+    topSearchFilter,
     selectedArtist,
     selectedPlaylist,
     libraryMode,
