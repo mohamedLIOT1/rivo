@@ -1,6 +1,18 @@
 const mongoose = require('mongoose');
 const { User, Track, Album } = require('../../models');
 
+// In-memory cache for ultra-fast playlist resolution (< 5ms)
+const playlistMemoryCache = new Map();
+const PLAYLIST_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function invalidatePlaylistCache(id = null) {
+  if (id) {
+    playlistMemoryCache.delete(String(id));
+  } else {
+    playlistMemoryCache.clear();
+  }
+}
+
 /**
  * Resolves a playlist (or album, or Liked Songs) by ID with authorization checks
  */
@@ -10,6 +22,15 @@ async function resolvePlaylistDetails({ plId, authUserId }) {
   }
 
   const isLikedReq = plId.toLowerCase().includes('liked');
+  const cacheKey = String(plId);
+
+  // High-speed cache hit for public playlists and albums
+  if (!isLikedReq) {
+    const cached = playlistMemoryCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp < PLAYLIST_CACHE_TTL)) {
+      return { status: 200, data: cached.data };
+    }
+  }
   const isObjId = mongoose.isValidObjectId(plId);
   let owner;
   if (isLikedReq) {
@@ -123,9 +144,11 @@ async function resolvePlaylistDetails({ plId, authUserId }) {
     orderedTracks = rawIds.map(id => trackMap.get(id)).filter(Boolean);
   }
 
-  return {
-    status: 200,
-    data: {
+    const safeOwnerAvatar = (owner.avatar && owner.avatar.startsWith('data:'))
+      ? ''
+      : (owner.avatar || '');
+
+    const responseData = {
       success: true,
       playlist: {
         id: pl?.id || (isLiked ? 'liked' : (pl?._id || plId)),
@@ -133,15 +156,23 @@ async function resolvePlaylistDetails({ plId, authUserId }) {
         name: pl?.name || (isLiked ? 'Liked Songs' : 'Playlist'),
         cover: pl?.cover || (orderedTracks[0]?.coverUrl || orderedTracks[0]?.cover || ''),
         ownerName: owner.name,
-        ownerAvatar: owner.avatar,
+        ownerAvatar: safeOwnerAvatar,
         isPublic: pl ? pl.isPublic !== false : true,
         isQuran: Boolean(pl?.isQuran),
         isLikedSongs: isLiked,
         trackIds: orderedTracks.map(t => String(t._id || t.id)),
         tracks: orderedTracks,
       }
+    };
+
+    if (!isLiked && pl && pl.isPublic !== false) {
+      playlistMemoryCache.set(cacheKey, { data: responseData, timestamp: Date.now() });
     }
-  };
+
+    return {
+      status: 200,
+      data: responseData
+    };
 }
 
 /**
@@ -313,5 +344,6 @@ async function savePlaylistToLibrary({ targetId, bodyPlaylist, bodyTracks, actio
 
 module.exports = {
   resolvePlaylistDetails,
-  savePlaylistToLibrary
+  savePlaylistToLibrary,
+  invalidatePlaylistCache
 };

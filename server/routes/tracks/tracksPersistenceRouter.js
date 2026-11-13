@@ -30,9 +30,9 @@ router.post('/by-ids', async (req, res) => {
       source: { $ne: 'SoundCloud' },
       album: { $ne: 'SoundCloud' },
       audioUrl: { $not: /soundcloud.com|sndcdn.com/i }
-    }).lean() : [];
+    }, { lyrics: 0, fullLyrics: 0 }).lean() : [];
 
-    // Attempt to resolve any missing YouTube tracks on the fly
+    // Attempt to resolve any missing YouTube tracks on the fly (parallelized & capped to avoid latency)
     const foundIds = new Set(tracks.map(t => String(t._id)));
     tracks.forEach(t => {
       if (t.id) foundIds.add(String(t.id));
@@ -45,8 +45,12 @@ router.post('/by-ids', async (req, res) => {
 
     const missingIds = stringIds.filter(id => !foundIds.has(id));
     let resolvedAny = false;
-    for (const mId of missingIds) {
-      if (mId.startsWith('yt-') || mId.startsWith('yt_') || (mId.length === 11 && !mongoose.isValidObjectId(mId))) {
+    const missingYtIds = missingIds
+      .filter(mId => mId.startsWith('yt-') || mId.startsWith('yt_') || (mId.length === 11 && !mongoose.isValidObjectId(mId)))
+      .slice(0, 4);
+
+    if (missingYtIds.length > 0) {
+      await Promise.allSettled(missingYtIds.map(async (mId) => {
         try {
           const resolved = await resolveAndSaveYouTubeTrack(mId);
           if (resolved) {
@@ -54,7 +58,7 @@ router.post('/by-ids', async (req, res) => {
             resolvedAny = true;
           }
         } catch {}
-      }
+      }));
     }
     if (resolvedAny) invalidateTracksCache();
 

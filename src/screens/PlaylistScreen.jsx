@@ -56,7 +56,10 @@ export default function PlaylistScreen({
 }) {
   const isDark = globalTheme === 'dark';
   const { language, t, isRTL } = usePreferences();
-  const [remotePlaylist, setRemotePlaylist] = useState(null);
+  const plInitialId = initialPlaylist?.id || initialPlaylist?._id;
+  const cachedPl = plInitialId ? clientPlaylistCache.get(String(plInitialId)) : null;
+  const [remotePlaylist, setRemotePlaylist] = useState(cachedPl ? cachedPl.playlist : null);
+  const [fetchedTracks, setFetchedTracks] = useState(cachedPl && Array.isArray(cachedPl.tracks) ? cachedPl.tracks : []);
 
   const playlist = useMemo(() => {
     if (!initialPlaylist) return remotePlaylist;
@@ -88,6 +91,10 @@ export default function PlaylistScreen({
       setRemotePlaylist(cached.playlist);
       if (Array.isArray(cached.tracks) && cached.tracks.length > 0) {
         setFetchedTracks(cached.tracks);
+      }
+      // If cache is fresh (< 5 mins), avoid redundant network fetch
+      if (Date.now() - cached.timestamp < CLIENT_PL_CACHE_TTL / 2) {
+        return;
       }
     } else {
       setRemotePlaylist(null);
@@ -153,7 +160,7 @@ export default function PlaylistScreen({
               };
               clientPlaylistCache.set(String(plId), { playlist: enrichedPl, tracks: cleanTracks, timestamp: Date.now() });
               setRemotePlaylist(enrichedPl);
-              try { onUpdatePlaylist(enrichedPl); } catch {}
+              try { onUpdatePlaylist(enrichedPl, { localOnly: true }); } catch {}
               if (cleanTracks.length > 0) {
                 setFetchedTracks(cleanTracks);
               }
@@ -179,7 +186,6 @@ export default function PlaylistScreen({
   const [searchQuery, setSearchQuery] = useState('');
   const [isUpdatingCover, setIsUpdatingCover] = useState(false);
   const [isTogglingPrivacy, setIsTogglingPrivacy] = useState(false);
-  const [fetchedTracks, setFetchedTracks] = useState([]);
   const [actionMenuTrack, setActionMenuTrack] = useState(null);
 
   // Ownership verification: owner or admin can edit, delete, add/remove tracks, change cover
@@ -323,12 +329,29 @@ export default function PlaylistScreen({
       setFetchedTracks([]);
       return;
     }
+
+    // Skip redundant network fetch if playlist already has all its tracks populated
+    if (Array.isArray(playlist.tracks) && playlist.tracks.length >= playlist.trackIds.length) {
+      return;
+    }
+
     const knownIds = new Set();
     tracks.forEach(t => {
       if (!t) return;
       if (t._id) knownIds.add(String(t._id));
       if (t.id) knownIds.add(String(t.id));
     });
+    fetchedTracks.forEach(t => {
+      if (!t) return;
+      if (t._id) knownIds.add(String(t._id));
+      if (t.id) knownIds.add(String(t.id));
+    });
+    (playlist.tracks || []).forEach(t => {
+      if (!t) return;
+      if (t._id) knownIds.add(String(t._id));
+      if (t.id) knownIds.add(String(t.id));
+    });
+
     const missing = playlist.trackIds.map(String).filter(id => !knownIds.has(id));
 
     if (missing.length > 0) {
@@ -344,12 +367,14 @@ export default function PlaylistScreen({
       .then(r => r.json())
       .then(d => {
         if (d.success && Array.isArray(d.tracks) && d.tracks.length > 0) {
-          setFetchedTracks(d.tracks);
+          setFetchedTracks(prev => {
+            const map = new Map(prev.map(t => [String(t.id || t._id), t]));
+            d.tracks.forEach(t => map.set(String(t.id || t._id), t));
+            return Array.from(map.values());
+          });
         }
       })
       .catch(() => {});
-    } else {
-      setFetchedTracks(prev => prev.filter(t => playlist.trackIds.map(String).includes(String(t.id || t._id))));
     }
   }, [playlist?.id, JSON.stringify(playlist?.trackIds || []), tracks.length]);
 
@@ -555,16 +580,6 @@ export default function PlaylistScreen({
     setSelectedTrackIds(new Set());
     setIsSelectMode(false);
   };
-
-  // Debounced auto-fetch AI recommendations on load so page renders with 0ms delay (skip for albums and Quran)
-  useEffect(() => {
-    if (!isQuran && !playlist?.isAlbum && !playlist?.isLikedSongs && playlistTracks.length > 0 && aiRecommendations.length === 0 && !isLoadingRecs) {
-      const timer = setTimeout(() => {
-        handleFetchAiRecommendations();
-      }, 600);
-      return () => clearTimeout(timer);
-    }
-  }, [playlist?.id, playlistTracks.length, isQuran, playlist?.isAlbum]);
 
   const formatDurationSum = () => {
     const totalSecs = playlistTracks.reduce((acc, t) => acc + (t.duration || 180), 0);
