@@ -161,7 +161,13 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
       <View style={[styles.container, { backgroundColor: isDark ? '#07100e' : '#f9f6f0' }]}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.topWhiteBtn} activeOpacity={0.8}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.topWhiteBtn}
+            activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <ChevronDown size={22} color="#000000" strokeWidth={2.5} />
           </TouchableOpacity>
 
@@ -193,6 +199,7 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             style={styles.topWhiteBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             activeOpacity={0.8}
+            delayPressIn={0}
           >
             <MoreVertical size={20} color="#000000" strokeWidth={2.5} />
           </TouchableOpacity>
@@ -203,6 +210,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
           <TouchableOpacity
             onPress={() => setActiveTab('player')}
             style={[styles.tabBtn, activeTab === 'player' && styles.activeTabBtn]}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.tabText, activeTab === 'player' && styles.activeTabText, rtlTextStyle]}>
               {isRTL ? (isCurPodcast ? 'المشغل' : 'يتم التشغيل') : 'Now Playing'}
@@ -213,6 +222,8 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             <TouchableOpacity
               onPress={() => setActiveTab('lyrics')}
               style={[styles.tabBtn, activeTab === 'lyrics' && styles.activeTabBtn]}
+              delayPressIn={0}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
             >
               <Text style={[styles.tabText, activeTab === 'lyrics' && styles.activeTabText, rtlTextStyle]}>
                 {isRTL ? 'الكلمات' : 'Lyrics'}
@@ -223,6 +234,9 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
           <TouchableOpacity
             onPress={() => setActiveTab('queue')}
             style={[styles.tabBtn, activeTab === 'queue' && styles.activeTabBtn]}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+          >
           >
             <Text style={[styles.tabText, activeTab === 'queue' && styles.activeTabText, rtlTextStyle]}>
               {isRTL ? `قائمة الانتظار (${queue?.length || 0})` : `Queue (${queue?.length || 0})`}

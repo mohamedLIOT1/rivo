@@ -677,10 +677,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               renderItem={renderHorizontalPersonItem}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.peopleScrollRow}
-              windowSize={7}
-              initialNumToRender={8}
-              maxToRenderPerBatch={8}
-              updateCellsBatchingPeriod={30}
+              windowSize={Platform.OS === 'android' ? 3 : 7}
+              initialNumToRender={Platform.OS === 'android' ? 4 : 8}
+              maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 8}
+              updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
               removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
@@ -708,10 +708,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               renderItem={renderHorizontalArtistItem}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.artistsScrollRow}
-              windowSize={7}
-              initialNumToRender={8}
-              maxToRenderPerBatch={8}
-              updateCellsBatchingPeriod={30}
+              windowSize={Platform.OS === 'android' ? 3 : 7}
+              initialNumToRender={Platform.OS === 'android' ? 4 : 8}
+              maxToRenderPerBatch={Platform.OS === 'android' ? 4 : 8}
+              updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
               removeClippedSubviews={Platform.OS === 'android'}
             />
           )}
@@ -977,10 +977,10 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        initialNumToRender={isLiteMode ? 6 : 8}
-        maxToRenderPerBatch={isLiteMode ? 6 : 8}
-        windowSize={isLiteMode ? 3 : 5}
-        updateCellsBatchingPeriod={40}
+        initialNumToRender={isLiteMode || Platform.OS === 'android' ? 5 : 8}
+        maxToRenderPerBatch={isLiteMode || Platform.OS === 'android' ? 5 : 8}
+        windowSize={isLiteMode || Platform.OS === 'android' ? 3 : 5}
+        updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
         removeClippedSubviews={Platform.OS === 'android'}
         refreshControl={
           <RefreshControl

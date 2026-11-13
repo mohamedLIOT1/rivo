@@ -100,7 +100,12 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   {track.artist || t('common.unknownArtist')}
                 </Text>
               </View>
-              <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+              <TouchableOpacity
+                onPress={onClose}
+                style={styles.closeBtn}
+                delayPressIn={0}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <X size={20} color={isDark ? '#e4e4e7' : colors.ink} />
               </TouchableOpacity>
             </View>
@@ -117,6 +122,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   playTrack(track);
                   onClose();
                 }}
+                delayPressIn={0}
+                hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
               >
                 <Play size={18} color={isDark ? '#fdfbf7' : colors.ink} fill={colors.teal} />
                 <Text style={[styles.actionText, { color: isDark ? '#fdfbf7' : colors.ink }, isRTL && { letterSpacing: 0 }]}>
@@ -134,6 +141,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   addToQueue(track);
                   onClose();
                 }}
+                delayPressIn={0}
+                hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
               >
                 <ListPlus size={18} color={isDark ? '#fdfbf7' : colors.ink} />
                 <Text style={[styles.actionText, { color: isDark ? '#fdfbf7' : colors.ink }, isRTL && { letterSpacing: 0 }]}>
@@ -151,6 +160,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   toggleLikeTrack(trackId);
                   onClose();
                 }}
+                delayPressIn={0}
+                hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
               >
                 <Heart
                   size={18}
@@ -173,6 +184,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                     onClose();
                     onOpenAddToPlaylist(track);
                   }}
+                  delayPressIn={0}
+                  hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
                 >
                   <ListPlus size={18} color={isDark ? '#26c4b7' : colors.tealDark} />
                   <Text style={[styles.actionText, { color: isDark ? '#fdfbf7' : colors.ink }, isRTL && { letterSpacing: 0 }]}>
@@ -193,6 +206,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   handleDownloadTrack(track);
                   onClose();
                 }}
+                delayPressIn={0}
+                hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
               >
                 {isDownloading ? (
                   <ActivityIndicator size="small" color={colors.teal} />
@@ -225,6 +240,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                   handleShare();
                   onClose();
                 }}
+                delayPressIn={0}
+                hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
               >
                 <Share2 size={18} color={isDark ? '#fdfbf7' : colors.ink} />
                 <Text style={[styles.actionText, { color: isDark ? '#fdfbf7' : colors.ink }, isRTL && { letterSpacing: 0 }]}>
@@ -249,6 +266,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                       if (showToast) showToast(e.message || t('modals.exportFailed'), 'error');
                     }
                   }}
+                  delayPressIn={0}
+                  hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
                 >
                   <FolderDown size={18} color="#10b981" />
                   <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }, { color: '#10b981', fontWeight: 'bold' }]}>
@@ -270,6 +289,8 @@ export default function TrackActionMenuModal({ visible, track, onClose, onOpenAd
                     if (showToast) showToast(`Removed "${track.title}" from playlist`, 'info');
                     onClose();
                   }}
+                  delayPressIn={0}
+                  hitSlop={{ top: 4, bottom: 4, left: 6, right: 6 }}
                 >
                   <Trash2 size={18} color="#dc2626" />
                   <Text style={[styles.actionText, isRTL && { letterSpacing: 0 }, { color: '#dc2626', fontWeight: 'bold' }]}>

@@ -183,7 +183,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.speedBtnCircle}
             onPress={cyclePlaybackSpeed}
             activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={styles.speedBtnText}>
               {playbackRate || 1}x
@@ -196,7 +197,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             onPress={() => jumpBy ? jumpBy(-15) : seekTo?.(Math.max(0, currentTime - 15))}
             onLongPress={playPrevTrack}
             activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={styles.jumpBtnInner}>
               <RotateCcw size={25} color="#e2e8f0" strokeWidth={2.2} />
@@ -211,7 +213,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.mainPlayBtn}
             onPress={togglePlay}
             activeOpacity={0.8}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="#0b1110" />
@@ -228,7 +231,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             onPress={() => jumpBy ? jumpBy(15) : seekTo?.(Math.max(0, currentTime + 15))}
             onLongPress={playNextTrack}
             activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <View style={styles.jumpBtnInner}>
               <RotateCw size={25} color="#e2e8f0" strokeWidth={2.2} />
@@ -243,7 +247,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.transportBtnCircle}
             onPress={playNextTrack}
             activeOpacity={0.7}
-            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <SkipForward size={20} color="#ffffff" fill="#ffffff" />
           </TouchableOpacity>
@@ -254,11 +259,19 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.transportBtnBox}
             onPress={() => toggleShuffle ? toggleShuffle() : setIsShuffle(!isShuffle)}
             activeOpacity={0.7}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Shuffle size={18} color={isShuffle ? colors.mint : '#9ca3af'} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.transportBtnBox} onPress={playPrevTrack} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.transportBtnBox}
+            onPress={playPrevTrack}
+            activeOpacity={0.7}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <SkipBack size={20} color="#ffffff" fill="#ffffff" />
           </TouchableOpacity>
 
@@ -266,6 +279,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.mainPlayBtn}
             onPress={togglePlay}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isLoading ? (
               <ActivityIndicator size="small" color="#0b1110" />
@@ -276,11 +291,23 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.transportBtnBox} onPress={playNextTrack} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.transportBtnBox}
+            onPress={playNextTrack}
+            activeOpacity={0.7}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <SkipForward size={20} color="#ffffff" fill="#ffffff" />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.transportBtnBox} onPress={toggleRepeat} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.transportBtnBox}
+            onPress={toggleRepeat}
+            activeOpacity={0.7}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <Repeat size={18} color={repeatMode !== 'off' ? colors.mint : '#9ca3af'} />
             {repeatMode === 'one' && (
               <View style={styles.repeatOneBadge}>
@@ -312,6 +339,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             style={styles.quickToolBtn}
             onPress={() => setIsSleepTimerOpen(true)}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Disc size={17} color="#94a3b8" />
           </TouchableOpacity>
@@ -321,6 +350,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
               style={styles.quickToolBtnTeal}
               onPress={() => setActiveTab('lyrics')}
               activeOpacity={0.8}
+              delayPressIn={0}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               {isCurQuran ? (
                 <BookOpen size={17} color="#0b1110" strokeWidth={2.4} />
@@ -335,6 +366,8 @@ export const FullPlayerControls = React.memo(function FullPlayerControls({
             onPress={() => !isDownloaded && !isDownloading && handleDownloadTrack?.(currentTrack)}
             disabled={isDownloading || isDownloaded}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isDownloading ? (
               <ActivityIndicator size="small" color="#17a398" />

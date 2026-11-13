@@ -336,6 +336,8 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
           ]}
           onPress={() => (isDocked ? snapBackToCenter() : openMenu())}
           activeOpacity={0.85}
+          delayPressIn={0}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           {isDocked ? (
             <View
@@ -430,6 +432,8 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
                         ]}
                         onPress={() => handleItemPress(item.screen)}
                         activeOpacity={0.8}
+                        delayPressIn={0}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
                         <Icon
                           size={22}
@@ -462,6 +466,8 @@ export default function FloatingNavMenu({ activeTab, onTabPress, hasTrack = fals
                   ]}
                   onPress={() => closeMenu()}
                   activeOpacity={0.88}
+                  delayPressIn={0}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <X size={24} color="#ffffff" strokeWidth={2.8} />
                 </TouchableOpacity>

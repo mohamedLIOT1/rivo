@@ -83,6 +83,7 @@ export const SongItemPure = React.memo(function SongItemPure({
       ]}
       onPress={() => onPlay && onPlay(track)}
       activeOpacity={0.8}
+      delayPressIn={0}
     >
       {/* Cover Image */}
       <View style={[styles.coverBox, !isDark && styles.coverBoxLight]}>
@@ -150,7 +151,8 @@ export const SongItemPure = React.memo(function SongItemPure({
         <TouchableOpacity
           onPress={() => onToggleLike && onToggleLike(trackId)}
           style={styles.iconBtn}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          delayPressIn={0}
         >
           <Heart
             size={16}
@@ -164,7 +166,8 @@ export const SongItemPure = React.memo(function SongItemPure({
           <TouchableOpacity
             onPress={() => handleAction(track)}
             style={styles.iconBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            delayPressIn={0}
           >
             <MoreVertical size={16} color={!isDark ? '#64748b' : '#94a3b8'} />
           </TouchableOpacity>
@@ -180,7 +183,8 @@ export const SongItemPure = React.memo(function SongItemPure({
               onPlay(track);
             }
           }}
-          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          delayPressIn={0}
           activeOpacity={0.85}
         >
           {isCurrent && isLoading ? (

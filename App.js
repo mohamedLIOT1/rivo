@@ -20,6 +20,12 @@ import {
   InteractionManager,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Boost touch responsiveness across Android & low-end devices (e.g. Galaxy A12)
+if (TouchableOpacity.defaultProps == null) {
+  TouchableOpacity.defaultProps = {};
+}
+TouchableOpacity.defaultProps.delayPressIn = 0;
 import {
   Home,
   Search,
@@ -449,6 +455,8 @@ function NativeAppShell() {
           style={styles.brandingRow}
           onPress={handleLogoPress}
           activeOpacity={0.8}
+          delayPressIn={0}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <View style={styles.logoBadge}>
             <View style={styles.logoTealOffset} />
@@ -481,7 +489,8 @@ function NativeAppShell() {
           {Boolean(headerSearchText) && (
             <TouchableOpacity
               onPress={handleClearSearch}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              delayPressIn={0}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               style={{ padding: 2 }}
             >
               <X size={13} color={isDark ? '#94a3b8' : '#78716c'} strokeWidth={2.2} />
@@ -496,6 +505,8 @@ function NativeAppShell() {
             style={[styles.topIconBtn, !isDark && styles.topIconBtnLight]}
             onPress={handleOpenMessages}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <MessageSquare size={16} color={isDark ? '#38bdf8' : '#0b1110'} strokeWidth={2.4} />
             {unreadChatCount > 0 && (
@@ -510,6 +521,8 @@ function NativeAppShell() {
             style={styles.topIconBtn}
             onPress={handleOpenMenu}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Menu size={16} color="#ffffff" strokeWidth={2.5} />
           </TouchableOpacity>
@@ -519,6 +532,8 @@ function NativeAppShell() {
             style={styles.avatarBtn}
             onPress={handleAvatarPress}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {currentUser?.avatar ? (
               <Image source={{ uri: currentUser.avatar }} style={styles.avatarImg} fadeDuration={0} />
@@ -675,6 +690,8 @@ function NativeAppShell() {
                 style={[styles.tabBtn, active && styles.tabBtnActive]}
                 onPress={() => handleTabPress(tab.screen)}
                 activeOpacity={0.8}
+                delayPressIn={0}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
               >
                 <Icon
                   size={18}

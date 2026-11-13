@@ -36,6 +36,7 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
           style={StyleSheet.absoluteFill}
           onPress={handleSelect}
           activeOpacity={0.85}
+          delayPressIn={0}
         >
           <View style={styles.albumCoverPlaceholder}>
             <Disc size={36} color="#1f3630" strokeWidth={1.5} />
@@ -54,6 +55,7 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
           style={styles.albumPlayOverlay}
           onPress={handlePlay}
           activeOpacity={0.75}
+          delayPressIn={0}
           hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
           accessibilityRole="button"
           accessibilityLabel={`Play ${album.name || 'album'}`}
@@ -68,7 +70,7 @@ const FeaturedAlbumCard = React.memo(function FeaturedAlbumCard({
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity onPress={handleSelect} activeOpacity={0.85}>
+      <TouchableOpacity onPress={handleSelect} activeOpacity={0.85} delayPressIn={0}>
         <Text style={[styles.albumTitle, !isDark && styles.albumTitleLight]} numberOfLines={1}>
           {album.name}
         </Text>

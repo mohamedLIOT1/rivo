@@ -370,6 +370,8 @@ function HomeScreen({
             style={styles.playTopChartsBtn}
             onPress={handlePlaySmartCassette}
             activeOpacity={0.85}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Play size={14} color="#0b1110" fill="#0b1110" />
             <Text style={[styles.playTopChartsBtnText, rtlTextStyle]}>
@@ -383,6 +385,8 @@ function HomeScreen({
             style={styles.addTrackBtn}
             onPress={onOpenAddSong}
             activeOpacity={0.85}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Plus size={15} color="#0b1110" strokeWidth={2.5} />
             <Text style={[styles.addTrackBtnText, rtlTextStyle]}>{isRTL ? '+ إضافة مقطع' : '+ Add Track'}</Text>
@@ -473,6 +477,8 @@ function HomeScreen({
           style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
           onPress={() => setActiveFilter('all')}
           activeOpacity={0.8}
+          delayPressIn={0}
+          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
         >
           <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive, rtlTextStyle]}>
             {t('common.all')}
@@ -483,6 +489,8 @@ function HomeScreen({
           style={[styles.filterPill, activeFilter === 'music' && styles.filterPillActive]}
           onPress={() => setActiveFilter('music')}
           activeOpacity={0.8}
+          delayPressIn={0}
+          hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
         >
           <Text style={[styles.filterPillText, activeFilter === 'music' && styles.filterPillTextActive, rtlTextStyle]}>
             {t('nav.music')}
@@ -494,6 +502,8 @@ function HomeScreen({
             style={[styles.filterPill, activeFilter === 'downloaded' && styles.filterPillActive]}
             onPress={() => setActiveFilter('downloaded')}
             activeOpacity={0.8}
+            delayPressIn={0}
+            hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
             <Text style={[styles.filterPillText, activeFilter === 'downloaded' && styles.filterPillTextActive, rtlTextStyle]}>
               {isRTL ? `المحملة (${downloadedCount})` : `Downloaded (${downloadedCount})`}
@@ -511,6 +521,8 @@ function HomeScreen({
           style={styles.loadMoreBtn}
           onPress={() => setVisibleCount((c) => c + (isLiteMode ? 15 : 30))}
           activeOpacity={0.8}
+          delayPressIn={0}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <Text style={[styles.loadMoreText, rtlTextStyle]}>
             {isRTL
@@ -601,10 +613,10 @@ function HomeScreen({
         getItemLayout={getItemLayout}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={isLiteMode ? 4 : 6}
-        maxToRenderPerBatch={isLiteMode ? 4 : 6}
-        windowSize={isLiteMode ? 3 : 5}
-        updateCellsBatchingPeriod={40}
+        initialNumToRender={isLiteMode || Platform.OS === 'android' ? 4 : 6}
+        maxToRenderPerBatch={isLiteMode || Platform.OS === 'android' ? 4 : 6}
+        windowSize={isLiteMode || Platform.OS === 'android' ? 3 : 5}
+        updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 40}
         removeClippedSubviews={Platform.OS === 'android'}
         onEndReached={handleLoadMoreOnEnd}
         onEndReachedThreshold={0.4}
