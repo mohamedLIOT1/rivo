@@ -4,7 +4,14 @@
  * Strictly modularized (< 400 lines).
  */
 
+const { generateBilingualVariants } = require('./francoArabicTransliteration');
+
 const TITLE_SYNONYMS = {
+  'شوفت كلام': ['shoft kalam', 'sheft kalam', 'شفت كلام'],
+  'شفت كلام': ['shoft kalam', 'sheft kalam', 'شوفت كلام'],
+  'shoft kalam': ['شوفت كلام', 'شفت كلام'],
+  'sheft kalam': ['شوفت كلام', 'شفت كلام'],
+
   'النيه': ['el neyya', 'neyya', 'el neya', 'neya', 'النية'],
   'النية': ['el neyya', 'neyya', 'el neya', 'neya', 'النيه'],
   'el neyya': ['النيه', 'النية', 'neyya'],
@@ -229,6 +236,20 @@ function getExpandedSearchTerms(query) {
         });
       }
     }
+  }
+
+  // Bilingual Franco-Arabic phonetic expansion
+  try {
+    const bilinguals = generateBilingualVariants(clean);
+    for (const b of bilinguals) {
+      if (b) {
+        terms.add(b.toLowerCase());
+        const normB = normalizeSearchTerm(b);
+        if (normB) terms.add(normB);
+      }
+    }
+  } catch (err) {
+    // Fail-safe
   }
 
   return Array.from(terms).filter(Boolean);
