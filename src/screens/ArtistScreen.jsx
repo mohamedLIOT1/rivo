@@ -97,16 +97,16 @@ export function getAlbumArtwork(albumOrName, fallbackCover = '') {
   }
 
   if (cover && typeof cover === 'string' && cover.startsWith('http') && !cover.includes('hqdefault.jpg') && !cover.includes('i.ytimg.com/vi/')) {
-    return cover;
+    return normalizeCoverUrl(cover);
   }
   const name = typeof albumOrName === 'string' ? albumOrName : (albumOrName?.name || albumOrName?.title || '');
   const cleanKey = name.replace(/^Album\s*[-–—:]\s*/i, '').trim().toLowerCase();
   if (OFFICIAL_ALBUM_COVERS[cleanKey]) {
-    return OFFICIAL_ALBUM_COVERS[cleanKey];
+    return normalizeCoverUrl(OFFICIAL_ALBUM_COVERS[cleanKey]);
   }
   for (const [key, val] of Object.entries(OFFICIAL_ALBUM_COVERS)) {
     if (cleanKey.includes(key) || key.includes(cleanKey)) {
-      return val;
+      return normalizeCoverUrl(val);
     }
   }
   if (cover && typeof cover === 'string' && cover.trim().length > 0) {

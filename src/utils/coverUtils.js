@@ -46,13 +46,41 @@ export const DEFAULT_COVER = MUSIC_PLACEHOLDER_SVG;
 export const QURAN_COVER_FALLBACK = 'https://rivo-m.duckdns.org/public/assets/quran/tarateel.jpg';
 
 /**
+ * Optimizes external high-res cover URLs into lightweight 300x300 thumbnails (90%+ bandwidth savings).
+ */
+export function getOptimizedThumbnailUrl(url, size = 300) {
+  if (!url || typeof url !== 'string') return url;
+  let trimmed = url.trim();
+  if (trimmed.includes('mzstatic.com')) {
+    return trimmed.replace(/\/\d+x\d+bb\.(jpg|png)/i, `/${size}x${size}bb.$1`);
+  }
+  if (trimmed.includes('googleusercontent.com')) {
+    return trimmed.replace(/=w\d+-h\d+[^?&]*/i, `=w${size}-h${size}-l90-rj`);
+  }
+  if (trimmed.includes('maxresdefault.jpg')) {
+    return trimmed.replace('maxresdefault.jpg', 'hqdefault.jpg');
+  }
+  return trimmed;
+}
+
+/**
  * Reusable bulletproof onError handler for <img> elements.
- * Prevents infinite onError loops and swaps in MUSIC_PLACEHOLDER_SVG.
+ * Automatically retries via /api/image-proxy if direct CDN connection was blocked by VPN/ISP,
+ * and swaps in MUSIC_PLACEHOLDER_SVG as final fallback.
  */
 export function handleCoverImageError(e, fallback = DEFAULT_COVER_FALLBACK) {
   if (!e || !e.currentTarget) return;
   const target = e.currentTarget;
   if (target.dataset.hasFallback) return;
+
+  const originalSrc = target.dataset.originalSrc || target.src || '';
+  if (!target.dataset.triedProxy && originalSrc && originalSrc.startsWith('http') && !originalSrc.includes('/api/image-proxy') && !originalSrc.startsWith('data:')) {
+    target.dataset.triedProxy = 'true';
+    const base = String(API_BASE_URL || '').replace(/\/+$/, '');
+    target.src = `${base}/api/image-proxy?url=${encodeURIComponent(originalSrc)}&w=300`;
+    return;
+  }
+
   target.dataset.hasFallback = 'true';
   try {
     target.removeAttribute('alt');
@@ -119,11 +147,12 @@ function _computeNormalizeCoverUrl(cover, track = null) {
     if (trimmed.length > 0 && trimmed !== 'null' && trimmed !== 'undefined') {
       if (
         trimmed.startsWith('data:') ||
-        trimmed.startsWith('blob:') ||
-        trimmed.startsWith('http://') ||
-        trimmed.startsWith('https://')
+        trimmed.startsWith('blob:')
       ) {
         return trimmed;
+      }
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return getOptimizedThumbnailUrl(trimmed, 300);
       }
       const base = String(API_BASE_URL || '').replace(/\/+$/, '');
       const cleanPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
@@ -162,6 +191,7 @@ function _computeNormalizeCoverUrl(cover, track = null) {
 
 export default {
   normalizeCoverUrl,
+  getOptimizedThumbnailUrl,
   MUSIC_PLACEHOLDER_SVG,
   DEFAULT_COVER_FALLBACK,
   DEFAULT_COVER,

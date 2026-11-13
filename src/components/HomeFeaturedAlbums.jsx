@@ -66,9 +66,11 @@ function HomeFeaturedAlbums({
               <div className="relative aspect-square mb-2 overflow-hidden rounded-lg brutal-border bg-black/10">
                 <img
                   src={getAlbumArtwork(alb, alb.cover)}
+                  data-original-src={alb.cover || alb.coverUrl}
                   alt={albumName}
-                  loading="lazy"
+                  loading="eager"
                   decoding="async"
+                  fetchPriority="high"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   onError={handleCoverImageError}
                 />

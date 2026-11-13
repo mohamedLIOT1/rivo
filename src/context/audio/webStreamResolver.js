@@ -263,8 +263,8 @@ export async function doResolvePlayableAudioStream(
   const qDuration = encodeURIComponent(track.duration || '');
   const retryParam = isRetryAlt ? '&retryAlt=1' : '';
 
-  // 5. Direct backend audio stream endpoint (fast 5000ms timeout)
-  const backendTimer = buildTimedFetchSignal(signal, 5000);
+  // 5. Direct backend audio stream endpoint (resilient 12000ms timeout)
+  const backendTimer = buildTimedFetchSignal(signal, 12000);
   try {
     const sRes = await fetch(
       `${API_BASE_URL}/api/tracks/${encodeURIComponent(trackId || 'stream')}/stream?url=${encodeURIComponent(targetUrl)}&title=${qTitle}&artist=${qArtist}&album=${qAlbum}&duration=${qDuration}${retryParam}`,
@@ -309,7 +309,7 @@ export async function doResolvePlayableAudioStream(
 
   // 6. Direct backend resolve-stream fallback
   if (!signal?.aborted) {
-    const resolveTimer = buildTimedFetchSignal(signal, 5000);
+    const resolveTimer = buildTimedFetchSignal(signal, 10000);
     try {
       const res = await fetch(
         `${API_BASE_URL}/api/tracks/resolve-stream?stream=true&title=${qTitle}&artist=${qArtist}&url=${encodeURIComponent(targetUrl)}&id=${encodeURIComponent(trackId)}&album=${qAlbum}&duration=${qDuration}${retryParam}`,

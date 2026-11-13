@@ -89,7 +89,9 @@ async function validateSafeUrl(urlString) {
       'youtu.be',
       'ytimg.com',
       'googleusercontent.com',
-      'ggpht.com'
+      'ggpht.com',
+      'mzstatic.com',
+      'apple.com'
     ];
     if (TRUSTED_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))) {
       return { valid: true, parsed };

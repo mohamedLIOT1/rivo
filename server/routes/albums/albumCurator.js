@@ -91,6 +91,19 @@ function getAlbumPrestigeScore(album) {
   return score;
 }
 
+function optimizeCoverSize(url, size = 300) {
+  if (!url || typeof url !== 'string') return url;
+  let optimized = url.trim();
+  if (optimized.includes('mzstatic.com')) {
+    optimized = optimized.replace(/\/\d+x\d+bb\.(jpg|png)/i, `/${size}x${size}bb.$1`);
+  } else if (optimized.includes('googleusercontent.com')) {
+    optimized = optimized.replace(/=w\d+-h\d+[^?&]*/i, `=w${size}-h${size}-l90-rj`);
+  } else if (optimized.includes('maxresdefault.jpg')) {
+    optimized = optimized.replace('maxresdefault.jpg', 'hqdefault.jpg');
+  }
+  return optimized;
+}
+
 function curateFeaturedAlbums(albumsList, { ownerId = 'global', now = Date.now(), limit = 16 } = {}) {
   if (!Array.isArray(albumsList) || albumsList.length === 0) return [];
 
@@ -163,7 +176,11 @@ function curateFeaturedAlbums(albumsList, { ownerId = 'global', now = Date.now()
 
     picked[pickIndex] = 1;
     const chosen = scored[pickIndex];
-    result.push(chosen.album);
+    const albumCopy = {
+      ...chosen.album,
+      cover: optimizeCoverSize(chosen.album.cover, 300)
+    };
+    result.push(albumCopy);
     lastArtist = chosen.normArtist;
   }
 
