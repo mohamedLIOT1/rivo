@@ -19,8 +19,8 @@ if not os.path.exists(BASE_IPA):
 HERMESC = os.path.join(ROOT_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 USER_DOWNLOADS = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-VERSION = '2.4.22'
-BUILD_NUM = '152'
+VERSION = '2.4.41'
+BUILD_NUM = '155'
 NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
 NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
 
@@ -84,6 +84,11 @@ def compile_hermes_bytecode():
 def repack():
     target_ver = get_target_version()
     print(f"\n--- Repacking Rivo iOS IPA (v{target_ver} Build {BUILD_NUM}) ---")
+
+    # Ensure JS version.js and manifests are in sync before Metro bundles index.js
+    sync_script = os.path.join(ROOT_DIR, 'scripts', 'sync-version.js')
+    if os.path.exists(sync_script):
+        subprocess.run(['node', sync_script, target_ver, BUILD_NUM], cwd=ROOT_DIR)
 
     build_metro_bundle()
 

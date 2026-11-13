@@ -74,39 +74,8 @@ export function getCachedHomeAlbums(albums, userTracks, ownerId = 'global') {
     return lastKnownFeaturedAlbums;
   }
 
-  const src = Array.isArray(userTracks) ? userTracks : EMPTY;
-  let cached = derivedAlbumsCache.get(src);
-  if (!cached) {
-    const map = new Map();
-    for (let i = 0; i < src.length; i++) {
-      const t = src[i];
-      if (t?.album && t.album.trim() && !isQuranContent(t)) {
-        const key = t.album.trim().toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, {
-            id: `derived-${key}`,
-            name: t.album.trim(),
-            artist: t.artist || 'Various Artists',
-            cover: t.cover,
-            tracks: [t],
-          });
-        } else {
-          map.get(key).tracks.push(t);
-        }
-      }
-    }
-    cached = Array.from(map.values())
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .slice(0, 16);
-    derivedAlbumsCache.set(src, cached);
-  }
-  const derivedEntry = rotatedAlbumsWindowCache.get(cached);
-  if (derivedEntry && derivedEntry.bucket === bucket12h && derivedEntry.ownerId === ownerId) {
-    return derivedEntry.list;
-  }
-  const rotatedDerived = curateFeaturedAlbums(cached, { ownerId, limit: 16 });
-  rotatedAlbumsWindowCache.set(cached, { bucket: bucket12h, ownerId, list: rotatedDerived });
-  return rotatedDerived;
+  // Prevent cold-start layout jump: do not derive temporary albums if official DB albums are hydrating
+  return EMPTY;
 }
 
 /**

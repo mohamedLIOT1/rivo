@@ -4,6 +4,7 @@ import { Zap, Download, RefreshCw, X, ArrowUpCircle } from 'lucide-react-native'
 import { useUpdate } from '../../context/UpdateContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useTranslation } from '../../context/LocalizationContext';
+import { compareVersions } from '../../services/otaService';
 
 const UpdateBanner = React.memo(function UpdateBanner() {
   const {
@@ -28,7 +29,11 @@ const UpdateBanner = React.memo(function UpdateBanner() {
   const { isDark } = useTheme();
   const { isRTL } = useTranslation();
 
-  if (!isUpdateAvailable || isBannerDismissed) {
+  if (
+    !isUpdateAvailable ||
+    isBannerDismissed ||
+    (runningVersion && targetVersion && compareVersions(runningVersion, targetVersion) >= 0)
+  ) {
     return null;
   }
 

@@ -33,6 +33,10 @@ if (!targetVersion) {
 const userNotes = process.argv[3];
 const userNotesEn = process.argv[4];
 
+// Ensure all version references in JS bundle & app manifests are strictly synchronized
+const { syncVersion } = require('./sync-version');
+syncVersion(targetVersion);
+
 console.log(`\n========================================`);
 console.log(`🚀 Building Rivo OTA Fast Update v${targetVersion}...`);
 console.log(`========================================\n`);

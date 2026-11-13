@@ -13,26 +13,11 @@ const STORAGE_KEYS = {
 };
 
 /**
- * Normalize version strings to handle legacy OTA numbering schemes.
- * In Rivo 2.4.x, OTAs were auto-incremented as 2.4.14, 2.4.15, 2.4.16 where:
- *   - 2.4.14 corresponds to patch 4 (base APK 2.4.4 / 2.4.1.4)
- *   - 2.4.15 corresponds to patch 5 (base APK 2.4.5)
- *   - 2.4.16 corresponds to patch 6 (base APK 2.4.6)
- * Mapping 2.4.1X to 2.4.X guarantees that a newer APK (e.g. 2.4.6) is recognized
- * as >= 2.4.16 and > 2.4.15, preventing stale older OTAs from being offered.
+ * Normalize version strings by stripping 'v' prefixes and trimming whitespace.
  */
 export const normalizeVersion = (v) => {
   if (!v) return '0.0.0';
-  let str = String(v).trim().replace(/^v/i, '');
-  if (/^2\.4\.(1[4-9]|2\d)(\.|$)/.test(str)) {
-    const match = str.match(/^2\.4\.(1[4-9]|2\d)(.*)$/);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      const patch = num - 10;
-      str = `2.4.${patch}${match[2] || ''}`;
-    }
-  }
-  return str;
+  return String(v).trim().replace(/^v/i, '');
 };
 
 /**

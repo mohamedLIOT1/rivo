@@ -612,13 +612,13 @@ function HomeScreen({
         renderItem={renderItem}
         ListHeaderComponent={renderHeader}
         ListFooterComponent={renderFooter}
-        initialNumToRender={isLiteMode ? 6 : 10}
-        maxToRenderPerBatch={isLiteMode ? 6 : 10}
-        windowSize={isLiteMode ? 5 : 7}
-        updateCellsBatchingPeriod={Platform.OS === 'android' ? 40 : 30}
-        removeClippedSubviews={false}
+        initialNumToRender={isLiteMode ? 6 : 8}
+        maxToRenderPerBatch={isLiteMode ? 6 : 8}
+        windowSize={isLiteMode ? 4 : 6}
+        updateCellsBatchingPeriod={20}
+        removeClippedSubviews={Platform.OS === 'android'}
         onEndReached={handleLoadMoreOnEnd}
-        onEndReachedThreshold={0.4}
+        onEndReachedThreshold={0.5}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl

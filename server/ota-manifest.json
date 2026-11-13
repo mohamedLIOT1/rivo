@@ -3,9 +3,9 @@
   "version": "2.4.41",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث سرعة الألبومات، إزالة التعليق، تسريع الفتح، وتعديل الكاش",
-  "notesEn": "Update album caching, eliminate layout shift, boost cold start",
-  "bundleSize": 5366090,
+  "notes": "إصلاح نهائي للتحديثات وتسريع الأداء",
+  "notesEn": "Final update loop fix and maximum mobile fluidity",
+  "bundleSize": 5364689,
   "sizeMb": "5.12 MB",
-  "updatedAt": "2026-11-13T18:54:02.197Z"
+  "updatedAt": "2026-11-13T19:59:10.260Z"
 }
