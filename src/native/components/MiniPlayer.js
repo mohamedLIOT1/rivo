@@ -67,6 +67,7 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
           style={[styles.container, !isDark && styles.containerLight]}
           onPress={onOpenFullPlayer}
           activeOpacity={0.9}
+          delayPressIn={0}
         >
         {/* Top Progress Line (Isolated to MiniProgressBar to prevent re-rendering MiniPlayer at 4Hz) */}
         <MiniProgressBar isLive={isLive} isDark={isDark} defaultDuration={Number(currentTrack?.duration || 240)} />
@@ -132,7 +133,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <TouchableOpacity
                 style={[styles.jumpBtn, !isDark && styles.jumpBtnLight]}
                 onPress={() => jumpBy?.(-15)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                delayPressIn={0}
                 activeOpacity={0.7}
               >
                 <View style={styles.miniJumpInner}>
@@ -146,7 +148,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <TouchableOpacity
                 style={styles.playBtn}
                 onPress={togglePlay}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                delayPressIn={0}
                 activeOpacity={0.85}
               >
                 {isLoading ? (
@@ -161,7 +164,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <TouchableOpacity
                 style={[styles.jumpBtn, !isDark && styles.jumpBtnLight]}
                 onPress={() => jumpBy?.(15)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                delayPressIn={0}
                 activeOpacity={0.7}
               >
                 <View style={styles.miniJumpInner}>
@@ -177,7 +181,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <TouchableOpacity
                 style={styles.iconBtn}
                 onPress={() => toggleLikeTrack(trackId)}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                delayPressIn={0}
               >
                 <Heart
                   size={18}
@@ -189,7 +194,8 @@ function MiniPlayer({ onOpenFullPlayer, bottomOffset }) {
               <TouchableOpacity
                 style={styles.playBtn}
                 onPress={togglePlay}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                delayPressIn={0}
                 activeOpacity={0.85}
               >
                 {isLoading ? (

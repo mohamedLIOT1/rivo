@@ -115,6 +115,8 @@ export const FullPlayerTrackInfo = React.memo(function FullPlayerTrackInfo({
           onPress={() => toggleLikeTrack(trackId)}
           style={styles.deckHeartBtn}
           activeOpacity={0.8}
+          delayPressIn={0}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Heart
             size={20}

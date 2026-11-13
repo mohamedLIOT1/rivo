@@ -1732,10 +1732,10 @@ function LibraryScreen({
               </View>
             ) : <View style={{ height: 32 }} />
           }
-          initialNumToRender={10}
-          maxToRenderPerBatch={8}
-          windowSize={7}
-          updateCellsBatchingPeriod={30}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 10}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 5 : 8}
+          windowSize={Platform.OS === 'android' ? 3 : 7}
+          updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
           removeClippedSubviews={Platform.OS === 'android'}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
@@ -1763,10 +1763,10 @@ function LibraryScreen({
           columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={10}
-          maxToRenderPerBatch={8}
-          windowSize={7}
-          updateCellsBatchingPeriod={30}
+          initialNumToRender={Platform.OS === 'android' ? 5 : 10}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 5 : 8}
+          windowSize={Platform.OS === 'android' ? 3 : 7}
+          updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={
             isReordering ? undefined : (

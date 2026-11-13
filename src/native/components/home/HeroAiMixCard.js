@@ -36,6 +36,7 @@ const HeroAiMixCard = React.memo(function HeroAiMixCard({
       style={styles.outerCard}
       onPress={onPlayMix}
       activeOpacity={0.9}
+      delayPressIn={0}
     >
       <View style={styles.dashedInner}>
         <View style={styles.topMetaRow}>
@@ -88,6 +89,8 @@ const HeroAiMixCard = React.memo(function HeroAiMixCard({
               style={styles.playBtn}
               onPress={onPlayMix}
               activeOpacity={0.85}
+              delayPressIn={0}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Play size={10} color="#17a398" fill="#17a398" />
               <Text style={styles.playBtnText}>

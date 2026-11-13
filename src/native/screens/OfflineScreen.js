@@ -337,10 +337,10 @@ function OfflineScreen() {
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={[styles.content, isSelectMode && { paddingBottom: 110 }]}
         showsVerticalScrollIndicator={false}
-        windowSize={7}
-        initialNumToRender={10}
-        maxToRenderPerBatch={8}
-        updateCellsBatchingPeriod={30}
+        windowSize={Platform.OS === 'android' ? 3 : 7}
+        initialNumToRender={Platform.OS === 'android' ? 5 : 10}
+        maxToRenderPerBatch={Platform.OS === 'android' ? 5 : 8}
+        updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
         removeClippedSubviews={Platform.OS === 'android'}
       />
 
