@@ -44,7 +44,7 @@ const rotatedAlbumsWindowCache = new WeakMap();
 /**
  * Returns filtered/derived Featured Albums for HomeScreen with 12h deterministic rotation + artist interleaving.
  */
-export function getCachedHomeAlbums(albums, userTracks, ownerId = 'guest') {
+export function getCachedHomeAlbums(albums, userTracks, ownerId = 'global') {
   const bucket12h = get12hBucket();
   const safeAlbums = Array.isArray(albums) ? albums : EMPTY;
   const dbAlbums = safeAlbums.filter((alb) => {

@@ -82,29 +82,13 @@ export default function HomeScreen({
     onSelectTrack,
   });
 
-  // Persistent 16 Featured Albums state to guarantee 0ms instant display without layout shift
+  // Persistent 16 Featured Albums state (Deterministic 'global' seed matching server 12h rotation)
   const [featured16Albums, setFeatured16Albums] = useState(() => {
-    const cached16 = getCachedFeatured16FromStorage(cacheOwnerId, bucket12h);
+    const cached16 = getCachedFeatured16FromStorage('global', bucket12h);
     if (cached16 && cached16.length > 0) return cached16;
     const base = (Array.isArray(albums) && albums.length > 0) ? albums : [];
-    return curateFeaturedAlbums(base, { ownerId: cacheOwnerId, limit: 16 });
+    return curateFeaturedAlbums(base, { ownerId: 'global', limit: 16 });
   });
-
-  const prevAlbumsLenRef = useRef(0);
-  useEffect(() => {
-    if (Array.isArray(albums) && albums.length > 0) {
-      if (albums.length === prevAlbumsLenRef.current) return;
-      prevAlbumsLenRef.current = albums.length;
-      const curated = curateFeaturedAlbums(albums, { ownerId: cacheOwnerId, limit: 16 });
-      if (curated && curated.length > 0) {
-        setFeatured16Albums(prev => {
-          if (prev && prev.length === curated.length && prev[0]?.id === curated[0]?.id) return prev;
-          return curated;
-        });
-        cacheFeatured16ToStorage(curated, cacheOwnerId, bucket12h);
-      }
-    }
-  }, [albums, cacheOwnerId, bucket12h]);
 
   // Fast background fetch for curated 16 featured albums (< 3KB payload, 0ms freeze)
   useEffect(() => {
@@ -114,15 +98,22 @@ export default function HomeScreen({
       .then(d => {
         if (!controller.signal.aborted && d?.success && Array.isArray(d.albums) && d.albums.length > 0) {
           setFeatured16Albums(prev => {
-            if (prev && prev.length === d.albums.length && prev[0]?.id === d.albums[0]?.id) return prev;
+            if (Array.isArray(prev) && prev.length === d.albums.length) {
+              const isIdentical = prev.every((alb, idx) => {
+                const prevId = String(alb.id || alb._id || '');
+                const nextId = String(d.albums[idx].id || d.albums[idx]._id || '');
+                return prevId === nextId;
+              });
+              if (isIdentical) return prev;
+            }
             return d.albums;
           });
-          cacheFeatured16ToStorage(d.albums, cacheOwnerId, bucket12h);
+          cacheFeatured16ToStorage(d.albums, 'global', bucket12h);
         }
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [cacheOwnerId, bucket12h]);
+  }, [bucket12h]);
 
   const totalAlbumsCount = Math.max(albums?.length || 0, featured16Albums?.length || 0);
 

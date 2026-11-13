@@ -97,10 +97,10 @@ function HomeScreen({
 
   const cacheOwnerId = String(currentUser?._id || currentUser?.id || 'guest');
 
-  // Discography Featured Albums (12h deterministic seeded rotation per ownerId)
+  // Discography Featured Albums (12h deterministic seeded rotation synchronized globally)
   const displayAlbums = useMemo(() => {
-    return getCachedHomeAlbums(albums, userTracks, cacheOwnerId);
-  }, [albums, userTracks, cacheOwnerId]);
+    return getCachedHomeAlbums(albums, userTracks, 'global');
+  }, [albums, userTracks]);
 
   const [aiMoodMix, setAiMoodMix] = useState(() => getMemoryCachedAiMoodMix(cacheOwnerId, displayTracks) || []);
 

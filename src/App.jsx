@@ -97,7 +97,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
     } catch {}
     return [];
   });
-  const albums = propAlbums || localAlbums;
+  const albums = (Array.isArray(propAlbums) && propAlbums.length > 0) ? propAlbums : localAlbums;
   const setAlbums = propSetAlbums || setLocalAlbums;
   const [audioQuality, setAudioQuality] = useState('320');
   const [crossfade, setCrossfade] = useState(4);
@@ -649,11 +649,16 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
 
 export default function App() {
   const { tracks, setTracks, likedTrackIds, playlists, currentUser } = useUser();
-  const [albums, setAlbums] = useState([]);
-
-  useEffect(() => {
-    dataService.fetchAlbums().then(alb => setAlbums(alb || [])).catch(() => {});
-  }, []);
+  const [albums, setAlbums] = useState(() => {
+    try {
+      const raw = localStorage.getItem('rivo_albums');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
   return (
     <PreferencesProvider currentUser={currentUser}>
