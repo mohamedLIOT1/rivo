@@ -27,9 +27,10 @@ export const API_BASE_URL = (() => {
   }
 
   // 2. Explicit environment variable if provided
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/$/, '');
-  }
+  try {
+    const envUrl = typeof process !== 'undefined' && process.env ? process.env.VITE_API_URL : null;
+    if (envUrl) return envUrl.replace(/\/$/, '');
+  } catch {}
 
   return 'https://rivo-m.duckdns.org';
 })();

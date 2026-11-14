@@ -77,7 +77,13 @@ import HomeScreen from './src/native/screens/HomeScreen';
 const lazyScreensCache = {};
 function getLazyScreen(key, loader) {
   if (!lazyScreensCache[key]) {
-    lazyScreensCache[key] = loader();
+    try {
+      const mod = loader();
+      lazyScreensCache[key] = (mod && mod.default) ? mod.default : mod;
+    } catch (e) {
+      console.warn(`[getLazyScreen] Error loading screen ${key}:`, e);
+      return () => null;
+    }
   }
   return lazyScreensCache[key];
 }
@@ -290,6 +296,28 @@ function NativeAppShell() {
     setHeaderSearchText('');
     setActiveTab('search');
   }, []);
+  // Android hardware back handler: navigate to home instead of abruptly exiting app
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const backAction = () => {
+      if (isMenuOpen) {
+        setIsMenuOpen(false);
+        return true;
+      }
+      if (isChatOpen) {
+        setIsChatOpen(false);
+        return true;
+      }
+      if (activeTab !== 'home') {
+        setActiveTab('home');
+        return true;
+      }
+      return false;
+    };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [activeTab, isMenuOpen, isChatOpen]);
+
   const { isDark, toggleTheme } = useTheme();
   const { socket } = useSocket();
   const { showToast } = useToast();
@@ -475,24 +503,33 @@ function NativeAppShell() {
         </TouchableOpacity>
 
         {/* ── Top Header Search Bar (Interactive input with live query sync) ── */}
-        <View style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}>
+        <TouchableOpacity
+          style={[styles.headerSearchBar, !isDark && styles.headerSearchBarLight]}
+          activeOpacity={0.85}
+          onPress={() => {
+            if (activeTab !== 'search') setActiveTab('search');
+          }}
+        >
           <Search size={13} color={isDark ? '#64748b' : '#78716c'} strokeWidth={2.2} />
-          <TextInput
-            style={[styles.headerSearchInput, !isDark && styles.headerSearchInputLight, isRTL && { textAlign: 'right' }]}
-            placeholder={t('search.placeholder')}
-            placeholderTextColor={isDark ? '#64748b' : '#78716c'}
-            value={headerSearchText}
-            onChangeText={(txt) => {
-              setHeaderSearchText(txt);
-              if (activeTab !== 'search') setActiveTab('search');
-            }}
-            onFocus={() => {
-              if (activeTab !== 'search') setActiveTab('search');
-            }}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+          {activeTab === 'search' ? (
+            <TextInput
+              style={[styles.headerSearchInput, !isDark && styles.headerSearchInputLight, isRTL && { textAlign: 'right' }]}
+              placeholder={t('search.placeholder')}
+              placeholderTextColor={isDark ? '#64748b' : '#78716c'}
+              value={headerSearchText}
+              onChangeText={(txt) => setHeaderSearchText(txt)}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          ) : (
+            <Text
+              style={[styles.headerSearchText, !isDark && styles.headerSearchTextLight, isRTL && { textAlign: 'right' }]}
+              numberOfLines={1}
+            >
+              {headerSearchText || t('search.placeholder')}
+            </Text>
+          )}
           {Boolean(headerSearchText) && (
             <TouchableOpacity
               onPress={handleClearSearch}
@@ -503,7 +540,7 @@ function NativeAppShell() {
               <X size={13} color={isDark ? '#94a3b8' : '#78716c'} strokeWidth={2.2} />
             </TouchableOpacity>
           )}
-        </View>
+        </TouchableOpacity>
 
         {/* Right Actions: Chat, Menu (☰), User Avatar */}
         <View style={styles.topActions}>
@@ -572,19 +609,21 @@ function NativeAppShell() {
         )}
 
         {normalizedTab === 'search' && (() => {
-          const SearchScreenComp = getLazyScreen('search', () => require('./src/native/screens/SearchScreen').default);
+          const SearchScreenComp = getLazyScreen('search', () => require('./src/native/screens/SearchScreen'));
           return (
             <View style={{ flex: 1 }}>
-              <SearchScreenComp
-                initialQuery={headerSearchText}
-                initialFilter={searchInitialFilter}
-                onQueryChange={handleQueryChange}
-                onTrackAction={handleTrackAction}
-                onOpenChat={handleOpenChat}
-                onOpenFullPlayer={handleOpenFullPlayer}
-                onSelectAlbum={handleSelectAlbum}
-                onSelectArtist={handleSelectArtist}
-              />
+              <ErrorBoundary>
+                <SearchScreenComp
+                  initialQuery={headerSearchText}
+                  initialFilter={searchInitialFilter}
+                  onQueryChange={handleQueryChange}
+                  onTrackAction={handleTrackAction}
+                  onOpenChat={handleOpenChat}
+                  onOpenFullPlayer={handleOpenFullPlayer}
+                  onSelectAlbum={handleSelectAlbum}
+                  onSelectArtist={handleSelectArtist}
+                />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -597,6 +636,7 @@ function NativeAppShell() {
                 onOpenCreatePlaylist={handleOpenCreatePlaylist}
                 onNavigateOffline={handleNavigateOffline}
                 onTrackAction={handleTrackAction}
+                onSelectArtist={handleSelectArtist}
               />
             </View>
           );

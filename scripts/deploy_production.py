@@ -154,14 +154,16 @@ def build_and_sync_frontend(skip_build=False):
         sys.exit(1)
     print("✅ Frontend dist synchronized successfully.")
 
-def sync_assets_and_metadata():
+def sync_assets_and_metadata(version=None):
+    if not version:
+        version = get_current_version()
     print("\n📄 [3/4] Syncing OTA bundles, IPAs & metadata...", flush=True)
     meta_files = [
+        ("scripts/clean_and_normalize_collaborations.js", f"{REMOTE_DIR}/scripts/clean_and_normalize_collaborations.js"),
         ("public/downloads/ota/index.android.bundle", f"{REMOTE_DIR}/public/downloads/ota/index.android.bundle"),
         ("server/ota-manifest.json", f"{REMOTE_DIR}/server/ota-manifest.json"),
         ("public/downloads/Rivo.ipa", f"{REMOTE_DIR}/public/downloads/Rivo.ipa"),
-        ("public/downloads/Rivo-v2.4.43.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.43.ipa"),
-        ("public/downloads/Rivo-v2.4.42.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v2.4.42.ipa"),
+        (f"public/downloads/Rivo-v{version}.ipa", f"{REMOTE_DIR}/public/downloads/Rivo-v{version}.ipa"),
         ("public/downloads/windows-update.json", f"{REMOTE_DIR}/public/downloads/windows-update.json"),
         ("public/rivo-bot.png", f"{REMOTE_DIR}/public/rivo-bot.png"),
         ("cookies.txt", f"{REMOTE_DIR}/cookies.txt"),
@@ -202,7 +204,7 @@ def main():
     print(f"🚀 Deploying Rivo v{version} to Production ({HOST})")
     print("==================================================")
 
-    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server {REMOTE_DIR}/dist /home/ubuntu/dist")
+    run_ssh(f"mkdir -p {REMOTE_DIR}/public/downloads/ota {REMOTE_DIR}/server {REMOTE_DIR}/dist {REMOTE_DIR}/scripts /home/ubuntu/dist")
 
     if args.ota_only:
         print("\n🚀 [OTA] Syncing Android OTA bundle and manifest...", flush=True)

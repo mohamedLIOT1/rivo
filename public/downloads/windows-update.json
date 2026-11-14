@@ -1,12 +1,12 @@
 {
-  "pub_date": "2026-11-13T19:10:00Z",
-  "version": "2.4.23",
-  "notes": "تحديث v2.4.23: عرض 16 ألبوم مختار بالرئيسية، حل مشكلة تشغيل الأغاني المنزلة القديمة، وتحسين سلاسة واستجابة الواجهة وإلغاء اللاج",
+  "pub_date": "2026-11-14T11:20:00Z",
+  "version": "2.4.46",
+  "notes": "تحديث v2.4.46: دعم التعاونات الفنية (Features) والألبومات المصغرة EPs والسنجل، تحسين وتنعيم صفحات الفنانين، وإصلاح اللاج وسلاسة تصفح المكتبة",
   "url": "https://rivo-m.duckdns.org/downloads/Rivo.exe",
-  "size": 52448310,
+  "size": 52448199,
   "platforms": {
     "windows-x86_64": {
-      "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.4.23.exe"
+      "url": "https://rivo-m.duckdns.org/downloads/Rivo-v2.4.46.exe"
     }
   }
 }

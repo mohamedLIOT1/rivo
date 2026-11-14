@@ -1,17 +1,24 @@
-import React from 'react';
-import { Loader2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { Loader2, User, Mic } from 'lucide-react';
 
 export default function SocialModal({
   isOpen,
   title,
   loading,
   users = [],
+  artists = [],
   isDark,
   onClose,
   onSelectUser,
+  onSelectArtist,
   t,
 }) {
+  const [activeTab, setActiveTab] = useState('people'); // 'people' | 'artists'
+
   if (!isOpen) return null;
+
+  const showTabs = artists && artists.length > 0;
+  const currentList = activeTab === 'artists' ? artists : users;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -32,31 +39,88 @@ export default function SocialModal({
           </button>
         </div>
 
-        <div className="max-h-60 overflow-y-auto space-y-2">
+        {/* Tabs if there are followed artists */}
+        {showTabs && (
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setActiveTab('people')}
+              className={`flex-1 py-1 rounded text-xs font-bold transition flex items-center justify-center gap-1.5 brutal-border ${
+                activeTab === 'people'
+                  ? 'bg-[#17a398] text-[#0b1110] font-black'
+                  : isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-white text-zinc-600 border-zinc-300'
+              }`}
+            >
+              <User size={12} />
+              <span>أشخاص ({users.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('artists')}
+              className={`flex-1 py-1 rounded text-xs font-bold transition flex items-center justify-center gap-1.5 brutal-border ${
+                activeTab === 'artists'
+                  ? 'bg-[#17a398] text-[#0b1110] font-black'
+                  : isDark ? 'bg-zinc-800 text-zinc-400 border-zinc-700' : 'bg-white text-zinc-600 border-zinc-300'
+              }`}
+            >
+              <Mic size={12} />
+              <span>فنانين ({artists.length})</span>
+            </button>
+          </div>
+        )}
+
+        <div className="max-h-64 overflow-y-auto space-y-2">
           {loading ? (
             <div className="text-center py-6">
               <Loader2 size={20} className="animate-spin text-[#17a398] mx-auto" />
             </div>
-          ) : users.length === 0 ? (
-            <p className="text-xs text-zinc-400 text-center py-4">{t('profile.noUsersFound')}</p>
+          ) : currentList.length === 0 ? (
+            <p className="text-xs text-zinc-400 text-center py-4">
+              {activeTab === 'artists' ? 'لا يوجد فنانين متابعين' : (t ? t('profile.noUsersFound') : 'No users found')}
+            </p>
           ) : (
-            users.map(u => (
-              <div 
-                key={u.id || u._id}
-                onClick={() => onSelectUser(u.id || u._id)}
-                className={`p-2 rounded-lg brutal-border flex items-center gap-2 cursor-pointer transition ${
-                  isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800 text-white' : 'bg-white border-black hover:bg-[#ede5d3] text-[#0b1110]'
-                }`}
-              >
-                <div className="w-8 h-8 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
-                  {u.avatar ? <img src={u.avatar} alt="" className="w-full h-full object-cover" /> : u.name?.[0] || 'U'}
+            currentList.map(item => {
+              const isArt = Boolean(item.isArtist || activeTab === 'artists');
+              return (
+                <div 
+                  key={item.id || item._id}
+                  onClick={() => {
+                    if (isArt) {
+                      if (onSelectArtist) onSelectArtist(item.name);
+                      if (onClose) onClose();
+                    } else {
+                      if (onSelectUser) onSelectUser(item.id || item._id);
+                    }
+                  }}
+                  className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
+                    isDark ? 'bg-zinc-900 border-zinc-700 hover:bg-zinc-800 text-white' : 'bg-white border-black hover:bg-[#ede5d3] text-[#0b1110]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 truncate flex-1">
+                    <div className="w-8 h-8 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
+                      {item.avatar || item.cover ? (
+                        <img src={item.avatar || item.cover} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        item.name?.[0] || 'U'
+                      )}
+                    </div>
+                    <div className="truncate flex-1">
+                      <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>
+                        {item.name}
+                      </p>
+                      {item.bio ? (
+                        <p className="text-[10px] text-zinc-400 truncate">{item.bio}</p>
+                      ) : isArt ? (
+                        <p className="text-[10px] text-zinc-400 truncate font-mono">فنان رسمي</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  {isArt && (
+                    <span className="text-[8px] font-mono font-bold px-1 py-0.5 rounded bg-zinc-800 text-[#17a398] border border-zinc-700 shrink-0">
+                      ARTIST
+                    </span>
+                  )}
                 </div>
-                <div className="truncate flex-1">
-                  <p className={`font-display font-bold text-xs truncate ${isDark ? 'text-white' : 'text-[#0b1110]'}`}>{u.name}</p>
-                  {u.bio ? <p className="text-[10px] text-zinc-400 truncate">{u.bio}</p> : null}
-                </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

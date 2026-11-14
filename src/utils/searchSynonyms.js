@@ -4,7 +4,8 @@
  * Strictly modularized (< 400 lines).
  */
 
-import { generateBilingualVariants } from './francoArabicTransliteration';
+import { generateBilingualVariants } from './francoArabicTransliteration.js';
+import { getCanonicalArtist, getAllArtistAliases } from './artistAliases.js';
 
 const TITLE_SYNONYMS = {
   'شوفت كلام': ['shoft kalam', 'sheft kalam', 'شفت كلام'],
@@ -249,6 +250,21 @@ export function getExpandedSearchTerms(query) {
         terms.add(b.toLowerCase());
         const normB = normalizeSearchTerm(b);
         if (normB) terms.add(normB);
+      }
+    }
+  } catch (err) {
+    // Fail-safe
+  }
+
+  // Canonical artist bilingual expansion
+  try {
+    const canonical = getCanonicalArtist(clean) || getCanonicalArtist(normalized);
+    if (canonical) {
+      const aliases = getAllArtistAliases(canonical);
+      for (const a of aliases) {
+        terms.add(a.toLowerCase());
+        const normA = normalizeSearchTerm(a);
+        if (normA) terms.add(normA);
       }
     }
   } catch (err) {

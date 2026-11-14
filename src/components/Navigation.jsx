@@ -1,4 +1,5 @@
 import { usePreferences } from '../context/PreferencesContext';
+import { useUser } from '../context/UserContext';
 import React, { useState, useMemo } from 'react';
 import { Home, Search, Disc, Plus, Heart, User, Radio, Podcast, DownloadCloud, MessageSquare, Command, Users, Sparkles, Link2, Music, ShieldCheck, BookOpen, Activity, WifiOff, Settings } from 'lucide-react';
 import VerifiedBadge, { isUserVerified } from './VerifiedBadge';
@@ -33,9 +34,11 @@ function Navigation({
   selectedPlaylist = null,
   onSelectLikedSongs,
   onSelectPlaylist,
+  onSelectArtist = () => {},
 }) {
   const isDark = globalTheme === 'dark';
   const [libraryFilter, setLibraryFilter] = useState('all');
+  const { followedArtists = [] } = useUser ? useUser() : { followedArtists: [] };
 
   const filteredLikedCount = useMemo(() => {
     if (!likedTrackIds || likedTrackIds.length === 0) return 0;
@@ -66,7 +69,6 @@ function Navigation({
   const mainNavItems = [
     ...(showMusic ? [{ id: 'home', label: t('nav.home'), icon: Home }] : []),
     { id: 'search', label: t('nav.search'), icon: Search },
-    { id: 'library', label: t('nav.library'), icon: Disc },
     ...(showQuran ? [{ id: 'quran', label: t('nav.quran'), icon: BookOpen }] : []),
     ...(showPodcasts ? [{ id: 'podcasts', label: t('nav.podcasts') || 'Podcasts', icon: Podcast }] : []),
     ...(!isInstalledClient ? [
@@ -257,135 +259,181 @@ function Navigation({
               })}
             </div>
 
-            {/* Playlists List */}
+            {/* Playlists / Artists List */}
             <div className="flex-1 min-h-[160px] overflow-y-auto space-y-1.5 pr-1 pb-1 text-xs font-bold">
-              {/* Liked Songs / Favorite Surahs */}
-              {libraryFilter !== 'artists' && (
-                <div
-                  onClick={() => {
-                    if (onSelectLikedSongs) {
-                      onSelectLikedSongs();
-                    } else {
-                      setCurrentScreen('playlist:liked');
-                    }
-                  }}
-                  className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
-                    (currentScreen === 'playlist' && (selectedPlaylist?.isLikedSongs || selectedPlaylist?.id === 'liked')) || currentScreen === 'liked'
-                      ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
-                      : isDark 
-                        ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
-                        : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
-                      <Heart size={12} fill="currentColor" />
-                    </div>
-                    <div className="truncate flex-1 min-w-0">
-                      <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
-                        {libraryMode === 'quran' 
-                          ? (t('library.favoriteSurahs') || 'Favorite Surahs') 
-                          : libraryMode === 'podcasts'
-                          ? (t('library.likedPodcasts') || (isRTL ? 'الحلقات المعجب بها' : 'Liked Episodes'))
-                          : (t('library.likedSongs') || 'Liked Songs')}
+              {/* If Artists filter is selected, render Followed Artists */}
+              {libraryFilter === 'artists' ? (
+                followedArtists && followedArtists.length > 0 ? (
+                  followedArtists.map((artName, idx) => (
+                    <div
+                      key={artName + idx}
+                      onClick={() => onSelectArtist && onSelectArtist(artName)}
+                      className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                        isDark 
+                          ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-white' 
+                          : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <div className="w-7 h-7 rounded-full bg-[#17a398] text-[#0b1110] flex items-center justify-center shrink-0 font-black text-xs border border-black/20">
+                          {artName.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="truncate flex-1 min-w-0">
+                          <div className={`truncate leading-none text-xs font-black ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
+                            {artName}
+                          </div>
+                          <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate mt-0.5">
+                            {isRTL ? 'فنان متابع' : 'Followed Artist'}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
-                        {filteredLikedCount > 0
-                          ? `${filteredLikedCount} ${libraryMode === 'quran' 
-                              ? (filteredLikedCount === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
-                              : libraryMode === 'podcasts'
-                              ? (filteredLikedCount === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
-                              : (filteredLikedCount === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}`
-                          : (libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorites') : libraryMode === 'podcasts' ? (t('library.likedPodcasts') || 'Favorites') : (t('library.likedSongs') || 'Favorites'))}
+                      <span className={`text-[8px] font-mono font-black px-1.5 py-0.5 rounded shrink-0 ${
+                        isDark ? 'bg-zinc-800 text-[#17a398]' : 'bg-[#ded2bb] text-[#0b1110]'
+                      }`}>
+                        ARTIST
                       </span>
                     </div>
+                  ))
+                ) : (
+                  <div className={`p-4 text-center rounded-lg border border-dashed ${
+                    isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
+                  }`}>
+                    <p className={`text-xs font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+                      {isRTL ? 'لا تتابع أي فنانين بعد' : 'No followed artists yet'}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      {isRTL ? 'افتح بروفايل أي فنان واضغط متابعة للوصول السريع هنا' : 'Follow artists to access them quickly here'}
+                    </p>
                   </div>
-                  {filteredLikedCount > 0 && (
-                    <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                      isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ded2bb] text-[#0b1110]'
-                    }`}>
-                      {filteredLikedCount}
-                    </span>
-                  )}
-                </div>
-              )}
-
-
-              {filteredPlaylists.map((pl, idx) => {
-                const plId = pl.id || pl._id;
-                const isActive = currentScreen === `playlist:${plId}` || (currentScreen === 'playlist' && String(selectedPlaylist?.id || selectedPlaylist?._id) === String(plId));
-                const count = (pl.trackIds || []).length;
-                const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899'];
-                const badgeColor = colors[idx % colors.length];
-
-                return (
+                )
+              ) : (
+                <>
+                  {/* Liked Songs / Favorite Surahs */}
                   <div
-                    key={plId || idx}
-                    onClick={() => onSelectPlaylist ? onSelectPlaylist(pl) : setCurrentScreen(`playlist:${plId}`)}
-                    className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
-                      isActive 
-                        ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm' : 'bg-[#ede5d3] brutal-shadow-sm'
-                        : isDark ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-white hover:bg-[#ede5d3]'
+                    onClick={() => {
+                      if (onSelectLikedSongs) {
+                        onSelectLikedSongs();
+                      } else {
+                        setCurrentScreen('playlist:liked');
+                      }
+                    }}
+                    className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition group ${
+                      (currentScreen === 'playlist' && (selectedPlaylist?.isLikedSongs || selectedPlaylist?.id === 'liked')) || currentScreen === 'liked'
+                        ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm text-white font-black' : 'bg-[#ede5d3] text-[#0b1110] brutal-shadow-sm font-black'
+                        : isDark 
+                          ? 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-white' 
+                          : 'bg-white hover:bg-[#ede5d3] text-[#0b1110]'
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0 flex-1">
-                      {pl.cover ? (
-                        <img 
-                          src={normalizeCoverUrl(pl.cover)} 
-                          alt={pl.name} 
-                          className="w-6 h-6 rounded object-cover border border-zinc-700 shrink-0" 
-                          onError={handleCoverImageError}
-                        />
-                      ) : (
-                        <div 
-                          className="w-6 h-6 rounded text-white flex items-center justify-center shrink-0 font-mono text-[10px] font-bold"
-                          style={{ backgroundColor: badgeColor }}
-                        >
-                          {pl.name ? pl.name[0].toUpperCase() : 'P'}
-                        </div>
-                      )}
+                      <div className="w-6 h-6 rounded bg-[#dc2626] text-white flex items-center justify-center shrink-0">
+                        <Heart size={12} fill="currentColor" />
+                      </div>
                       <div className="truncate flex-1 min-w-0">
-                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>{pl.name}</div>
+                        <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
+                          {libraryMode === 'quran' 
+                            ? (t('library.favoriteSurahs') || 'Favorite Surahs') 
+                            : libraryMode === 'podcasts'
+                            ? (t('library.likedPodcasts') || (isRTL ? 'الحلقات المعجب بها' : 'Liked Episodes'))
+                            : (t('library.likedSongs') || 'Liked Songs')}
+                        </div>
                         <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
-                          {count} {isQuranContent(pl) || libraryMode === 'quran' 
-                            ? (count === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
-                            : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts')
-                            ? (count === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
-                            : (count === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}
+                          {filteredLikedCount > 0
+                            ? `${filteredLikedCount} ${libraryMode === 'quran' 
+                                ? (filteredLikedCount === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                                : libraryMode === 'podcasts'
+                                ? (filteredLikedCount === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
+                                : (filteredLikedCount === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}`
+                            : (libraryMode === 'quran' ? (t('library.favoriteSurahs') || 'Favorites') : libraryMode === 'podcasts' ? (t('library.likedPodcasts') || 'Favorites') : (t('library.likedSongs') || 'Favorites'))}
                         </span>
                       </div>
                     </div>
-                    <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${
-                      isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
-                    }`}>
-                      {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts') ? 'PODCAST' : 'LIST'}
-                    </span>
+                    {filteredLikedCount > 0 && (
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                        isDark ? 'bg-zinc-800 text-zinc-300' : 'bg-[#ded2bb] text-[#0b1110]'
+                      }`}>
+                        {filteredLikedCount}
+                      </span>
+                    )}
                   </div>
-                );
-              })}
 
-              {filteredPlaylists.length === 0 && (
-                <div className={`p-3 text-center rounded-lg border border-dashed ${
-                  isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
-                }`}>
-                  <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
-                    {libraryMode === 'quran' 
-                      ? (t('library.noQuranPlaylistsYet') || 'No Quran playlists yet') 
-                      : libraryMode === 'podcasts'
-                      ? (isRTL ? 'لا توجد قوائم بودكاست بعد' : 'No podcast playlists yet')
-                      : (t('library.noPlaylistsYet') || 'No playlists yet')}
-                  </p>
-                  <button
-                    onClick={openCreatePlaylistModal}
-                    className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
-                  >
-                    {libraryMode === 'quran' 
-                      ? (t('library.createQuranPlaylist') || '+ Create Quran Playlist') 
-                      : libraryMode === 'podcasts'
-                      ? (isRTL ? '+ إنشاء قائمة بودكاست' : '+ Create Podcast Playlist')
-                      : (t('library.createPlaylist') || '+ Create Playlist')}
-                  </button>
-                </div>
+                  {filteredPlaylists.map((pl, idx) => {
+                    const plId = pl.id || pl._id;
+                    const isActive = currentScreen === `playlist:${plId}` || (currentScreen === 'playlist' && String(selectedPlaylist?.id || selectedPlaylist?._id) === String(plId));
+                    const count = (pl.trackIds || []).length;
+                    const colors = ['#1e3a8a', '#f59e0b', '#0f756d', '#dc2626', '#ec4899'];
+                    const badgeColor = colors[idx % colors.length];
+
+                    return (
+                      <div
+                        key={plId || idx}
+                        onClick={() => onSelectPlaylist ? onSelectPlaylist(pl) : setCurrentScreen(`playlist:${plId}`)}
+                        className={`p-2 rounded-lg brutal-border flex items-center justify-between cursor-pointer transition ${
+                          isActive 
+                            ? isDark ? 'bg-zinc-800 border-zinc-600 brutal-shadow-sm' : 'bg-[#ede5d3] brutal-shadow-sm'
+                            : isDark ? 'bg-zinc-900/90 border-zinc-800 hover:bg-zinc-800 text-zinc-300' : 'bg-white hover:bg-[#ede5d3]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {pl.cover ? (
+                            <img 
+                              src={normalizeCoverUrl(pl.cover)} 
+                              alt={pl.name} 
+                              className="w-6 h-6 rounded object-cover border border-zinc-700 shrink-0" 
+                              onError={handleCoverImageError}
+                            />
+                          ) : (
+                            <div 
+                              className="w-6 h-6 rounded text-white flex items-center justify-center shrink-0 font-mono text-[10px] font-bold"
+                              style={{ backgroundColor: badgeColor }}
+                            >
+                              {pl.name ? pl.name[0].toUpperCase() : 'P'}
+                            </div>
+                          )}
+                          <div className="truncate flex-1 min-w-0">
+                            <div className={`truncate leading-none ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>{pl.name}</div>
+                            <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate" dir={isRTL ? "rtl" : "ltr"}>
+                              {count} {isQuranContent(pl) || libraryMode === 'quran' 
+                                ? (count === 1 ? (t('library.surahSingle') || 'سورة') : (t('library.surahPlural') || 'سور')) 
+                                : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts')
+                                ? (count === 1 ? (isRTL ? 'حلقة' : 'episode') : (isRTL ? 'حلقات' : 'episodes'))
+                                : (count === 1 ? (t('library.songSingle') || 'أغنية') : (t('library.songPlural') || 'أغانٍ'))}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`text-[8px] font-mono font-bold px-1 py-0.5 rounded shrink-0 ${
+                          isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-[#ede5d3] text-[#0b1110]'
+                        }`}>
+                          {isQuranContent(pl) || libraryMode === 'quran' ? 'QURAN' : (pl.isPodcast || isPodcastContent(pl) || libraryMode === 'podcasts') ? 'PODCAST' : 'LIST'}
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {filteredPlaylists.length === 0 && (
+                    <div className={`p-3 text-center rounded-lg border border-dashed ${
+                      isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
+                    }`}>
+                      <p className={`text-[11px] font-bold ${isDark ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                        {libraryMode === 'quran' 
+                          ? (t('library.noQuranPlaylistsYet') || 'No Quran playlists yet') 
+                          : libraryMode === 'podcasts'
+                          ? (isRTL ? 'لا توجد قوائم بودكاست بعد' : 'No podcast playlists yet')
+                          : (t('library.noPlaylistsYet') || 'No playlists yet')}
+                      </p>
+                      <button
+                        onClick={openCreatePlaylistModal}
+                        className="mt-1.5 px-2.5 py-1 bg-[#17a398] text-[#0b1110] text-[10px] font-bold rounded brutal-border brutal-shadow-sm"
+                      >
+                        + {libraryMode === 'quran' 
+                          ? (t('library.createQuranPlaylist') || 'Create Quran Playlist') 
+                          : libraryMode === 'podcasts'
+                          ? (isRTL ? 'إنشاء قائمة بودكاست' : 'Create Podcast Playlist')
+                          : (t('library.createPlaylist') || 'Create Playlist')}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

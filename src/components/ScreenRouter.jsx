@@ -372,6 +372,7 @@ export default function ScreenRouter({
           viewingUserId={viewingProfileUserId}
           onClearViewingUser={() => setViewingProfileUserId(null)}
           onNavigateScreen={goToScreen}
+          onSelectArtist={handleSelectArtist}
         />
       )}
     </Suspense>

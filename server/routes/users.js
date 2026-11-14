@@ -258,11 +258,47 @@ router.get('/:id/followers', optionalAuth, async (req, res) => {
 // Following
 router.get('/:id/following', optionalAuth, async (req, res) => {
   try {
-    const following = await fetchFollowingList(req.params.id);
-    if (!following) return res.status(404).json({ error: 'User not found' });
-    res.json({ success: true, following, count: following.length });
+    const data = await fetchFollowingList(req.params.id);
+    if (!data) return res.status(404).json({ error: 'User not found' });
+    const following = Array.isArray(data) ? data : (data.users || []);
+    const artists = data.artists || [];
+    res.json({
+      success: true,
+      following,
+      artists,
+      users: following,
+      count: following.length + artists.length
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// Follow / Unfollow Artist
+router.post('/follow-artist', auth, async (req, res) => {
+  try {
+    const { artistName } = req.body;
+    if (!artistName || typeof artistName !== 'string') {
+      return res.status(400).json({ error: 'Valid artist name required' });
+    }
+    const cleanName = artistName.trim();
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    user.followedArtists = user.followedArtists || [];
+    const exists = user.followedArtists.some(a => a.toLowerCase() === cleanName.toLowerCase());
+    let isFollowing = false;
+    if (exists) {
+      user.followedArtists = user.followedArtists.filter(a => a.toLowerCase() !== cleanName.toLowerCase());
+      isFollowing = false;
+    } else {
+      user.followedArtists.push(cleanName);
+      isFollowing = true;
+    }
+    await user.save();
+    res.json({ success: true, isFollowing, followedArtists: user.followedArtists });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

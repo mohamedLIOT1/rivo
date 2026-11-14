@@ -19,18 +19,31 @@ if not os.path.exists(BASE_IPA):
 HERMESC = os.path.join(ROOT_DIR, 'node_modules', 'react-native', 'sdks', 'hermesc', 'win64-bin', 'hermesc.exe')
 USER_DOWNLOADS = os.path.join(os.path.expanduser('~'), 'Downloads')
 
-VERSION = '2.4.43'
-BUILD_NUM = '159'
-NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
-NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
-
 def get_target_version():
     pkg_path = os.path.join(ROOT_DIR, 'package.json')
     try:
         with open(pkg_path, 'r', encoding='utf-8') as f:
-            return json.load(f).get('version', VERSION)
+            return json.load(f).get('version', '2.4.45')
     except Exception:
-        return VERSION
+        return '2.4.45'
+
+def get_target_build():
+    ver_path = os.path.join(ROOT_DIR, 'src', 'native', 'version.js')
+    try:
+        with open(ver_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if 'IOS_BUILD' in line or 'ANDROID_BUILD' in line:
+                    import re
+                    m = re.search(r"'(\d+)'", line)
+                    if m: return m.group(1)
+    except Exception:
+        pass
+    return '163'
+
+VERSION = get_target_version()
+BUILD_NUM = get_target_build()
+NEW_IPA_VERSIONED = os.path.join(DOWNLOADS_DIR, f'Rivo-v{VERSION}.ipa')
+NEW_IPA_LATEST = os.path.join(DOWNLOADS_DIR, 'Rivo.ipa')
 
 def build_metro_bundle():
     print(f"\n[1/3] Exporting iOS JavaScript bundle via Metro...")

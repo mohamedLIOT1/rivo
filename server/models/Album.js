@@ -15,6 +15,7 @@ const AlbumSchema = new mongoose.Schema({
   id: { type: String, unique: true, index: true },
   name: { type: String, required: true },
   artist: { type: String, required: true },
+  artists: [{ type: String, index: true }],
   cover: { type: String },
   linkUrl: { type: String, default: '' },
   trackIds: [{ type: String }],

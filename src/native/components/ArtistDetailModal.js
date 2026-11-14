@@ -85,10 +85,9 @@ export default function ArtistDetailModal({
       onTrackAction(track);
     }
   }, [onTrackAction, onClose]);
-  const { likedTrackIds = [], toggleLikeTrack, currentUser } = useUser();
+  const { likedTrackIds = [], toggleLikeTrack, currentUser, isFollowingArtist, toggleFollowArtist } = useUser();
   const { isDark } = useTheme();
   const { t, isRTL } = useTranslation();
-  const [isFollowing, setIsFollowing] = useState(false);
   const [isAddAlbumOpen, setIsAddAlbumOpen] = useState(false);
   const [isEditArtistOpen, setIsEditArtistOpen] = useState(false);
   const isAdmin = Boolean(currentUser?.role === 'admin' || currentUser?.isAdmin);
@@ -279,8 +278,8 @@ export default function ArtistDetailModal({
                 finalTracksCount={finalTracks.length}
                 finalAlbumsCount={finalAlbums.length}
                 isDark={isDark}
-                isFollowing={isFollowing}
-                setIsFollowing={setIsFollowing}
+                isFollowing={Boolean(isFollowingArtist && isFollowingArtist(artistName))}
+                setIsFollowing={() => toggleFollowArtist && toggleFollowArtist(artistName)}
                 handlePlayAll={handlePlayAll}
                 addToQueue={addToQueue}
                 finalTracks={finalTracks}

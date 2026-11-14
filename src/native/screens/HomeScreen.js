@@ -515,11 +515,11 @@ function HomeScreen({
   ), [currentUser?.name, aiMoodMix, handlePlaySmartCassette, displayAlbums, isDark, activeFilter, downloadedCount, isOffline, isLiteMode, onOpenAddSong, onViewAllAlbums, handlePlayAlbum, handleSelectAlbumCard, albumCardWidth, loadingAlbumId, isRTL, currentMood, getMoodLabel, t, rtlTextStyle]);
 
   const renderFooter = useCallback(() => {
-    if (displayTracks.length > visibleCount) {
+    if (visibleCount < MAX_HOME_FEED_TRACKS && displayTracks.length > visibleCount) {
       return (
         <TouchableOpacity
           style={styles.loadMoreBtn}
-          onPress={() => setVisibleCount((c) => c + (isLiteMode ? 15 : 30))}
+          onPress={() => setVisibleCount((c) => Math.min(MAX_HOME_FEED_TRACKS, displayTracks.length, c + (isLiteMode ? 6 : 10)))}
           activeOpacity={0.8}
           delayPressIn={0}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -528,6 +528,25 @@ function HomeScreen({
             {isRTL
               ? `+ عرض المزيد من المقاطع (متبقي ${displayTracks.length - visibleCount})`
               : `+ LOAD MORE TRACKS (${displayTracks.length - visibleCount} MORE)`}
+          </Text>
+        </TouchableOpacity>
+      );
+    }
+
+    if (displayTracks.length > MAX_HOME_FEED_TRACKS) {
+      return (
+        <TouchableOpacity
+          style={[styles.loadMoreBtn, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}
+          onPress={() => {
+            if (onViewAllAlbums) onViewAllAlbums();
+          }}
+          activeOpacity={0.8}
+          delayPressIn={0}
+        >
+          <Text style={[styles.loadMoreText, rtlTextStyle]}>
+            {isRTL
+              ? `⚡ استكشف باقي الموسيقى (${displayTracks.length} مقطع) في البحث`
+              : `⚡ EXPLORE ALL ${displayTracks.length} TRACKS IN SEARCH`}
           </Text>
         </TouchableOpacity>
       );
@@ -546,7 +565,7 @@ function HomeScreen({
     }
 
     return null;
-  }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isRTL, rtlTextStyle]);
+  }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isDark, isRTL, rtlTextStyle, onViewAllAlbums]);
 
   const displayTracksRef = useRef(displayTracks);
   displayTracksRef.current = displayTracks;
@@ -596,9 +615,11 @@ function HomeScreen({
     );
   }, [curTrackId, isPlaying, isLoading, likedSet, isDark, handlePlaySong, togglePlay, toggleLikeTrack, handleMoreSong]);
 
+  const MAX_HOME_FEED_TRACKS = 25;
+
   const handleLoadMoreOnEnd = useCallback(() => {
-    if (displayTracks.length > visibleCount) {
-      setVisibleCount((c) => Math.min(displayTracks.length, c + (isLiteMode ? 12 : 20)));
+    if (visibleCount < MAX_HOME_FEED_TRACKS && displayTracks.length > visibleCount) {
+      setVisibleCount((c) => Math.min(MAX_HOME_FEED_TRACKS, displayTracks.length, c + (isLiteMode ? 6 : 10)));
     }
   }, [displayTracks.length, visibleCount, isLiteMode]);
 

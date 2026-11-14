@@ -26,6 +26,7 @@ export default function ProfileScreen({
   viewingUserId = null,
   onClearViewingUser,
   onNavigateScreen,
+  onSelectArtist,
 }) {
   const isDark = globalTheme === 'dark';
   const { t, isRTL } = useTranslation();
@@ -144,11 +145,16 @@ export default function ProfileScreen({
           title={socialModal.title}
           loading={socialModal.loading}
           users={socialModal.users}
+          artists={socialModal.artists || []}
           isDark={isDark}
           onClose={() => setSocialModal(prev => ({ ...prev, isOpen: false }))}
           onSelectUser={(uid) => {
             setSocialModal(prev => ({ ...prev, isOpen: false }));
             handleViewUserProfile(uid);
+          }}
+          onSelectArtist={(artistName) => {
+            setSocialModal(prev => ({ ...prev, isOpen: false }));
+            if (onSelectArtist) onSelectArtist(artistName);
           }}
           t={t}
         />
@@ -235,11 +241,16 @@ export default function ProfileScreen({
         title={socialModal.title}
         loading={socialModal.loading}
         users={socialModal.users}
+        artists={socialModal.artists || []}
         isDark={isDark}
         onClose={() => setSocialModal(prev => ({ ...prev, isOpen: false }))}
         onSelectUser={(uid) => {
           setSocialModal(prev => ({ ...prev, isOpen: false }));
           handleViewUserProfile(uid);
+        }}
+        onSelectArtist={(artistName) => {
+          setSocialModal(prev => ({ ...prev, isOpen: false }));
+          if (onSelectArtist) onSelectArtist(artistName);
         }}
         t={t}
       />

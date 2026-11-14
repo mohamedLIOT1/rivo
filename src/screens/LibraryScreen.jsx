@@ -364,8 +364,8 @@ export default function LibraryScreen({
         />
       )}
 
-      {/* ── 2. ALBUMS GRID (MUSIC ONLY) ── */}
-      {(filter === 'all' || filter === 'albums') && activeSection === 'music' && (
+      {/* ── 2. ALBUMS GRID (MUSIC ONLY - Only when Albums filter is explicitly active) ── */}
+      {filter === 'albums' && activeSection === 'music' && (
         <LibraryAlbumsGrid
           albums={filteredAlbums}
           isDark={isDark}

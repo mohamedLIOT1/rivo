@@ -237,7 +237,6 @@ export function FullPlayerModal({ visible, onClose, onTrackAction }) {
             delayPressIn={0}
             hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
           >
-          >
             <Text style={[styles.tabText, activeTab === 'queue' && styles.activeTabText, rtlTextStyle]}>
               {isRTL ? `قائمة الانتظار (${queue?.length || 0})` : `Queue (${queue?.length || 0})`}
             </Text>

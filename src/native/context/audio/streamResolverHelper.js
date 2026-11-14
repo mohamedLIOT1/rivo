@@ -62,10 +62,31 @@ export const verifyLocalAudioFile = async (rawUri) => {
   return null;
 };
 
-const pickLocalUriField = (obj) =>
-  obj?.localAudioUri ||
-  (obj?.nativeAudioUri && (obj.nativeAudioUri.startsWith('file://') || obj.nativeAudioUri.startsWith('content://') || obj.nativeAudioUri.startsWith('/') || obj.nativeAudioUri.includes('rivo_tracks/')) ? obj.nativeAudioUri : null) ||
-  (obj?.audioUrl && (obj.audioUrl.startsWith('file://') || obj.audioUrl.startsWith('content://') || obj.audioUrl.startsWith('/') || obj.audioUrl.includes('rivo_tracks/')) ? obj.audioUrl : null);
+const isDeviceLocalPath = (uri) => {
+  if (!uri || typeof uri !== 'string') return false;
+  if (uri.startsWith('http://') || uri.startsWith('https://')) return false;
+  if (uri.startsWith('/uploads/') || uri.startsWith('uploads/')) return false;
+  if (uri.startsWith('/api/') || uri.startsWith('api/')) return false;
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('/var/') ||
+    uri.startsWith('/private/var/') ||
+    uri.startsWith('/data/user/') ||
+    uri.startsWith('/storage/') ||
+    uri.includes('rivo_tracks') ||
+    uri.includes('rivo_vault') ||
+    uri.includes('Application Support') ||
+    uri.includes('Documents/')
+  );
+};
+
+const pickLocalUriField = (obj) => {
+  if (isDeviceLocalPath(obj?.localAudioUri)) return obj.localAudioUri;
+  if (isDeviceLocalPath(obj?.nativeAudioUri)) return obj.nativeAudioUri;
+  if (isDeviceLocalPath(obj?.audioUrl)) return obj.audioUrl;
+  return null;
+};
 
 /**
  * Resolves the playback URI for a track:
@@ -81,8 +102,8 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
   const fastDl = !track._skipLocal ? findDownloadedTrackFast(track) : { ready: true, match: null };
   const rawTrackUrl = String(track.audioUrl || '').trim();
 
-  // Instant fast-path for online tracks that are NOT in local offline vault (avoids 15+ sequential FileSystem calls)
-  const shouldScanDiskDirs = Boolean(candidateLocal || track.isDownloaded || track.downloaded || fastDl.match);
+  // Instant fast-path for online tracks that are NOT in local offline vault (avoids sequential FileSystem calls)
+  const shouldScanDiskDirs = Boolean(candidateLocal || fastDl.match);
 
   if (!track._skipLocal) {
     if (candidateLocal) {
@@ -91,80 +112,22 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
       if (check?.exists) validLocalUri = check.uri;
     }
 
-    if (!validLocalUri && (!fastDl.ready || fastDl.match)) {
-      try {
-        const match = fastDl.ready
-          ? fastDl.match
-          : await (async () => {
-              const downloadedList = await getDownloadedTracks();
-              if (signal?.aborted || !Array.isArray(downloadedList) || downloadedList.length === 0) return null;
-              const dedupeKey = getTrackDedupeKey(track);
-              const cleanT = (track.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-              const cleanA = (track.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-              return downloadedList.find((item) => {
-                if (!item) return false;
-                const itemId = String(item._id || item.id || '');
-                if (
-                  (trackId && itemId && itemId === trackId) ||
-                  (track.youtubeId && item.youtubeId && track.youtubeId === item.youtubeId) ||
-                  (dedupeKey && getTrackDedupeKey(item) === dedupeKey)
-                ) return true;
-                if (cleanT) {
-                  const iT = (item.title || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-                  const iA = (item.artist || '').toLowerCase().replace(/[/\\?%*:|"<>]/g, '').trim();
-                  if (iT && cleanT === iT && (!cleanA || !iA || cleanA.includes(iA) || iA.includes(cleanA))) return true;
-                }
-                return false;
-              });
-            })();
+    if (!validLocalUri && fastDl.match) {
+      const matchUri = pickLocalUriField(fastDl.match);
+      if (matchUri) {
+        const check = await verifyLocalAudioFile(matchUri);
         if (signal?.aborted) return null;
-        const matchUri = pickLocalUriField(match);
-        if (matchUri) {
-          const check = await verifyLocalAudioFile(matchUri);
-          if (signal?.aborted) return null;
-          if (check?.exists) validLocalUri = check.uri;
-        }
-      } catch (e) {
-        console.warn('[streamResolverHelper] Storage manifest lookup error:', e?.message);
+        if (check?.exists) validLocalUri = check.uri;
       }
     }
 
-    // Immediate direct cloud URL shortcut before scanning 12+ fallback directories if not marked downloaded
-    if (!validLocalUri && !shouldScanDiskDirs && rawTrackUrl.startsWith('/uploads/')) {
-      const directCloudUrl = `${API_BASE_URL}${rawTrackUrl}`;
-      track.resolvedAudioUrl = directCloudUrl;
-      return directCloudUrl;
-    }
-
-    if (!validLocalUri && shouldScanDiskDirs && FileSystem.documentDirectory) {
+    // Direct single candidate check for standard downloaded track without scanning 16 directories
+    if (!validLocalUri && shouldScanDiskDirs && FileSystem.documentDirectory && trackId) {
       const docDir = FileSystem.documentDirectory;
       const baseDir = docDir.endsWith('/') ? docDir : `${docDir}/`;
-      const candidates = [];
-      const dirs = ['rivo_tracks', 'rivo_vault'];
-      if (trackId) {
-        for (const dir of dirs) {
-          for (const ext of ['.mp3', '.m4a', '']) candidates.push(`${baseDir}${dir}/${trackId}${ext}`);
-        }
-      }
-      if (track.youtubeId && track.youtubeId !== trackId) {
-        for (const dir of dirs) {
-          for (const ext of ['.mp3', '.m4a']) candidates.push(`${baseDir}${dir}/${track.youtubeId}${ext}`);
-        }
-      }
-      if (candidateLocal) {
-        const filename = candidateLocal.split('/').pop()?.split('?')[0];
-        if (filename && filename !== trackId) {
-          for (const dir of dirs) candidates.push(`${baseDir}${dir}/${filename}`);
-        }
-      }
-
-      for (const cand of candidates) {
-        if (signal?.aborted) return null;
-        const check = await verifyLocalAudioFile(cand);
-        if (check?.exists) {
-          validLocalUri = check.uri;
-          break;
-        }
+      const quickCheck = await verifyLocalAudioFile(`${baseDir}rivo_tracks/${trackId}.mp3`);
+      if (quickCheck?.exists) {
+        validLocalUri = quickCheck.uri;
       }
     }
 
@@ -186,6 +149,16 @@ export const resolveTrackPlaybackUri = async ({ track, isVocalOnly, updateVocalS
       }
       return validLocalUri;
     }
+  }
+
+  // 0ms instant cloud URL fast-path for all cloud hosted tracks (uploads/cloud/...)
+  const isCloudPath = rawTrackUrl.startsWith('/uploads/') || rawTrackUrl.startsWith('uploads/') || rawTrackUrl.includes('/uploads/');
+  if (isCloudPath) {
+    const fullCloudUrl = rawTrackUrl.startsWith('http')
+      ? rawTrackUrl
+      : `${API_BASE_URL}${rawTrackUrl.startsWith('/') ? rawTrackUrl : '/' + rawTrackUrl}`;
+    track.resolvedAudioUrl = fullCloudUrl;
+    return fullCloudUrl;
   }
 
   if (track.isDownloaded || track.downloaded || candidateLocal) {

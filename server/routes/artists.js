@@ -60,30 +60,35 @@ async function getCachedOrFetchArtists(forceRefresh = false) {
   for (const t of allTracks) {
     if (!t.artist && !t.title) continue;
     const quranReciter = detectQuranReciter(t.title, t.artist, t.album);
-    const canonical = quranReciter || getCanonicalArtistName(t.artist);
-    if (!canonical) continue;
-    const key = canonical.toLowerCase();
-    if (!artistMap[key]) {
-      const doc = artistDocMap[key];
-      const fixedImg = doc?.cover || doc?.avatar || '';
-      artistMap[key] = {
-        id: key,
-        name: doc?.name || canonical,
-        avatar: fixedImg,
-        image: fixedImg,
-        cover: fixedImg,
-        trackCount: 0,
-        songsCount: 0,
-        albumCount: 0,
-        totalPlays: 0,
-        albums: [],
-        tracks: [],
-        isVerified: Boolean(doc?.isVerified)
-      };
+    const constituentArtists = quranReciter ? [quranReciter] : splitArtistNames(t.artist);
+    if (!constituentArtists.length) continue;
+
+    for (const art of constituentArtists) {
+      const canonical = quranReciter || getCanonicalArtistName(art) || art;
+      if (!canonical) continue;
+      const key = canonical.toLowerCase();
+      if (!artistMap[key]) {
+        const doc = artistDocMap[key];
+        const fixedImg = doc?.cover || doc?.avatar || '';
+        artistMap[key] = {
+          id: key,
+          name: doc?.name || canonical,
+          avatar: fixedImg,
+          image: fixedImg,
+          cover: fixedImg,
+          trackCount: 0,
+          songsCount: 0,
+          albumCount: 0,
+          totalPlays: 0,
+          albums: [],
+          tracks: [],
+          isVerified: Boolean(doc?.isVerified)
+        };
+      }
+      artistMap[key].trackCount++;
+      artistMap[key].songsCount++;
+      artistMap[key].totalPlays += (Number(t.plays) || 0);
     }
-    artistMap[key].trackCount++;
-    artistMap[key].songsCount++;
-    artistMap[key].totalPlays += (Number(t.plays) || 0);
   }
 
   for (const a of allAlbums) {
@@ -96,12 +101,16 @@ async function getCachedOrFetchArtists(forceRefresh = false) {
     if (trackCount <= 1 || a.releaseType === 'single') continue;
 
     const quranReciter = detectQuranReciter(a.name, a.artist);
-    const canonical = quranReciter || getCanonicalArtistName(a.artist);
-    if (!canonical) continue;
-    const key = canonical.toLowerCase();
-    if (artistMap[key]) {
-      artistMap[key].albumCount++;
-      artistMap[key].albums.push(a);
+    const constituentArtists = quranReciter ? [quranReciter] : splitArtistNames(a.artist);
+
+    for (const art of constituentArtists) {
+      const canonical = quranReciter || getCanonicalArtistName(art) || art;
+      if (!canonical) continue;
+      const key = canonical.toLowerCase();
+      if (artistMap[key]) {
+        artistMap[key].albumCount++;
+        artistMap[key].albums.push(a);
+      }
     }
   }
 
@@ -228,6 +237,38 @@ router.get('/:name', async (req, res) => {
       ...t
     }));
 
+    // Partition albums into Full Albums and EPs
+    const fullAlbums = albums.filter(a => {
+      const explicitCount = Number(a.trackCount || 0);
+      const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const count = explicitCount > 0 ? explicitCount : arrCount;
+      const name = String(a.name || '').toLowerCase();
+      if (a.releaseType === 'ep' || name.endsWith('- ep') || name.endsWith('(ep)')) return false;
+      return a.releaseType === 'album' || count > 6;
+    });
+
+    const eps = albums.filter(a => {
+      const explicitCount = Number(a.trackCount || 0);
+      const arrCount = Array.isArray(a.trackIds) ? a.trackIds.length : (Array.isArray(a.tracks) ? a.tracks.length : 0);
+      const count = explicitCount > 0 ? explicitCount : arrCount;
+      const name = String(a.name || '').toLowerCase();
+      if (a.releaseType === 'album' && !name.endsWith('- ep') && !name.endsWith('(ep)') && count > 6) return false;
+      return a.releaseType === 'ep' || name.endsWith('- ep') || name.endsWith('(ep)') || (count >= 2 && count <= 6);
+    });
+
+    // Partition tracks: Top tracks, Singles, and Collaborations/Features
+    const topTracks = [...formattedTracks].sort((a, b) => (Number(b.plays) || 0) - (Number(a.plays) || 0));
+
+    const singles = formattedTracks.filter(t => {
+      const alb = String(t.album || '').trim().toLowerCase();
+      return !alb || alb === 'single' || alb === 'singles' || alb.endsWith('(single)') || alb.endsWith('- single');
+    });
+
+    const collaborations = formattedTracks.filter(t => {
+      const subArtists = splitArtistNames(t.artist);
+      return subArtists.length > 1 || (Array.isArray(t.featuredArtists) && t.featuredArtists.length > 0);
+    });
+
     let bio = artistDoc?.bio || '';
     if (!bio || !bio.trim()) {
       const isQuran = Boolean(detectQuranReciter(canonicalName || rawName) || tracks.some(t => t.isQuran));
@@ -257,7 +298,12 @@ router.get('/:name', async (req, res) => {
       albumCount: albums.length,
       totalPlays: tracks.reduce((sum, t) => sum + (Number(t.plays) || 0), 0),
       tracks: formattedTracks,
-      albums
+      topTracks: topTracks.slice(0, 50),
+      albums,
+      fullAlbums,
+      eps,
+      singles,
+      collaborations
     };
 
     artistProfileCache.set(cacheKey, { data: artistData, timestamp: Date.now() });

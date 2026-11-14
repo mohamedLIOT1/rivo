@@ -190,6 +190,62 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
   const banner = remoteData?.banner || initialArtist?.banner || '';
   const isVerified = Boolean(remoteData?.isVerified || initialArtist?.isVerified);
 
+  // Helper release classifier
+  const getAlbumType = (album) => {
+    if (album?.releaseType) return album.releaseType.toLowerCase();
+    const name = String(album?.name || album?.title || '').toLowerCase().trim();
+    const count = Number(album?.trackCount || (Array.isArray(album?.trackIds) ? album.trackIds.length : 0));
+    if (name.endsWith('- single') || name.endsWith('(single)') || count === 1) return 'single';
+    if (name.endsWith('- ep') || name.endsWith('(ep)') || (count >= 2 && count <= 6)) return 'ep';
+    return 'album';
+  };
+
+  // 1. Top Tracks (Most listened on server)
+  const topTracks = useMemo(() => {
+    if (remoteData?.topTracks && Array.isArray(remoteData.topTracks) && remoteData.topTracks.length > 0) {
+      return remoteData.topTracks;
+    }
+    return [...artistTracks].sort((a, b) => (Number(b.plays) || 0) - (Number(a.plays) || 0));
+  }, [remoteData, artistTracks]);
+
+  // 2. Full Albums (> 6 tracks)
+  const fullAlbums = useMemo(() => {
+    if (remoteData?.fullAlbums && Array.isArray(remoteData.fullAlbums) && remoteData.fullAlbums.length > 0) {
+      return remoteData.fullAlbums;
+    }
+    return artistAlbums.filter(a => getAlbumType(a) === 'album');
+  }, [remoteData, artistAlbums]);
+
+  // 3. EPs (2 - 6 tracks)
+  const eps = useMemo(() => {
+    if (remoteData?.eps && Array.isArray(remoteData.eps) && remoteData.eps.length > 0) {
+      return remoteData.eps;
+    }
+    return artistAlbums.filter(a => getAlbumType(a) === 'ep');
+  }, [remoteData, artistAlbums]);
+
+  // 4. Singles (1 track)
+  const singles = useMemo(() => {
+    if (remoteData?.singles && Array.isArray(remoteData.singles) && remoteData.singles.length > 0) {
+      return remoteData.singles;
+    }
+    return artistAlbums.filter(a => getAlbumType(a) === 'single');
+  }, [remoteData, artistAlbums]);
+
+  // 5. Collaborations / Features ("Appears On")
+  const collaborations = useMemo(() => {
+    if (remoteData?.collaborations && Array.isArray(remoteData.collaborations) && remoteData.collaborations.length > 0) {
+      return remoteData.collaborations;
+    }
+    return artistTracks.filter(t => {
+      const artList = Array.isArray(t.artists) && t.artists.length > 0 ? t.artists : (t.artist ? t.artist.split(/[,&]/) : []);
+      const featList = Array.isArray(t.featuredArtists) ? t.featuredArtists : [];
+      const hasFeat = featList.some(f => f.toLowerCase().trim() === artistKey);
+      const isMulti = artList.length > 1 && artList.some(a => a.toLowerCase().trim() === artistKey);
+      return hasFeat || isMulti;
+    });
+  }, [remoteData, artistTracks, artistKey]);
+
   return {
     artistName,
     rawArtistName,
@@ -197,6 +253,11 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
     aliasNote,
     artistTracks,
     artistAlbums,
+    topTracks,
+    fullAlbums,
+    eps,
+    singles,
+    collaborations,
     isQuran,
     totalPlays,
     bio,

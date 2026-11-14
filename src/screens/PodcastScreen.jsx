@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { Search, Radio, Sparkles, Disc, Flame } from 'lucide-react';
 import { useTranslation } from '../context/PreferencesContext';
 import { useAudioPlayer } from '../context/AudioContext';
+import { API_BASE_URL } from '../config';
 import { buildPodcastSeedQueue, isPodcastContent, getPodcastCategory } from '../utils/podcastUtils';
 
 import PodcastCategoriesBar from '../components/podcast/PodcastCategoriesBar';
@@ -26,22 +27,70 @@ export default function PodcastScreen({
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
+  const [backendShows, setBackendShows] = useState([]);
+
+  // Fetch official podcast shows from backend API
+  React.useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/api/podcasts/shows`)
+      .then(r => r.json())
+      .then(data => {
+        if (active && data.success && Array.isArray(data.shows)) {
+          setBackendShows(data.shows);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const realPodcastEpisodes = useMemo(() => {
     const src = Array.isArray(propTracks) && propTracks.length > 0 ? propTracks : (audio?.tracks || []);
-    return src
+    const local = src
       .filter((tr) => isPodcastContent(tr))
       .map((tr) => ({
         ...tr,
         category: tr.podcastCategory || getPodcastCategory(tr),
       }));
-  }, [propTracks, audio?.tracks]);
+
+    const backendEpisodes = backendShows.flatMap(s => (s.episodes || []).map(ep => ({
+      ...ep,
+      artist: ep.host || s.host,
+      album: s.title,
+      coverUrl: ep.cover || s.cover,
+      cover: ep.cover || s.cover,
+      isPodcast: true
+    })));
+
+    return [...backendEpisodes, ...local];
+  }, [propTracks, audio?.tracks, backendShows]);
 
   const realPodcastShows = useMemo(() => {
-    if (realPodcastEpisodes.length === 0) return [];
     const map = new Map();
+    // 1. Add backend shows
+    backendShows.forEach(s => {
+      map.set(s.id, {
+        id: s.id,
+        name: s.title,
+        title: s.title,
+        creator: s.host,
+        category: s.category || 'culture',
+        cover: s.cover,
+        description: s.description,
+        episodes: (s.episodes || []).map(ep => ({
+          ...ep,
+          artist: ep.host || s.host,
+          album: s.title,
+          coverUrl: ep.cover || s.cover,
+          cover: ep.cover || s.cover,
+          isPodcast: true
+        }))
+      });
+    });
+
+    // 2. Add local shows from tracks if any
     for (let i = 0; i < realPodcastEpisodes.length; i++) {
       const ep = realPodcastEpisodes[i];
+      if (ep.showId && map.has(ep.showId)) continue;
       const showName = String(ep.album || ep.artist || '').trim();
       if (!showName) continue;
       const key = showName.toLowerCase();
@@ -55,12 +104,10 @@ export default function PodcastScreen({
           cover: ep.coverUrl || ep.cover || null,
           episodes: [ep],
         });
-      } else {
-        map.get(key).episodes.push(ep);
       }
     }
-    return Array.from(map.values()).filter((s) => s.episodes.length >= 2);
-  }, [realPodcastEpisodes]);
+    return Array.from(map.values());
+  }, [backendShows, realPodcastEpisodes]);
 
   // Play a podcast episode and set seed queue exclusively with other podcasts
   const handlePlayEpisode = useCallback((episode, customQueue = null) => {

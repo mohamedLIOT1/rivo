@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const TrackSchema = new mongoose.Schema({
   title: { type: String, required: true },
   artist: { type: String, required: true },
+  primaryArtist: { type: String, index: true },
+  artists: [{ type: String, index: true }],
+  featuredArtists: [{ type: String, index: true }],
   album: String,
   cover: String,
   audioUrl: { type: String, required: true },
@@ -48,6 +51,9 @@ const TrackSchema = new mongoose.Schema({
 
 TrackSchema.index({ title: 1, artist: 1 });
 TrackSchema.index({ artist: 1, plays: -1 });
+TrackSchema.index({ primaryArtist: 1, plays: -1 });
+TrackSchema.index({ artists: 1, plays: -1 });
+TrackSchema.index({ featuredArtists: 1, plays: -1 });
 TrackSchema.index({ artist: 1, views: -1 });
 TrackSchema.index({ artist: 1, createdAt: -1 });
 TrackSchema.index({ album: 1, createdAt: -1 });

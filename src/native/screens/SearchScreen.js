@@ -9,6 +9,7 @@ import {
   FlatList,
   RefreshControl,
   useWindowDimensions,
+  Dimensions,
   ActivityIndicator,
   Image,
   Platform,
@@ -40,9 +41,15 @@ import ArtistDetailModal from '../components/ArtistDetailModal';
 import UserDetailModal from '../components/UserDetailModal';
 import SongRadarModal from '../components/SongRadarModal';
 import { isQuranContent } from '../../utils/quranUtils';
-import { splitArtists, getCanonicalArtistName, getArtistAliases } from '../../utils/artistUtils.jsx';
-import { getExpandedSearchTerms } from '../../utils/searchSynonyms';
 import { normalizeCoverUri } from '../utils/coverUtils';
+import { useNativeSearchArtists } from '../hooks/useNativeSearchArtists';
+import {
+  prepareSearchContext,
+  matchArtistBilingual,
+  matchTrackBilingual,
+  matchAlbumBilingual,
+} from '../utils/nativeSearchMatcher';
+import { searchMusicOnline } from '../../utils/searchEngine';
 
 const SearchPersonCard = React.memo(function SearchPersonCard({ user, isHorizontal, isDark, rtlTextStyle, onPress }) {
   const initial = (user.name || 'U').charAt(0).toUpperCase();
@@ -166,14 +173,16 @@ const DISPENSARY_GENRES = [
 ];
 
 function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlbum, onSelectArtist, initialQuery = '', initialFilter = 'all', onQueryChange }) {
-  const { width } = useWindowDimensions();
-  const numColumns = width >= 1024 ? 5 : width >= 768 ? 4 : width >= 600 ? 3 : 2;
+  const windowDims = useWindowDimensions();
+  const screenDims = Dimensions.get('window');
+  const safeWidth = Math.max(320, windowDims?.width || screenDims?.width || 375);
+  const numColumns = safeWidth >= 1024 ? 5 : safeWidth >= 768 ? 4 : safeWidth >= 600 ? 3 : 2;
   const albumGap = 10;
   const albumPadding = 28;
-  const albumCardWidth = Math.floor((width - albumPadding - (numColumns - 1) * albumGap) / numColumns);
+  const albumCardWidth = Math.max(80, Math.floor((safeWidth - albumPadding - (numColumns - 1) * albumGap) / numColumns));
 
-  const genreColumns = width >= 1024 ? 4 : width >= 600 ? 3 : 2;
-  const genreCardWidth = Math.floor((width - albumPadding - (genreColumns - 1) * albumGap) / genreColumns);
+  const genreColumns = safeWidth >= 1024 ? 4 : safeWidth >= 600 ? 3 : 2;
+  const genreCardWidth = Math.max(100, Math.floor((safeWidth - albumPadding - (genreColumns - 1) * albumGap) / genreColumns));
 
   const { playTrack, togglePlay, currentTrack, isPlaying, isLoading, tracks: audioTracks, downloadedTracks = [] } = useAudioPlayer();
   const { tracks: userTracks, albums: userAlbums = [], likedTrackIds = [], toggleLikeTrack, fetchPublicTracks } = useUser();
@@ -234,11 +243,15 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     ? (Array.isArray(downloadedTracks) ? downloadedTracks : [])
     : ((Array.isArray(userTracks) && userTracks.length > 0) ? userTracks : (Array.isArray(audioTracks) ? audioTracks : []));
 
+  const { allArtists } = useNativeSearchArtists({ allTracks, allAlbums: userAlbums });
+  const searchCtx = useMemo(() => prepareSearchContext(query), [query]);
+  const hasSearch = Boolean(query.trim() || selectedGenre);
+
   useEffect(() => {
     setVisibleSongLimit(25);
   }, [query, activeFilter]);
 
-  // Live query to server /api/search when connected
+  // Live query for remote/external tracks when connected (never blocks instant local search)
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
@@ -250,25 +263,51 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     }
 
     const controller = new AbortController();
-    setIsSearchingRemote(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/api/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.success && Array.isArray(data.tracks)) {
-            setRemoteResults(data.tracks);
+        setIsSearchingRemote(true);
+        const resolvedCanonical = searchCtx.queryCanonical;
+
+        // 1. If query is a canonical artist, fetch full tracklist from /api/artists/:name
+        let artistTracks = [];
+        if (resolvedCanonical) {
+          try {
+            const artRes = await fetch(`${API_BASE_URL}/api/artists/${encodeURIComponent(resolvedCanonical)}`, {
+              signal: controller.signal,
+            });
+            if (artRes.ok) {
+              const artData = await artRes.json();
+              if (artData?.success && Array.isArray(artData?.artist?.tracks)) {
+                artistTracks = artData.artist.tracks;
+              }
+            }
+          } catch {}
+        }
+
+        // 2. Query online music search resolver (external streams)
+        let onlineTracks = [];
+        try {
+          onlineTracks = await searchMusicOnline(trimmed);
+        } catch {}
+
+        if (!controller.signal.aborted) {
+          const combined = [...artistTracks, ...onlineTracks];
+          if (combined.length > 0) {
+            setRemoteResults(combined);
           }
         }
-      } catch {}
-      setIsSearchingRemote(false);
+      } catch {} finally {
+        if (!controller.signal.aborted) {
+          setIsSearchingRemote(false);
+        }
+      }
     }, 450);
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
       controller.abort();
     };
-  }, [query, isOffline, activeFilter]);
+  }, [query, isOffline, activeFilter, searchCtx.queryCanonical]);
 
   // Live query for people & listeners (fast 150ms debounce)
   useEffect(() => {
@@ -311,19 +350,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     };
   }, [query, activeFilter, isOffline]);
 
-  const normalizeFuzzy = (str) => {
-    if (!str || typeof str !== 'string') return '';
-    return str
-      .toLowerCase()
-      .replace(/[أإآ]/g, 'ا')
-      .replace(/ة/g, 'ه')
-      .replace(/ى/g, 'ي')
-      .replace(/[\u064B-\u065F\u0670]/g, '')
-      .replace(/[-_.\s/\\,:+()~`'"!?#@*&^%$[\]{}|<>]+/g, '')
-      .trim();
-  };
-
-  // Matching songs
+  // Matching songs (instant 0-lag local filter + merged remote)
   const filteredTracks = useMemo(() => {
     let localResult = allTracks || [];
 
@@ -342,50 +369,17 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
       }
     }
 
-    if (query.trim()) {
-      const q = query.toLowerCase().trim();
-      const fq = normalizeFuzzy(q);
-      const expandedTerms = getExpandedSearchTerms(query.trim());
-
-      localResult = localResult.filter((t) => {
-        const titleLower = (t.title || '').toLowerCase();
-        const artistLower = (t.artist || '').toLowerCase();
-        const albumLower = (t.album || '').toLowerCase();
-        const titleFuzzy = normalizeFuzzy(t.title);
-        const artistFuzzy = normalizeFuzzy(t.artist);
-        const albumFuzzy = normalizeFuzzy(t.album);
-
-        if (
-          titleLower.includes(q) ||
-          artistLower.includes(q) ||
-          albumLower.includes(q) ||
-          (fq && titleFuzzy.includes(fq)) ||
-          (fq && artistFuzzy.includes(fq)) ||
-          (fq && albumFuzzy.includes(fq))
-        ) {
-          return true;
-        }
-
-        // Check canonical aliases of artist
-        const artistNames = splitArtists(t.artist);
-        const allArtistAliases = artistNames.flatMap((a) => {
-          const can = getCanonicalArtistName(a);
-          return [a.toLowerCase(), ...(can ? getArtistAliases(can).map((al) => al.toLowerCase()) : [])];
-        });
-
-        return expandedTerms.some((term) => {
-          const termFz = normalizeFuzzy(term);
-          if (titleLower.includes(term) || (termFz && titleFuzzy.includes(termFz))) return true;
-          if (artistLower.includes(term) || (termFz && artistFuzzy.includes(termFz))) return true;
-          if (albumLower.includes(term) || (termFz && albumFuzzy.includes(termFz))) return true;
-          return allArtistAliases.some((al) => al.includes(term) || (termFz && normalizeFuzzy(al).includes(termFz)));
-        });
-      });
+    if (searchCtx.hasSearch) {
+      localResult = localResult.filter((t) => matchTrackBilingual(t, searchCtx));
     }
 
     // Merge local and remote results (deduplicating)
+    if (!remoteResults || remoteResults.length === 0) {
+      return localResult;
+    }
+
     const combined = [...localResult];
-    const seenIds = new Set(localResult.map(t => String(t._id || t.id || t.audioUrl)));
+    const seenIds = new Set(localResult.map((t) => String(t._id || t.id || t.audioUrl)));
 
     for (const r of remoteResults) {
       const rid = String(r._id || r.id || r.audioUrl);
@@ -396,63 +390,18 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     }
 
     return combined;
-  }, [allTracks, query, selectedGenre, remoteResults]);
+  }, [allTracks, selectedGenre, searchCtx, remoteResults]);
 
-  // Matching Artists
+  // Matching Artists (all database artists when empty/filter, or instant bilingual match)
   const matchingArtists = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase().trim();
-    const fq = normalizeFuzzy(q);
-    const expandedTerms = getExpandedSearchTerms(query.trim());
-    const map = new Map();
+    if (!searchCtx.hasSearch) {
+      return activeFilter === 'artists' ? allArtists : [];
+    }
+    return allArtists.filter((a) => matchArtistBilingual(a, searchCtx));
+  }, [allArtists, searchCtx, activeFilter]);
 
-    (allTracks || []).forEach((t) => {
-      if (!t.artist || isQuranContent(t)) return;
-      const artistNames = splitArtists(t.artist);
-      artistNames.forEach((rawName) => {
-        const canonical = getCanonicalArtistName(rawName) || (rawName || '').trim();
-        if (!canonical) return;
-        const key = canonical.toLowerCase();
-        if (!map.has(key)) {
-          map.set(key, {
-            name: canonical,
-            count: 1,
-            cover: t.coverUrl || t.cover,
-            aliases: getArtistAliases(canonical),
-            tracks: [t],
-          });
-        } else {
-          const entry = map.get(key);
-          entry.count += 1;
-          entry.tracks.push(t);
-          if (!entry.cover && (t.coverUrl || t.cover)) {
-            entry.cover = t.coverUrl || t.cover;
-          }
-        }
-      });
-    });
-
-    return Array.from(map.values()).filter((a) => {
-      const artName = (a.name || '').toLowerCase();
-      const normArtName = normalizeFuzzy(a.name);
-      const aliases = (a.aliases || []).map((al) => al.toLowerCase());
-      const normAliases = (a.aliases || []).map((al) => normalizeFuzzy(al));
-
-      if (artName.includes(q) || (fq && normArtName.includes(fq))) return true;
-      if (aliases.some((al, idx) => al.includes(q) || (fq && normAliases[idx].includes(fq)))) return true;
-
-      return expandedTerms.some((term) => {
-        const normTerm = normalizeFuzzy(term);
-        if (artName.includes(term) || (normTerm && normArtName.includes(normTerm))) return true;
-        return aliases.some((al, idx) => al.includes(term) || (normTerm && normAliases[idx].includes(normTerm)));
-      });
-    });
-  }, [allTracks, query]);
-
-  // Matching Albums (all albums when query is empty)
+  // Matching Albums (all albums when empty, or instant bilingual match)
   const matchingAlbums = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    const fq = normalizeFuzzy(q);
     const map = new Map();
 
     // From DB albums
@@ -492,18 +441,12 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     });
 
     const all = Array.from(map.values());
-    if (!q) return all;
+    if (!searchCtx.hasSearch) {
+      return activeFilter === 'albums' ? all : (query.trim() ? [] : all);
+    }
 
-    return all.filter(
-      (a) =>
-        (a.name && a.name.toLowerCase().includes(q)) ||
-        (a.artist && a.artist.toLowerCase().includes(q)) ||
-        (fq && normalizeFuzzy(a.name).includes(fq)) ||
-        (fq && normalizeFuzzy(a.artist).includes(fq))
-    );
-  }, [userAlbums, allTracks, query]);
-
-  const hasSearch = query.trim().length > 0 || Boolean(selectedGenre);
+    return all.filter((a) => matchAlbumBilingual(a, searchCtx));
+  }, [userAlbums, allTracks, searchCtx, activeFilter, query]);
 
   const handlePlaySong = useCallback((track) => {
     const tId = String(track?._id || track?.id || '');
@@ -589,12 +532,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
     />
   ), [isDark, rtlTextStyle, handlePressArtist]);
 
+  const artistNumColumns = safeWidth >= 768 ? 4 : 3;
   const artistGridCardWidth = useMemo(() => {
-    const cols = width >= 768 ? 4 : 3;
-    return Math.floor((width - 28 - (cols - 1) * 10) / cols);
-  }, [width]);
-
-  const artistNumColumns = width >= 768 ? 4 : 3;
+    const cols = safeWidth >= 768 ? 4 : 3;
+    return Math.max(80, Math.floor((safeWidth - 28 - (cols - 1) * 10) / cols));
+  }, [safeWidth]);
 
   const renderGridArtistItem = useCallback(({ item }) => (
     <SearchArtistCard
@@ -939,7 +881,7 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
           activeFilter === 'people'
             ? userResults
             : activeFilter === 'artists'
-              ? (hasSearch ? matchingArtists : [])
+              ? matchingArtists
               : activeFilter === 'albums'
                 ? matchingAlbums
                 : songData
@@ -951,13 +893,11 @@ function SearchScreen({ onTrackAction, onOpenChat, onOpenFullPlayer, onSelectAlb
               ? artistNumColumns
               : 1
         }
-        columnWrapperStyle={
-          activeFilter === 'albums' && numColumns > 1
-            ? { gap: 10, marginBottom: 10 }
-            : activeFilter === 'artists' && artistNumColumns > 1
-              ? { gap: 10 }
-              : undefined
-        }
+        {...((activeFilter === 'albums' && numColumns > 1)
+          ? { columnWrapperStyle: { gap: 10, marginBottom: 10 } }
+          : (activeFilter === 'artists' && artistNumColumns > 1)
+            ? { columnWrapperStyle: { gap: 10 } }
+            : {})}
         keyExtractor={
           activeFilter === 'people'
             ? personKeyExtractor

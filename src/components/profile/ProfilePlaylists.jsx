@@ -56,7 +56,11 @@ export default function ProfilePlaylists({
                     {pl.cover ? (
                       <img src={pl.cover} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <Disc size={20} className={isDark ? "text-white" : "text-[#0b1110]"} />
+                      <img 
+                        src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400" 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                      />
                     )}
                   </div>
                   <div className="truncate">

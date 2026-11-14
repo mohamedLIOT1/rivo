@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.43",
+  "version": "2.4.46",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث v2.4.43 • إصلاح زر عرض كل الألبومات وتصفح جميع الألبومات بسلاسة، ومزامنة مكتبة الألبومات",
-  "notesEn": "Instant in-app OTA update (5.12 MB) • No reinstall required • Performance improvements and bug fixes.",
-  "bundleSize": 5365049,
-  "sizeMb": "5.12 MB",
-  "updatedAt": "2026-11-13T21:05:30.395Z"
+  "notes": "تحديث معماري شامل: دعم الفيتشرز والتعاونات الفنية، وإصلاح اللاج في الهاتف وتصفح المكتبة",
+  "notesEn": "Major architecture update: features & collaborations, mobile performance fix & library filters",
+  "bundleSize": 5392850,
+  "sizeMb": "5.14 MB",
+  "updatedAt": "2026-11-14T09:18:42.264Z"
 }

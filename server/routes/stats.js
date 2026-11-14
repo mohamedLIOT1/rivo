@@ -217,8 +217,9 @@ router.post('/listen', optionalAuth, async (req, res) => {
       }
     }
 
-    // 2. Increment real track plays in Track collection if completed
-    if (isCompleted && trackId) {
+    // 2. The 30-Second Rule: increment track plays if listened >= 30 seconds or completed
+    const isPositiveStream = sec >= 30 || isCompleted;
+    if (isPositiveStream && trackId) {
       await Track.updateOne(
         { $or: [{ _id: mongoose.isValidObjectId(trackId) ? trackId : null }, { id: trackId }] },
         { $inc: { plays: 1 } }
@@ -227,10 +228,76 @@ router.post('/listen', optionalAuth, async (req, res) => {
 
     res.json({
       success: true,
+      isPositiveStream,
       totalListeningSeconds: updatedTotalSeconds,
       weeklyListeningSeconds: updatedWeeklySeconds,
       topTrack: updatedTopTrack
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dynamic Real-Time Trending Search Tags
+router.get('/trending', async (req, res) => {
+  try {
+    const [topTracks, topArtists] = await Promise.all([
+      Track.find({ plays: { $gt: 0 }, isQuran: { $ne: true } }, { title: 1, artist: 1, genre: 1, plays: 1 })
+        .sort({ plays: -1 })
+        .limit(12)
+        .lean(),
+      Track.aggregate([
+        { $match: { plays: { $gt: 0 }, isQuran: { $ne: true } } },
+        { $group: { _id: '$artist', totalPlays: { $sum: '$plays' } } },
+        { $sort: { totalPlays: -1 } },
+        { $limit: 8 }
+      ])
+    ]);
+
+    const tags = [];
+    const seen = new Set();
+
+    // Top trending artists
+    for (const a of topArtists) {
+      if (!a._id || typeof a._id !== 'string') continue;
+      const clean = a._id.trim();
+      const lower = clean.toLowerCase();
+      if (!seen.has(lower) && clean.length > 1 && !clean.includes('unknown') && !clean.includes('topic')) {
+        seen.add(lower);
+        tags.push({ label: clean, query: clean, type: 'artist' });
+      }
+    }
+
+    // Top trending genres/tracks
+    for (const t of topTracks) {
+      if (!t.genre) continue;
+      const cleanG = t.genre.trim();
+      const lowerG = cleanG.toLowerCase();
+      if (!seen.has(lowerG) && cleanG.length > 2 && !cleanG.includes('music') && !cleanG.includes('general')) {
+        seen.add(lowerG);
+        tags.push({ label: cleanG, query: cleanG, type: 'genre' });
+      }
+    }
+
+    // Fallbacks if data is sparse
+    const defaultFallbacks = [
+      { label: 'عمرو دياب', query: 'عمرو دياب' },
+      { label: 'ويجز', query: 'ويجز' },
+      { label: 'تامر حسني', query: 'تامر حسني' },
+      { label: 'Cairokee', query: 'Cairokee' },
+      { label: 'Egyptian Trap', query: 'Trap' },
+      { label: 'Abyusif', query: 'Abyusif' },
+      { label: 'Retro Cassette', query: 'Retro' }
+    ];
+
+    for (const f of defaultFallbacks) {
+      if (!seen.has(f.label.toLowerCase()) && tags.length < 10) {
+        seen.add(f.label.toLowerCase());
+        tags.push(f);
+      }
+    }
+
+    res.json({ success: true, trending: tags.slice(0, 10) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

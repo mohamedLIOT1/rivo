@@ -14,6 +14,7 @@ const UserSchema = new mongoose.Schema({
   likedTrackIds: [String],
   followers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   following: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  followedArtists: [{ type: String }],
   playlists: [{
     id: String,
     name: String,

@@ -126,10 +126,10 @@ async function fetchFollowersList(rawId) {
 async function fetchFollowingList(rawId) {
   let target = null;
   if (mongoose.isValidObjectId(rawId)) {
-    target = await User.findById(rawId).select('_id following').lean();
+    target = await User.findById(rawId).select('_id following followedArtists').lean();
   }
   if (!target) {
-    target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('_id following').lean();
+    target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] }).select('_id following followedArtists').lean();
   }
   if (!target) return null;
 
@@ -157,14 +157,50 @@ async function fetchFollowingList(rawId) {
     await User.findByIdAndUpdate(target._id, { $set: { following: followingUsers.map(u => u._id) } }).catch(() => {});
   }
 
-  return followingUsers.map(f => ({
+  const { Album } = require('../../models');
+  const Artist = mongoose.models.Artist || mongoose.model('Artist');
+  const followedArtistNames = Array.isArray(target.followedArtists) ? target.followedArtists : [];
+  let artistDocs = [];
+  if (followedArtistNames.length > 0) {
+    try {
+      artistDocs = await Artist.find({
+        name: { $in: followedArtistNames.map(a => new RegExp(`^${escapeRegex(a)}$`, 'i')) }
+      }).select('id name avatar cover isVerified').lean();
+    } catch {}
+  }
+
+  const artistMap = new Map();
+  artistDocs.forEach(d => artistMap.set(d.name.toLowerCase().trim(), d));
+
+  const formattedArtists = followedArtistNames.map(artName => {
+    const doc = artistMap.get(artName.toLowerCase().trim());
+    const img = doc?.avatar || doc?.cover || '';
+    return {
+      id: doc?.id || artName.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
+      name: doc?.name || artName,
+      avatar: img,
+      image: img,
+      cover: img,
+      isVerified: Boolean(doc?.isVerified),
+      isArtist: true
+    };
+  });
+
+  const formattedUsers = followingUsers.map(f => ({
     id: String(f._id),
     _id: String(f._id),
     name: f.name,
     avatar: f.avatar || '',
     bio: f.bio || '',
-    isVerified: isVerifiedUser(f.name)
+    isVerified: isVerifiedUser(f.name),
+    isArtist: false
   }));
+
+  return {
+    users: formattedUsers,
+    artists: formattedArtists,
+    all: [...formattedUsers, ...formattedArtists]
+  };
 }
 
 const { fetchListeningActivities } = require('./listeningActivityService');

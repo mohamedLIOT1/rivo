@@ -43,7 +43,7 @@ function extractYouTubeId(raw) {
 }
 
 function getAllowedCategories() {
-  const raw = (process.env.CLOUD_MIGRATION_PHASE || 'music').toLowerCase();
+  const raw = (process.env.CLOUD_MIGRATION_PHASE || 'all').toLowerCase();
   if (raw === 'all') return new Set(['music', 'quran', 'podcast']);
   return new Set(raw.split(',').map((s) => s.trim()).filter(Boolean));
 }

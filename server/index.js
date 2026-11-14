@@ -463,6 +463,7 @@ app.use('/api/ai',        require('./routes/ai'));
 app.use('/api/admin',     require('./routes/admin'));
 app.use('/api/recognize', require('./routes/recognize'));
 app.use('/api/image-proxy', require('./routes/imageProxy'));
+app.use('/api/podcasts',   require('./routes/podcasts'));
 
 
 

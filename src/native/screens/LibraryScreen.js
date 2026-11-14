@@ -209,11 +209,14 @@ function LibraryScreen({
   onOpenCreatePlaylist,
   onNavigateOffline,
   onTrackAction,
+  onSelectArtist,
 }) {
   const { width } = useWindowDimensions();
   const effectiveWidth = Math.min(width, 840);
   const numCols = width >= 1024 ? 4 : width >= 768 ? 3 : 2;
   const cardWidth = Math.floor((effectiveWidth - 28 - (numCols - 1) * 10) / numCols);
+
+  const [activeFilter, setActiveFilter] = useState('all'); // 'all' | 'playlists' | 'artists' | 'quran' | 'podcasts'
 
   const {
     playTrack,
@@ -248,6 +251,7 @@ function LibraryScreen({
     syncUserData,
     addToPlaylist,
     deletePlaylist,
+    followedArtists = [],
     token,
   } = useUser();
   const { showToast } = useToast();
@@ -1310,6 +1314,51 @@ function LibraryScreen({
     setSelectedView(pl);
   }, []);
 
+  const filteredPlaylists = useMemo(() => {
+    if (activeFilter === 'quran') {
+      return (playlists || []).filter(p => isQuranContent(p) || p.isQuran || (p.name && /قرآن|سورة|مصحف|تلاوة|قراء|reciter/i.test(p.name)));
+    }
+    if (activeFilter === 'playlists') {
+      return (playlists || []).filter(p => !isQuranContent(p) && !p.isQuran && !(p.name && /قرآن|سورة|مصحف|تلاوة|قراء/i.test(p.name)));
+    }
+    if (activeFilter === 'podcasts') {
+      return (playlists || []).filter(p => p.isPodcast || (p.name && /بودكاست|podcast/i.test(p.name)));
+    }
+    return playlists || [];
+  }, [playlists, activeFilter]);
+
+  const renderFollowedArtistItem = useCallback(({ item: artistName }) => (
+    <TouchableOpacity
+      style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth, alignItems: 'center', paddingVertical: 14 }]}
+      activeOpacity={0.85}
+      onPress={() => onSelectArtist && onSelectArtist(artistName)}
+    >
+      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#17a398', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1.5, borderColor: '#082621' }}>
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#082621' }}>
+          {(artistName || 'A').charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }, { textAlign: 'center', fontWeight: '900' }]} numberOfLines={1}>
+        {artistName}
+      </Text>
+      <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', marginTop: 2, fontFamily: 'monospace' }}>
+        FOLLOWING
+      </Text>
+    </TouchableOpacity>
+  ), [cardWidth, isDark, onSelectArtist]);
+
+  const renderFollowedArtistsEmpty = useCallback(() => (
+    <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { marginTop: 20 }]}>
+      <Users size={36} color={colors.teal} />
+      <Text style={[styles.emptyTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+        {isRTL ? 'لم تتابع أي فنانين بعد' : 'No followed artists yet'}
+      </Text>
+      <Text style={[styles.emptySub, !isDark && { color: '#57534e' }, rtlTextStyle]}>
+        {isRTL ? 'تابع فنانيك المفضلين من صفحة الفنان للوصول إليهم هنا بضغطة واحدة!' : 'Follow your favorite artists to easily find and open their catalog here!'}
+      </Text>
+    </View>
+  ), [isDark, colors, isRTL, rtlTextStyle]);
+
   const renderPlaylistItem = useCallback(({ item: playlist }) => (
     <PlaylistItemGridCard
       key={playlist._id || playlist.id}
@@ -1427,19 +1476,64 @@ function LibraryScreen({
             </View>
           </View>
         ) : (
-          <View style={styles.headerMainRow}>
-            <View>
-              <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
-                {isRTL ? 'مكتبتك الموسيقية' : 'YOUR LIBRARY'}
-              </Text>
-              <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
-                {isRTL ? 'قوائم التشغيل والتنزيلات' : 'PLAYLISTS & DOWNLOADS'}
-              </Text>
+          <View>
+            <View style={styles.headerMainRow}>
+              <View>
+                <Text style={[styles.headerTitle, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                  {isRTL ? 'مكتبتك الموسيقية' : 'YOUR LIBRARY'}
+                </Text>
+                <Text style={[styles.headerSub, !isDark && { color: '#0f756d' }, isRTL && { textAlign: 'right' }, rtlTextStyle]}>
+                  {isRTL ? 'قوائم التشغيل والتنزيلات' : 'PLAYLISTS & DOWNLOADS'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.newPlaylistBtn} onPress={onOpenCreatePlaylist}>
+                <Plus size={16} color={colors.ink} strokeWidth={3} />
+                <Text style={[styles.newPlaylistBtnText, rtlTextStyle]}>{isRTL ? 'جديدة' : 'NEW'}</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.newPlaylistBtn} onPress={onOpenCreatePlaylist}>
-              <Plus size={16} color={colors.ink} strokeWidth={3} />
-              <Text style={[styles.newPlaylistBtnText, rtlTextStyle]}>{isRTL ? 'جديدة' : 'NEW'}</Text>
-            </TouchableOpacity>
+
+            {/* Library Category Filter Pills */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginTop: 10, marginBottom: 2 }}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
+            >
+              {[
+                { id: 'all', label: isRTL ? 'الكل' : 'All' },
+                { id: 'playlists', label: isRTL ? 'قوائم الموسيقى' : 'Playlists' },
+                { id: 'artists', label: isRTL ? `المغنيين (${followedArtists.length})` : `Artists (${followedArtists.length})` },
+                { id: 'quran', label: isRTL ? 'القرآن الكريم' : 'Quran' },
+                { id: 'podcasts', label: isRTL ? 'بودكاست' : 'Podcasts' },
+              ].map((f) => {
+                const active = activeFilter === f.id;
+                return (
+                  <TouchableOpacity
+                    key={f.id}
+                    onPress={() => setActiveFilter(f.id)}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 14,
+                      backgroundColor: active ? '#17a398' : (isDark ? '#141d1b' : '#ede5d3'),
+                      borderWidth: 1.2,
+                      borderColor: active ? '#17a398' : (isDark ? '#263330' : '#d6cbb5'),
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '900',
+                        color: active ? '#082621' : (isDark ? '#e4e4e7' : '#0b1110'),
+                        fontFamily: Platform.OS === 'ios' ? 'Courier-Bold' : 'monospace',
+                      }}
+                    >
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         )}
       </View>
@@ -1759,19 +1853,19 @@ function LibraryScreen({
         />
       ) : (
         <FlatList
-          key={`playlists_list_${numCols}`}
-          data={playlists}
+          key={`library_${activeFilter}_${numCols}`}
+          data={activeFilter === 'artists' ? followedArtists : filteredPlaylists}
           numColumns={numCols}
-          keyExtractor={(item, idx) => String(item._id || item.id || idx)}
-          renderItem={renderPlaylistItem}
-          ListHeaderComponent={renderPlaylistsHeader}
-          ListEmptyComponent={renderPlaylistsEmpty}
+          keyExtractor={(item, idx) => (activeFilter === 'artists' ? `art_${item || idx}` : String(item._id || item.id || idx))}
+          renderItem={activeFilter === 'artists' ? renderFollowedArtistItem : renderPlaylistItem}
+          ListHeaderComponent={activeFilter === 'artists' ? null : renderPlaylistsHeader}
+          ListEmptyComponent={activeFilter === 'artists' ? renderFollowedArtistsEmpty : renderPlaylistsEmpty}
           columnWrapperStyle={numCols > 1 ? { gap: 10, marginBottom: 10 } : undefined}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          initialNumToRender={Platform.OS === 'android' ? 5 : 10}
-          maxToRenderPerBatch={Platform.OS === 'android' ? 5 : 8}
-          windowSize={Platform.OS === 'android' ? 3 : 7}
+          initialNumToRender={Platform.OS === 'android' ? 6 : 10}
+          maxToRenderPerBatch={Platform.OS === 'android' ? 6 : 8}
+          windowSize={Platform.OS === 'android' ? 3 : 5}
           updateCellsBatchingPeriod={Platform.OS === 'android' ? 50 : 30}
           removeClippedSubviews={Platform.OS === 'android'}
           refreshControl={

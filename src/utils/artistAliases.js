@@ -236,3 +236,27 @@ export function getCanonicalArtist(name) {
 }
 
 export const resolveCanonicalArtist = getCanonicalArtist;
+
+// Precomputed canonical -> Set of aliases for instant O(1) lookup
+const CANONICAL_TO_ALIASES_MAP = new Map();
+for (const [alias, canonical] of Object.entries(CANONICAL_ARTIST_MAP)) {
+  const cKey = canonical.toLowerCase().trim();
+  if (!CANONICAL_TO_ALIASES_MAP.has(cKey)) {
+    CANONICAL_TO_ALIASES_MAP.set(cKey, new Set([cKey]));
+  }
+  CANONICAL_TO_ALIASES_MAP.get(cKey).add(alias.toLowerCase().trim());
+}
+
+/**
+ * Returns all known aliases (Arabic, English, Franco, nicknames) for an artist.
+ */
+export function getAllArtistAliases(name) {
+  if (!name || typeof name !== 'string') return [];
+  const canonical = getCanonicalArtist(name).toLowerCase().trim();
+  const set = CANONICAL_TO_ALIASES_MAP.get(canonical);
+  if (set) {
+    return Array.from(set);
+  }
+  return [name.toLowerCase().trim()];
+}
+

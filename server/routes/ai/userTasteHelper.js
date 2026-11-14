@@ -176,6 +176,17 @@ async function fetchUserTasteProfile(userId, clientHints = {}) {
     if (fu?.topTrack?.artist) addArtistWeight(topArtistWeights, fu.topTrack.artist, 10);
   }
 
+  const userFollowed = Array.isArray(user.followedArtists) ? user.followedArtists : [];
+  const followedArtistList = [...new Set([...(guest.followedArtists || []), ...userFollowed])];
+  const followedArtistSet = new Set();
+  for (const fa of followedArtistList) {
+    if (fa) {
+      const norm = getEffectiveArtist({ artist: fa });
+      followedArtistSet.add(norm);
+      addArtistWeight(topArtistWeights, fa, 35);
+    }
+  }
+
   const topGenresRanked = Object.entries(genreTotals)
     .filter(([g]) => g && !NON_MUSIC_GENRE_RE.test(g))
     .map(([genre, seconds]) => ({ genre, seconds }))
@@ -192,8 +203,8 @@ async function fetchUserTasteProfile(userId, clientHints = {}) {
     likedTrackIds,
     likedTrackIdSet,
     playlistTrackIdSet: new Set(playlistTrackIds),
-    followedArtists: guest.followedArtists,
-    followedArtistSet: guest.followedArtistSet,
+    followedArtists: followedArtistList,
+    followedArtistSet,
     topTrack: user.topTrack || null,
     recentHistory,
     recentTrackIdSet,
@@ -334,6 +345,31 @@ function scoreTrackPersonalized(track, {
   else if (relatedArtists.has(effArt)) score += refresh ? 30 : 22;
   if (seedGenres.has(tGenre)) score += 20;
   if (moodGenres.includes(tGenre)) score += 22;
+
+  // Camelot Harmonic Key Compatibility
+  if (currentTrack?.key && track?.key) {
+    const k1 = String(currentTrack.key).toUpperCase().trim();
+    const k2 = String(track.key).toUpperCase().trim();
+    if (k1 === k2) {
+      score += 15;
+    } else {
+      const match1 = k1.match(/^(\d{1,2})([AB])$/);
+      const match2 = k2.match(/^(\d{1,2})([AB])$/);
+      if (match1 && match2) {
+        const num1 = parseInt(match1[1], 10);
+        const letter1 = match1[2];
+        const num2 = parseInt(match2[1], 10);
+        const letter2 = match2[2];
+        const diff = Math.abs(num1 - num2);
+        if ((diff === 1 || diff === 11) && letter1 === letter2) {
+          score += 12;
+        } else if (num1 === num2 && letter1 !== letter2) {
+          score += 10;
+        }
+      }
+    }
+  }
+
   score += Math.min(10, Math.log10((Number(track.plays) || 0) + 1) * 3);
   return score;
 }

@@ -86,3 +86,13 @@ Thumbs.db
 
 ios_assets/
 
+# Scratch & temporary media
+rivo-main/
+scratch/
+*.mov
+radiojar.mp3
+sidebar_crop.png
+check_nginx_ios.py
+find_modules.py
+inspect_stems_remote.py
+

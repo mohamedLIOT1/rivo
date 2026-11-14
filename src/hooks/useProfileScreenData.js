@@ -43,6 +43,7 @@ export function useProfileScreenData({
     type: 'followers',
     title: '',
     users: [],
+    artists: [],
     loading: false
   });
 
@@ -56,6 +57,7 @@ export function useProfileScreenData({
       type,
       title: `${typeLabel} • ${name || 'User'}`,
       users: [],
+      artists: [],
       loading: true
     });
 
@@ -69,6 +71,7 @@ export function useProfileScreenData({
         setSocialModal(prev => ({
           ...prev,
           users: isFollowers ? (data.followers || []) : (data.following || []),
+          artists: !isFollowers ? (data.artists || []) : [],
           loading: false
         }));
       } else {

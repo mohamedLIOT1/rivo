@@ -15,6 +15,7 @@ import { useConnectivity } from '../context/ConnectivityContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LocalizationContext';
 import { colors } from '../theme/colors';
+import { API_BASE_URL } from '../config';
 import { PODCAST_CATEGORIES } from '../data/podcastData';
 import { isPodcastContent, getPodcastCategory, normalizePodcastSearchText } from '../utils/podcastUtils';
 import PodcastShowCard from '../components/podcast/PodcastShowCard';
@@ -36,22 +37,67 @@ export function PodcastScreen({ onTrackAction }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedShow, setSelectedShow] = useState(null);
   const [followedShowIds, setFollowedShowIds] = useState(new Set());
+  const [backendShows, setBackendShows] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    fetch(`${API_BASE_URL}/api/podcasts/shows`)
+      .then(r => r.json())
+      .then(data => {
+        if (active && data.success && Array.isArray(data.shows)) {
+          setBackendShows(data.shows);
+        }
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const realPodcastEpisodes = useMemo(() => {
     const src = isOffline ? (downloadedTracks || []) : (userTracks || []);
-    return src
+    const local = src
       .filter((tr) => isPodcastContent(tr))
       .map((tr) => ({
         ...tr,
         category: tr.podcastCategory || getPodcastCategory(tr),
       }));
-  }, [isOffline, downloadedTracks, userTracks]);
+
+    const backendEpisodes = backendShows.flatMap(s => (s.episodes || []).map(ep => ({
+      ...ep,
+      artist: ep.host || s.host,
+      album: s.title,
+      coverUrl: ep.cover || s.cover,
+      cover: ep.cover || s.cover,
+      isPodcast: true
+    })));
+
+    return [...backendEpisodes, ...local];
+  }, [isOffline, downloadedTracks, userTracks, backendShows]);
 
   const realPodcastShows = useMemo(() => {
-    if (realPodcastEpisodes.length === 0) return [];
     const map = new Map();
+    backendShows.forEach(s => {
+      map.set(s.id, {
+        id: s.id,
+        name: s.title,
+        title: s.title,
+        creator: s.host,
+        category: s.category || 'culture',
+        cover: s.cover,
+        description: s.description,
+        episodes: (s.episodes || []).map(ep => ({
+          ...ep,
+          artist: ep.host || s.host,
+          album: s.title,
+          coverUrl: ep.cover || s.cover,
+          cover: ep.cover || s.cover,
+          isPodcast: true
+        }))
+      });
+    });
+
     for (let i = 0; i < realPodcastEpisodes.length; i++) {
       const ep = realPodcastEpisodes[i];
+      if (ep.showId && map.has(ep.showId)) continue;
       const showName = String(ep.album || ep.artist || '').trim();
       if (!showName) continue;
       const key = showName.toLowerCase();
@@ -65,12 +111,10 @@ export function PodcastScreen({ onTrackAction }) {
           cover: ep.coverUrl || ep.cover || null,
           episodes: [ep],
         });
-      } else {
-        map.get(key).episodes.push(ep);
       }
     }
-    return Array.from(map.values()).filter((s) => s.episodes.length >= 2);
-  }, [realPodcastEpisodes]);
+    return Array.from(map.values());
+  }, [backendShows, realPodcastEpisodes]);
 
   // Load followed podcasts from local storage
   useEffect(() => {

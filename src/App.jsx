@@ -480,6 +480,7 @@ function MainAppShell({ albums: propAlbums, setAlbums: propSetAlbums }) {
             selectedPlaylist={selectedPlaylist}
             onSelectLikedSongs={() => goToScreen('liked')}
             onSelectPlaylist={handleSelectPlaylistView}
+            onSelectArtist={handleSelectArtist}
           />
 
           {/* Main Content Area */}

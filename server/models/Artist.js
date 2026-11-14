@@ -16,4 +16,13 @@ const ArtistSchema = new mongoose.Schema({
 ArtistSchema.index({ name: 1, isVerified: 1 });
 ArtistSchema.index({ createdAt: -1 });
 
+// Prevent collaborative artist names from being saved as standalone artist documents
+ArtistSchema.pre('save', function(next) {
+  const COLLAB_REGEX = /(?:\s*[,،;&+]\s*|\s+(?:ft\.?|feat\.?|featuring|with|مع|vs\.?)\s+|\s+[xX]\s+|\s+و\s+)/i;
+  if (this.name && COLLAB_REGEX.test(this.name)) {
+    return next(new Error(`Collaborative artist profiles like "${this.name}" cannot be created as standalone artists.`));
+  }
+  next();
+});
+
 module.exports = mongoose.models.Artist || mongoose.model('Artist', ArtistSchema);

@@ -32,6 +32,7 @@ export const UserProvider = ({ children }) => {
   const [playlists, setPlaylists] = useState([]);
   const [albums, setAlbums] = useState([]);
   const [likedTrackIds, setLikedTrackIds] = useState([]);
+  const [followedArtists, setFollowedArtists] = useState([]);
 
   const tokenRef = useRef(token);
   tokenRef.current = token;
@@ -104,7 +105,19 @@ export const UserProvider = ({ children }) => {
       if (userObj) {
         setCurrentUser(userObj);
         setLikedTrackIds(userObj.likedTrackIds || []);
+        if (Array.isArray(userObj.followedArtists)) {
+          setFollowedArtists(userObj.followedArtists);
+        }
       }
+      // Load offline cached followed artists
+      AsyncStorage.getItem('rivo_followed_artists').then((raw) => {
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) setFollowedArtists(parsed);
+          } catch {}
+        }
+      }).catch(() => {});
       if (activeToken) {
         setToken(activeToken);
       }
@@ -237,6 +250,10 @@ export const UserProvider = ({ children }) => {
           const normalized = normalizePlaylists(data.user.playlists || []);
           setCurrentUser(data.user);
           setLikedTrackIds(data.user.likedTrackIds || []);
+          if (Array.isArray(data.user.followedArtists)) {
+            setFollowedArtists(data.user.followedArtists);
+            AsyncStorage.setItem('rivo_followed_artists', JSON.stringify(data.user.followedArtists)).catch(() => {});
+          }
           setPlaylists(normalized);
           AsyncStorage.setItem(USER_KEY, JSON.stringify(data.user)).catch(() => {});
           savePlaylistsDebounced(normalized);
@@ -356,6 +373,45 @@ export const UserProvider = ({ children }) => {
       }).catch(() => {});
     }
   }, []);
+
+  const toggleFollowArtist = useCallback(async (artistName) => {
+    if (!artistName) return;
+    const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+    if (!cleanName) return;
+
+    let next;
+    setFollowedArtists((prev) => {
+      const exists = prev.some((a) => a.toLowerCase() === cleanName.toLowerCase());
+      next = exists
+        ? prev.filter((a) => a.toLowerCase() !== cleanName.toLowerCase())
+        : [...prev, cleanName];
+      AsyncStorage.setItem('rivo_followed_artists', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+
+    const t = tokenRef.current;
+    if (t) {
+      try {
+        await fetch(`${API_BASE_URL}/api/users/follow-artist`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ artist: cleanName }),
+        });
+      } catch {}
+    }
+  }, []);
+
+  const isFollowingArtist = useCallback(
+    (artistName) => {
+      if (!artistName) return false;
+      const cleanName = typeof artistName === 'string' ? artistName.trim() : (artistName.name || '').trim();
+      return followedArtists.some((a) => a.toLowerCase() === cleanName.toLowerCase());
+    },
+    [followedArtists]
+  );
 
   const createPlaylist = useCallback(async (name) => {
     const t = tokenRef.current;
@@ -663,11 +719,14 @@ export const UserProvider = ({ children }) => {
     playlists,
     albums,
     likedTrackIds,
+    followedArtists,
     login,
     register,
     logout,
     updateProfile,
     toggleLikeTrack,
+    toggleFollowArtist,
+    isFollowingArtist,
     fetchPublicTracks,
     syncUserData,
     createPlaylist,
@@ -686,11 +745,14 @@ export const UserProvider = ({ children }) => {
     playlists,
     albums,
     likedTrackIds,
+    followedArtists,
     login,
     register,
     logout,
     updateProfile,
     toggleLikeTrack,
+    toggleFollowArtist,
+    isFollowingArtist,
     fetchPublicTracks,
     syncUserData,
     createPlaylist,
