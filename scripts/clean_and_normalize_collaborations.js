@@ -171,6 +171,7 @@ async function run() {
 
   console.log('\n🎉 ALL DATA MIGRATION STEPS FINISHED SUCCESSFULLY!');
   await mongoose.disconnect();
+  process.exit(0);
 }
 
 run().catch((err) => {
