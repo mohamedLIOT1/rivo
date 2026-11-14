@@ -10,6 +10,7 @@ import LibraryMixesSection from '../components/library/LibraryMixesSection';
 import LibraryPlaylistsGrid from '../components/library/LibraryPlaylistsGrid';
 import LibraryAlbumsGrid from '../components/library/LibraryAlbumsGrid';
 import LibraryTracksList from '../components/library/LibraryTracksList';
+import FollowedArtistsShelf from '../components/library/FollowedArtistsShelf';
 
 export default function LibraryScreen({ 
   playlists = [], 
@@ -75,12 +76,10 @@ export default function LibraryScreen({
     const likedCover = firstLikedTrack?.cover || 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=400';
 
     const likedPl = {
-      id: 'liked',
-      _id: 'liked',
+      id: 'liked', _id: 'liked',
       name: isRTL ? 'الأغاني المفضلة' : 'Liked Songs',
       description: isRTL ? 'جميع أغانيك المفضلة في مكان واحد.' : 'Your favorite tracks in one place.',
-      cover: likedCover,
-      isLikedSongs: true,
+      cover: likedCover, isLikedSongs: true,
       trackIds: (likedTrackIds || []).map(String),
     };
     return [likedPl, ...list];
@@ -124,11 +123,7 @@ export default function LibraryScreen({
     return musicAlbums.filter(a => (a.name && a.name.toLowerCase().includes(s)) || (a.artist && a.artist.toLowerCase().includes(s)));
   }, [musicAlbums, search]);
 
-  const filteredPlaylists = activePlaylists.filter(item => {
-    if (!search) return true;
-    return item.name && item.name.toLowerCase().includes(search.toLowerCase());
-  });
-
+  const filteredPlaylists = activePlaylists.filter(item => !search || (item.name && item.name.toLowerCase().includes(search.toLowerCase())));
   const filteredTracks = activeTracks.filter(item => {
     if (!search) return true;
     const s = search.toLowerCase();
@@ -361,6 +356,18 @@ export default function LibraryScreen({
           isDark={isDark}
           isRTL={isRTL}
           onSelectPlaylist={onSelectPlaylist}
+        />
+      )}
+
+      {/* ── 1.5. FOLLOWED ARTISTS SHELF (UNDER ALL FILTER) ── */}
+      {filter === 'all' && activeSection === 'music' && (
+        <FollowedArtistsShelf
+          followedArtists={currentUser?.followedArtists || []}
+          tracks={tracks}
+          albums={albums}
+          onSelectArtist={onSelectArtist}
+          isDark={isDark}
+          isRTL={isRTL}
         />
       )}
 

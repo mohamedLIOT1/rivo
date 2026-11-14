@@ -21,6 +21,81 @@ export const PODCAST_CREATORS = [
   'بدون ورق', 'فيصل العقل', 'مربع', 'أبجورة', 'لبنى الخميس', 'طحالب', 'سين وجيم'
 ];
 
+export const RECOGNIZED_MUSIC_ARTISTS = [
+  'mahmoud el esseily', 'محمود العسيلي', 'العسيلي', 'esseily',
+  'amr diab', 'عمرو دياب', 'الهضبة',
+  'tamer hosny', 'تامر حسني',
+  'mohamed hamaki', 'محمد حماقي', 'حماقي',
+  'cairokee', 'كايروكي',
+  'amir eid', 'أمير عيد',
+  'wegz', 'ويجز',
+  'marwan pablo', 'مروان بابلو',
+  'marwan moussa', 'مروان موسى',
+  'lege-cy', 'ليجيسي', 'ليجي-سي',
+  'el joker', 'الجوكر',
+  'tul8te', 'تووليت', 'توليت',
+  'afroto', 'عفروتو',
+  'shehab', 'شهاب',
+  'batistuta', 'باتيستوتا', 'باتستوتا',
+  'abyusif', 'أبيوسف',
+  'sherine', 'شيرين', 'شيرين عبد الوهاب',
+  'fairouz', 'فيروز',
+  'tamer ashour', 'تامر عاشور',
+  'mohamed mounir', 'محمد منير', 'الكينج',
+  'angham', 'أنغام',
+  'asala', 'أصالة', 'اصالة',
+  'elissa', 'إليسا', 'اليسا',
+  'nancy ajram', 'نانسي عجرم',
+  'wael jassar', 'وائل جسار',
+  'bahaa sultan', 'بهاء سلطان',
+  'ramy sabry', 'رامي صبري',
+  'hamza namira', 'حمزة نمرة',
+  'muslim', 'مسلم',
+  'essam sasa', 'عصام صاصا',
+  'hamo bika', 'حمو بيكا',
+  'hassan shakosh', 'حسن شاكوش',
+  'ziad zaza', 'زياد ظاظا',
+  'abo el anwar', 'أبو الأنوار', 'ابو الانوار',
+  '3enba', 'عنبة',
+  'santa', 'سانتا',
+  'al shami', 'الشامي',
+  'dizzytooskinny', 'ديزي',
+  'karim osama', 'كريم أسامة',
+  'husayn', 'حسين',
+  'fl ex', 'فليكس',
+  'wingii', 'وينجي',
+  'mousv', 'موسي سام', 'موسى سام', 'mousa sam',
+  'double zuksh', 'دبل زوكش',
+  'sharmoofers', 'شارموفرز',
+  'massar egbari', 'مسار إجباري',
+  'hussain al jassmi', 'حسين الجسمي',
+  'mohammed saeed', 'محمد سعيد',
+  'amr mostafa', 'عمرو مصطفى',
+  'mahmoud el leithy', 'محمود الليثي',
+  'ahmed saad', 'أحمد سعد',
+  'ruby', 'روبي',
+  'mostafa amar', 'مصطفى قمر',
+  'ehab tawfik', 'إيهاب توفيق',
+  'hakim', 'حكيم',
+  'hisham abbas', 'هشام عباس',
+  'medhat saleh', 'مدحت صالح',
+  'ali el haggar', 'علي الحجار',
+  'mohamed fouad', 'محمد فؤاد'
+];
+
+/**
+ * Checks whether an artist string belongs to a recognized core music artist.
+ */
+export function isRecognizedMusicArtist(artistStr = '') {
+  if (!artistStr || typeof artistStr !== 'string') return false;
+  const norm = normalizePodcastSearchText(artistStr);
+  if (!norm) return false;
+  return RECOGNIZED_MUSIC_ARTISTS.some(m => {
+    const normM = normalizePodcastSearchText(m);
+    return normM.length >= 3 && (norm.includes(normM) || normM.includes(norm));
+  });
+}
+
 /**
  * Normalizes text for robust Arabic & Latin search/matching.
  */
@@ -44,10 +119,20 @@ export function isPodcastContent(item, artist = '', album = '') {
   if (typeof item === 'object') {
     // 1. Explicit metadata flags
     if (item.isPodcast === true || item.contentType === 'podcast') return true;
-    if (item.genre === 'Podcast' || item.genre === 'بودكاست' || item.arabicGenre === 'بودكاست') return true;
+    if (item.episodeId && item.showId) return true;
 
     // Never misidentify Holy Quran as podcast unless explicitly flagged
     if (item.isQuran === true || item.isQuran === 'true' || item.category === 'quran' || item.contentType === 'quran' || item.genre === 'quran-radio') return false;
+
+    // Strict recognized music artist protection:
+    // Tracks by core music artists (e.g. Mahmoud El Esseily, Amr Diab, Tamer Hosny) must never be podcasts
+    // unless explicitly marked as a podcast episode above.
+    const itemArtist = String(item.artist || item.primaryArtist || (Array.isArray(item.artists) ? item.artists.join(' ') : '') || artist || '');
+    if (isRecognizedMusicArtist(itemArtist)) {
+      return false;
+    }
+
+    if (item.genre === 'Podcast' || item.genre === 'بودكاست' || item.arabicGenre === 'بودكاست') return true;
 
     const combined = `${item.title || item.name || ''} ${item.artist || ''} ${item.album || ''} ${item.genre || ''} ${item.description || ''}`;
     if (PODCAST_REGEX.test(combined)) return true;
@@ -63,7 +148,15 @@ export function isPodcastContent(item, artist = '', album = '') {
   }
 
   // String overload
+  if (artist && isRecognizedMusicArtist(artist)) {
+    return false;
+  }
+
   const str = `${item} ${artist} ${album}`;
+  if (isRecognizedMusicArtist(str)) {
+    return false;
+  }
+
   if (PODCAST_REGEX.test(str)) return true;
 
   const norm = normalizePodcastSearchText(str);

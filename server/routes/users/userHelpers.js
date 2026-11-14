@@ -15,12 +15,12 @@ async function fetchUserProfileData(rawId, currentUserId) {
   let target = null;
   if (mongoose.isValidObjectId(rawId)) {
     target = await User.findById(rawId)
-      .select('_id name avatar bio playlists followers following createdAt')
+      .select('_id name avatar bio playlists followers following followedArtists createdAt')
       .lean();
   }
   if (!target) {
     target = await User.findOne({ $or: [{ id: rawId }, { name: rawId }] })
-      .select('_id name avatar bio playlists followers following createdAt')
+      .select('_id name avatar bio playlists followers following followedArtists createdAt')
       .lean();
   }
   if (!target) return null;
@@ -73,7 +73,7 @@ async function fetchUserProfileData(rawId, currentUserId) {
     publicPlaylists,
     playlistCount: publicPlaylists.length,
     followersCount: (target.followers || []).length,
-    followingCount: (target.following || []).length,
+    followingCount: (target.following || []).length + (target.followedArtists || []).length,
     isFollowing,
     isVerified: isVerifiedUser(target.name)
   };

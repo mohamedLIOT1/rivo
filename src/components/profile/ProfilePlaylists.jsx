@@ -1,6 +1,7 @@
 import React from 'react';
 import { Music, Disc, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { isQuranContent } from '../../utils/quranUtils';
+import PlaylistCoverCollage from '../playlist/PlaylistCoverCollage';
 
 export default function ProfilePlaylists({
   localPlaylists = [],
@@ -53,15 +54,7 @@ export default function ProfilePlaylists({
                   className="flex items-center gap-3 text-left min-w-0 flex-1 cursor-pointer"
                 >
                   <div className="w-11 h-11 rounded-lg bg-[#17a398] brutal-border shrink-0 flex items-center justify-center font-bold text-white overflow-hidden">
-                    {pl.cover ? (
-                      <img src={pl.cover} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <img 
-                        src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=400" 
-                        alt="" 
-                        className="w-full h-full object-cover" 
-                      />
-                    )}
+                    <PlaylistCoverCollage playlist={pl} discSize={20} />
                   </div>
                   <div className="truncate">
                     <p className={`font-display font-black text-xs truncate ${

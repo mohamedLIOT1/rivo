@@ -291,9 +291,15 @@ function NativeAppShell() {
   const [headerSearchText, setHeaderSearchText] = useState('');
   const [searchInitialFilter, setSearchInitialFilter] = useState('all');
 
-  const handleViewAllAlbums = useCallback(() => {
-    setSearchInitialFilter('albums');
+  const handleViewAllAlbums = useCallback((filter = 'albums') => {
+    setSearchInitialFilter(typeof filter === 'string' ? filter : 'albums');
     setHeaderSearchText('');
+    setActiveTab('search');
+  }, []);
+
+  const handleOpenSearch = useCallback((filter = 'all', query = '') => {
+    setSearchInitialFilter(typeof filter === 'string' ? filter : 'all');
+    setHeaderSearchText(typeof query === 'string' ? query : '');
     setActiveTab('search');
   }, []);
   // Android hardware back handler: navigate to home instead of abruptly exiting app
@@ -604,12 +610,13 @@ function NativeAppShell() {
               onSelectAlbum={handleSelectAlbum}
               onSelectArtist={handleSelectArtist}
               onViewAllAlbums={handleViewAllAlbums}
+              onOpenSearch={handleOpenSearch}
             />
           </View>
         )}
 
         {normalizedTab === 'search' && (() => {
-          const SearchScreenComp = getLazyScreen('search', () => require('./src/native/screens/SearchScreen'));
+          const SearchScreenComp = getLazyScreen('search', () => require('./src/native/screens/SearchScreen').default);
           return (
             <View style={{ flex: 1 }}>
               <ErrorBoundary>

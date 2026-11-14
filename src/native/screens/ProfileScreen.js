@@ -247,9 +247,9 @@ function ProfileScreen({
     ? currentUser.followers.length 
     : (currentUser?.followersCount || 0);
 
-  const followingCount = Array.isArray(currentUser?.following) 
-    ? currentUser.following.length 
-    : (currentUser?.followingCount || 0);
+  const followingCount = currentUser?.followingCount !== undefined
+    ? currentUser.followingCount
+    : ((Array.isArray(currentUser?.following) ? currentUser.following.length : 0) + (Array.isArray(currentUser?.followedArtists) ? currentUser.followedArtists.length : 0));
 
   const [viewingProfile, setViewingProfile] = useState(null);
   const [viewingLoading, setViewingLoading] = useState(false);
@@ -609,7 +609,7 @@ function ProfileScreen({
     const isMe = String(viewingProfile.id || viewingProfile._id) === String(currentUser?._id || currentUser?.id);
     const vCrates = viewingProfile.publicPlaylists || [];
     const vFollowers = viewingProfile.followersCount || 0;
-    const vFollowing = viewingProfile.followingCount || 0;
+    const vFollowing = viewingProfile.followingCount ?? ((Array.isArray(viewingProfile?.following) ? viewingProfile.following.length : 0) + (Array.isArray(viewingProfile?.followedArtists) ? viewingProfile.followedArtists.length : 0));
 
     const viewingHeaderNode = (
       <View>

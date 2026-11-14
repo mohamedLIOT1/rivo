@@ -362,7 +362,7 @@ export default function SearchScreen({
           </div>
 
           {/* Deck Body */}
-          <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6">
+          <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6 w-full max-w-full min-w-0">
             {/* Search Scanner Box — Desktop only */}
             <div className="hidden md:flex w-28 h-28 md:w-36 md:h-36 bg-[#082621] brutal-border-thick brutal-shadow shrink-0 relative flex-col items-center justify-center text-[#26c4b7]">
               {filterType === 'people' ? (
@@ -380,7 +380,7 @@ export default function SearchScreen({
               </div>
             </div>
 
-            <div className="flex-1 w-full text-left">
+            <div className="flex-1 w-full max-w-full min-w-0 text-left">
               {/* Title row — compact on mobile */}
               <div className="flex items-center justify-between gap-2 mb-2">
                 <h2 className={`text-base sm:text-2xl md:text-4xl font-display font-black leading-tight ${
@@ -468,7 +468,7 @@ export default function SearchScreen({
               </div>
 
               {/* ── Search Type Filter Options (All / Songs / People) ── */}
-              <div className="flex items-center gap-2 mb-2.5 overflow-x-auto no-scrollbar py-0.5">
+              <div className="w-full max-w-full min-w-0 flex items-center gap-2 mb-2.5 overflow-x-auto no-scrollbar py-0.5">
                 <span className={`text-[10px] font-mono font-black uppercase tracking-wider shrink-0 ${
                   isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                 }`}>
@@ -512,7 +512,7 @@ export default function SearchScreen({
 
               {/* Trending Quick Filter Pills */}
               {filterType !== 'people' && (
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                <div className="w-full max-w-full min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   <span className={`text-[10px] font-mono font-black uppercase mr-1 shrink-0 ${
                     isDark ? 'text-zinc-400' : 'text-[#082621]/70'
                   }`}>

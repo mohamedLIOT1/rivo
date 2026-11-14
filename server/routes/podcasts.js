@@ -35,6 +35,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'بودكاست فنجان',
         host: 'عبدالرحمن أبو مالح',
         duration: 3420,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=ambient-piano-amp-strings-10711.mp3',
         cover: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600',
         publishedAt: '2026-02-10'
@@ -46,6 +48,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'بودكاست فنجان',
         host: 'عبدالرحمن أبو مالح',
         duration: 4180,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=cinematic-time-lapse-115672.mp3',
         cover: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=600',
         publishedAt: '2026-02-03'
@@ -68,6 +72,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'بودكاست وعي',
         host: 'أحمد عامر وشريف علي',
         duration: 2850,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=soft-piano-meditation-9686.mp3',
         cover: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=600',
         publishedAt: '2026-01-28'
@@ -79,6 +85,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'بودكاست وعي',
         host: 'أحمد عامر وشريف علي',
         duration: 3120,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=ambient-piano-amp-strings-10711.mp3',
         cover: 'https://images.unsplash.com/photo-1519671482749-fd09be7ccebf?w=600',
         publishedAt: '2026-01-15'
@@ -101,6 +109,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'دوباميكافين',
         host: 'ناصر العقيل',
         duration: 2410,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=cinematic-time-lapse-115672.mp3',
         cover: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600',
         publishedAt: '2026-02-05'
@@ -123,6 +133,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'دروس أونلاين بودكاست',
         host: 'أحمد أبو زيد',
         duration: 3600,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=ambient-piano-amp-strings-10711.mp3',
         cover: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=600',
         publishedAt: '2026-02-01'
@@ -145,6 +157,8 @@ const CURATED_PODCAST_SHOWS = [
         showTitle: 'بودكاست سندباد',
         host: 'محمد قاسم',
         duration: 2980,
+        isPodcast: true,
+        contentType: 'podcast',
         audioUrl: 'https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8c8a73467.mp3?filename=soft-piano-meditation-9686.mp3',
         cover: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=600',
         publishedAt: '2026-01-20'
@@ -152,6 +166,21 @@ const CURATED_PODCAST_SHOWS = [
     ]
   }
 ];
+
+// Music artist safeguarding: ensure no music tracks or artists are served through podcast routes
+const MUSIC_ARTISTS_GUARD = [
+  'esseily', 'عسيلي', 'diab', 'دياب', 'hosny', 'حسني', 'hamaki', 'حماقي',
+  'cairokee', 'كايروكي', 'wegz', 'ويجز', 'pablo', 'بابلو', 'moussa', 'موسى',
+  'lege-cy', 'ليجيسي', 'el joker', 'الجوكر', 'tul8te', 'توليت', 'تووليت',
+  'afroto', 'عفروتو', 'shehab', 'شهاب', 'batistuta', 'باتيستوتا', 'abyusif', 'أبيوسف',
+  'sherine', 'شيرين', 'fairouz', 'فيروز', 'ashour', 'عاشور', 'mounir', 'منير',
+  'angham', 'أنغام', 'asala', 'أصالة', 'elissa', 'إليسا', 'ajram', 'عجرم'
+];
+
+function isMusicArtistOrTrack(item = {}) {
+  const text = `${item.title || ''} ${item.host || ''} ${item.artist || ''} ${item.description || ''}`.toLowerCase();
+  return MUSIC_ARTISTS_GUARD.some(term => text.includes(term.toLowerCase()));
+}
 
 // 1. Get Categories
 router.get('/categories', (req, res) => {
@@ -162,7 +191,7 @@ router.get('/categories', (req, res) => {
 router.get('/shows', async (req, res) => {
   try {
     const { category, q } = req.query;
-    let shows = [...CURATED_PODCAST_SHOWS];
+    let shows = CURATED_PODCAST_SHOWS.filter(s => !isMusicArtistOrTrack(s));
 
     if (category && category !== 'all') {
       shows = shows.filter(s => s.category === category);
@@ -185,21 +214,24 @@ router.get('/shows', async (req, res) => {
 
 // 3. Get Single Show & Episodes
 router.get('/shows/:id', (req, res) => {
-  const show = CURATED_PODCAST_SHOWS.find(s => s.id === req.params.id);
+  const show = CURATED_PODCAST_SHOWS.find(s => s.id === req.params.id && !isMusicArtistOrTrack(s));
   if (!show) {
     return res.status(404).json({ error: 'Podcast show not found' });
   }
-  res.json({ success: true, show });
+  const cleanEpisodes = (show.episodes || []).filter(e => !isMusicArtistOrTrack(e));
+  res.json({ success: true, show: { ...show, episodes: cleanEpisodes } });
 });
 
 // 4. Get All Episodes (flattened with pagination & category filtering)
 router.get('/episodes', (req, res) => {
   try {
     const { category, limit = 20, page = 1 } = req.query;
-    let allEpisodes = CURATED_PODCAST_SHOWS.flatMap(s => s.episodes.map(ep => ({
-      ...ep,
-      category: s.category
-    })));
+    let allEpisodes = CURATED_PODCAST_SHOWS
+      .filter(s => !isMusicArtistOrTrack(s))
+      .flatMap(s => s.episodes.filter(ep => !isMusicArtistOrTrack(ep)).map(ep => ({
+        ...ep,
+        category: s.category
+      })));
 
     if (category && category !== 'all') {
       allEpisodes = allEpisodes.filter(e => e.category === category);
@@ -223,7 +255,10 @@ router.get('/episodes', (req, res) => {
 
 // 5. Featured Episodes for Home & Spotlight
 router.get('/featured', (req, res) => {
-  const featured = CURATED_PODCAST_SHOWS.map(s => s.episodes[0]).filter(Boolean);
+  const featured = CURATED_PODCAST_SHOWS
+    .filter(s => !isMusicArtistOrTrack(s))
+    .map(s => (s.episodes || []).find(e => !isMusicArtistOrTrack(e)))
+    .filter(Boolean);
   res.json({ success: true, featured });
 });
 

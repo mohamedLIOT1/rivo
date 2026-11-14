@@ -37,6 +37,7 @@ import { getListeningStats } from '../context/audio/audioApiHelpers';
 
 const keyExtractor = (item, index) => String(item._id || item.id || index);
 const TRACK_ROW_HEIGHT = 68;
+const MAX_HOME_FEED_TRACKS = 25;
 const getItemLayout = (_, index) => ({
   length: TRACK_ROW_HEIGHT,
   offset: TRACK_ROW_HEIGHT * index,
@@ -50,6 +51,7 @@ function HomeScreen({
   onSelectAlbum,
   onSelectArtist,
   onViewAllAlbums,
+  onOpenSearch,
   initialFilter = 'all',
 }) {
   const { width } = useWindowDimensions();
@@ -538,7 +540,11 @@ function HomeScreen({
         <TouchableOpacity
           style={[styles.loadMoreBtn, !isDark && { backgroundColor: '#ede5d3', borderColor: '#0b1110' }]}
           onPress={() => {
-            if (onViewAllAlbums) onViewAllAlbums();
+            if (onOpenSearch) {
+              onOpenSearch('songs');
+            } else if (onViewAllAlbums) {
+              onViewAllAlbums('songs');
+            }
           }}
           activeOpacity={0.8}
           delayPressIn={0}
@@ -565,7 +571,7 @@ function HomeScreen({
     }
 
     return null;
-  }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isDark, isRTL, rtlTextStyle, onViewAllAlbums]);
+  }, [displayTracks.length, visibleCount, isOffline, isLiteMode, isDark, isRTL, rtlTextStyle, onOpenSearch, onViewAllAlbums]);
 
   const displayTracksRef = useRef(displayTracks);
   displayTracksRef.current = displayTracks;
@@ -614,8 +620,6 @@ function HomeScreen({
       />
     );
   }, [curTrackId, isPlaying, isLoading, likedSet, isDark, handlePlaySong, togglePlay, toggleLikeTrack, handleMoreSong]);
-
-  const MAX_HOME_FEED_TRACKS = 25;
 
   const handleLoadMoreOnEnd = useCallback(() => {
     if (visibleCount < MAX_HOME_FEED_TRACKS && displayTracks.length > visibleCount) {

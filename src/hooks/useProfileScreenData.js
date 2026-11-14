@@ -68,12 +68,34 @@ export function useProfileScreenData({
       });
       const data = await res.json();
       if (data.success) {
+        const usersList = isFollowers ? (data.followers || []) : (data.following || data.users || []);
+        const artistsList = !isFollowers ? (data.artists || []) : [];
         setSocialModal(prev => ({
           ...prev,
-          users: isFollowers ? (data.followers || []) : (data.following || []),
-          artists: !isFollowers ? (data.artists || []) : [],
+          users: usersList,
+          artists: artistsList,
           loading: false
         }));
+
+        if (!isFollowers) {
+          const totalFollowing = usersList.length + artistsList.length;
+          setLocalUser(prev => {
+            if (!prev) return prev;
+            const prevId = String(prev._id || prev.id || '').trim();
+            if (prevId === String(targetUserId).trim()) {
+              return { ...prev, followingCount: totalFollowing };
+            }
+            return prev;
+          });
+          setViewingProfile(prev => {
+            if (!prev) return prev;
+            const prevId = String(prev._id || prev.id || '').trim();
+            if (prevId === String(targetUserId).trim()) {
+              return { ...prev, followingCount: totalFollowing };
+            }
+            return prev;
+          });
+        }
       } else {
         setSocialModal(prev => ({ ...prev, loading: false }));
       }
@@ -83,9 +105,19 @@ export function useProfileScreenData({
   }, [t]);
 
   useEffect(() => {
-    setLocalUser(currentUser);
-    setNameInput(currentUser?.name || '');
-    setBioInput(currentUser?.bio || '');
+    if (currentUser) {
+      const calcFollowing = (Array.isArray(currentUser.following) ? currentUser.following.length : 0) +
+                            (Array.isArray(currentUser.followedArtists) ? currentUser.followedArtists.length : 0);
+      const userFollowingCount = (currentUser.followingCount !== undefined && currentUser.followingCount >= calcFollowing)
+        ? currentUser.followingCount
+        : calcFollowing;
+
+      setLocalUser({ ...currentUser, followingCount: userFollowingCount });
+      setNameInput(currentUser?.name || '');
+      setBioInput(currentUser?.bio || '');
+    } else {
+      setLocalUser(null);
+    }
 
     const token = getToken();
     if (token) {
@@ -95,7 +127,11 @@ export function useProfileScreenData({
       .then(r => r.json())
       .then(d => {
         if (d.success && d.user) {
-          setLocalUser(d.user);
+          const u = d.user;
+          const calcFollowing = (Array.isArray(u.following) ? u.following.length : 0) +
+                                (Array.isArray(u.followedArtists) ? u.followedArtists.length : 0);
+          const finalCount = Math.max(u.followingCount || 0, calcFollowing);
+          setLocalUser({ ...u, followingCount: finalCount });
         }
       })
       .catch(() => {});
@@ -239,7 +275,13 @@ export function useProfileScreenData({
         headers: token ? { Authorization: `Bearer ${token}` } : {}
       });
       const data = await res.json();
-      if (data.success && data.user) setViewingProfile(data.user);
+      if (data.success && data.user) {
+        const u = data.user;
+        const calcFollowing = (Array.isArray(u.following) ? u.following.length : 0) +
+                              (Array.isArray(u.followedArtists) ? u.followedArtists.length : 0);
+        const finalCount = Math.max(u.followingCount || 0, calcFollowing);
+        setViewingProfile({ ...u, followingCount: finalCount });
+      }
     } catch (e) {
       console.warn('[ProfileScreen] Load user profile error:', e);
     } finally {
@@ -269,6 +311,15 @@ export function useProfileScreenData({
           isFollowing: data.isFollowing,
           followersCount: data.followersCount
         }));
+        setLocalUser(prev => {
+          if (!prev) return prev;
+          const diff = data.isFollowing ? 1 : -1;
+          const currentCount = prev.followingCount ?? ((prev.following?.length || 0) + (prev.followedArtists?.length || 0));
+          return {
+            ...prev,
+            followingCount: Math.max(0, currentCount + diff)
+          };
+        });
       }
     } catch {}
     setFollowLoading(false);

@@ -97,13 +97,16 @@ export default function ArtistDetailModal({
   const rawArtistName = useMemo(() => {
     if (!artist) return '';
     if (typeof artist === 'string') return artist.trim();
-    return (artist.name || artist.artist || '').trim();
+    if (typeof artist === 'object') {
+      return (artist.name || artist.artist || artist.artistName || artist.title || '').trim();
+    }
+    return String(artist).trim();
   }, [artist]);
 
-  const canonicalName = useMemo(() => getCanonicalArtistName(rawArtistName), [rawArtistName]);
+  const canonicalName = useMemo(() => (rawArtistName ? getCanonicalArtistName(rawArtistName) : ''), [rawArtistName]);
   const artistName = canonicalName || rawArtistName;
-  const artistKey = artistName.toLowerCase();
-  const aliasNote = useMemo(() => getArtistAliasNote(artistName), [artistName]);
+  const artistKey = (artistName || '').toLowerCase();
+  const aliasNote = useMemo(() => (artistName ? getArtistAliasNote(artistName) : null), [artistName]);
 
   const {
     finalTracks,

@@ -1,4 +1,5 @@
 import React from 'react';
+import PlaylistCoverCollage from '../playlist/PlaylistCoverCollage';
 
 export default function LibraryPlaylistsGrid({
   playlists = [],
@@ -38,10 +39,9 @@ export default function LibraryPlaylistsGrid({
               <div className={`relative w-full aspect-square rounded-lg overflow-hidden mb-2.5 border ${
                 isDark ? 'bg-black/40 border-emerald-900/40' : 'bg-black/10 border-[#0b1110]'
               }`}>
-                <img
-                  src={pl.cover || fallbackCover}
-                  alt={pl.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                <PlaylistCoverCollage
+                  playlist={pl}
+                  className="group-hover:scale-105 transition-transform"
                 />
                 <span className={`absolute bottom-1.5 ${isRTL ? 'left-1.5' : 'right-1.5'} px-1.5 py-0.5 rounded text-[10px] font-bold ${
                   isDark ? 'bg-black/80 text-emerald-300' : 'bg-[#082621] text-[#26c4b7]'

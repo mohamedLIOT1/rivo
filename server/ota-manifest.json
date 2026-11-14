@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.46",
+  "version": "2.4.47",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحديث معماري شامل: دعم الفيتشرز والتعاونات الفنية، وإصلاح اللاج في الهاتف وتصفح المكتبة",
-  "notesEn": "Major architecture update: features & collaborations, mobile performance fix & library filters",
-  "bundleSize": 5392850,
-  "sizeMb": "5.14 MB",
-  "updatedAt": "2026-11-14T09:18:42.264Z"
+  "notes": "تحسينات شاملة للألبومات والبروفايل والتصفح وإصلاح البحث والمكتبة",
+  "notesEn": "Catalog and mobile performance overhaul with search and library fixes",
+  "bundleSize": 5409175,
+  "sizeMb": "5.16 MB",
+  "updatedAt": "2026-11-14T10:29:23.654Z"
 }

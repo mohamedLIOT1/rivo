@@ -1,5 +1,5 @@
-import React from 'react';
-import { Music2, MoreVertical, Heart } from 'lucide-react';
+import React, { useState, memo } from 'react';
+import { Music2, MoreVertical, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { ArtistLinks } from '../../utils/artistUtils';
 import { useTranslation } from '../../context/PreferencesContext';
 import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils';
@@ -24,7 +24,7 @@ export function formatCompactPlays(count) {
   return num.toLocaleString();
 }
 
-export default function ArtistTrackList({
+function ArtistTrackList({
   artistTracks = [],
   isQuran = false,
   isDark = true,
@@ -34,6 +34,10 @@ export default function ArtistTrackList({
   toggleLike
 }) {
   const { t, isRTL } = useTranslation();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const INITIAL_LIMIT = 10;
+  const displayedTracks = isExpanded ? artistTracks : artistTracks.slice(0, INITIAL_LIMIT);
+  const hasMore = artistTracks.length > INITIAL_LIMIT;
 
   return (
     <div className={`brutal-border-thick brutal-shadow-lg p-4 sm:p-6 mb-6 sm:mb-8 rounded-xl ${
@@ -48,14 +52,26 @@ export default function ArtistTrackList({
             {isQuran ? t('profile.allSurahs') : t('profile.allTracks')}
           </h2>
         </div>
-        <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
-          {isQuran ? t('profile.surahsCount', { count: artistTracks.length }) : t('profile.tracksCount', { count: artistTracks.length })}
-        </span>
+        <div className="flex items-center gap-2">
+          {hasMore && (
+            <button
+              onClick={() => setIsExpanded(prev => !prev)}
+              type="button"
+              className="flex items-center gap-1 text-xs font-mono font-bold text-[#17a398] hover:underline cursor-pointer"
+            >
+              <span>{isExpanded ? (isRTL ? 'عرض أقل' : 'Show Less') : (isRTL ? 'عرض الكل' : 'View All')}</span>
+              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          )}
+          <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
+            {isQuran ? t('profile.surahsCount', { count: artistTracks.length }) : t('profile.tracksCount', { count: artistTracks.length })}
+          </span>
+        </div>
       </div>
 
       {artistTracks.length > 0 ? (
         <div className="space-y-1.5 sm:space-y-2">
-          {artistTracks.map((track, i) => {
+          {displayedTracks.map((track, i) => {
             const sitePlays = Number(track.plays) || 0;
             const formattedPlays = sitePlays > 0 ? (sitePlays >= 1000 ? formatCompactPlays(sitePlays) : String(sitePlays)) : null;
 
@@ -139,6 +155,37 @@ export default function ArtistTrackList({
             </div>
           );
         })}
+
+        {/* Expand / Collapse Toggle Button */}
+        {hasMore && (
+          <div className="pt-3 sm:pt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setIsExpanded(prev => !prev)}
+              className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg text-xs font-mono font-bold brutal-border brutal-shadow-sm brutal-btn cursor-pointer transition ${
+                isDark
+                  ? 'bg-zinc-800 hover:bg-zinc-700 text-[#17a398] border-zinc-700'
+                  : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
+              }`}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp size={15} strokeWidth={2.5} />
+                  <span>{isRTL ? 'عرض أقل' : 'Show Less'}</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={15} strokeWidth={2.5} />
+                  <span>
+                    {isRTL 
+                      ? `عرض باقي الأغاني (${artistTracks.length} ${isQuran ? 'سورة' : 'أغنية'})`
+                      : `View All ${artistTracks.length} ${isQuran ? 'Surahs' : 'Tracks'}`}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
       ) : (
         <div className={`text-center py-8 text-xs font-mono ${isDark ? 'text-zinc-400' : 'text-[#082621]/70'}`}>
@@ -148,3 +195,5 @@ export default function ArtistTrackList({
     </div>
   );
 }
+
+export default memo(ArtistTrackList);

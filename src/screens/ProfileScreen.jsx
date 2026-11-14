@@ -238,6 +238,7 @@ export default function ProfileScreen({
       {/* Social Modal */}
       <SocialModal
         isOpen={socialModal.isOpen}
+        type={socialModal.type}
         title={socialModal.title}
         loading={socialModal.loading}
         users={socialModal.users}

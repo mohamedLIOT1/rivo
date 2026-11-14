@@ -173,8 +173,8 @@ export function useArtistDetailData({
     return Array.from(albumMap.values());
   }, [combinedAlbums, finalTracks, artistKey, artistName, rawArtistName, artist]);
 
-  const artistCover = (typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl))
-    ? (artist.avatar || artist.cover || artist.coverUrl)
+  const artistCover = (artist && typeof artist === 'object' && (artist.avatar || artist.cover || artist.coverUrl || artist.image))
+    ? (artist.avatar || artist.cover || artist.coverUrl || artist.image)
     : (finalTracks[0]?.coverUrl || finalTracks[0]?.cover || '');
 
   return {

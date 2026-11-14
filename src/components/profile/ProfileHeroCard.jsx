@@ -224,7 +224,7 @@ export default function ProfileHeroCard({
               }`}
             >
               <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
-                {localUser?.followingCount ?? (Array.isArray(localUser?.following) ? localUser.following.length : 0)}
+                {localUser?.followingCount ?? ((Array.isArray(localUser?.following) ? localUser.following.length : 0) + (Array.isArray(localUser?.followedArtists) ? localUser.followedArtists.length : 0))}
               </span>
               <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                 isDark ? 'text-zinc-400' : 'text-zinc-600'

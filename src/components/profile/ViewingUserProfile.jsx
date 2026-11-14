@@ -172,7 +172,7 @@ export default function ViewingUserProfile({
                   }`}
                 >
                   <span className="font-display font-black text-base sm:text-xl text-[#17a398] block leading-none mb-0.5 sm:mb-1">
-                    {viewingProfile.followingCount || 0}
+                    {viewingProfile.followingCount ?? ((Array.isArray(viewingProfile.following) ? viewingProfile.following.length : 0) + (Array.isArray(viewingProfile.followedArtists) ? viewingProfile.followedArtists.length : 0))}
                   </span>
                   <span className={`text-[8px] sm:text-[9px] font-mono font-bold uppercase truncate block ${
                     isDark ? 'text-zinc-400' : 'text-zinc-600'

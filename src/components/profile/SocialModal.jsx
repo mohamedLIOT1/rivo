@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Loader2, User, Mic } from 'lucide-react';
+import { getCanonicalArtistAvatar } from '../../utils/canonicalArtistAvatars';
 
 export default function SocialModal({
   isOpen,
   title,
+  type = 'following',
   loading,
   users = [],
   artists = [],
@@ -15,9 +17,22 @@ export default function SocialModal({
 }) {
   const [activeTab, setActiveTab] = useState('people'); // 'people' | 'artists'
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (type === 'followers') {
+      setActiveTab('people');
+    } else if (type === 'following') {
+      // If opened and no people but has artists, default directly to artists
+      if (users.length === 0 && artists.length > 0) {
+        setActiveTab('artists');
+      }
+    }
+  }, [isOpen, type, users.length, artists.length]);
+
   if (!isOpen) return null;
 
-  const showTabs = artists && artists.length > 0;
+  // Always show tabs for following to prevent tab flickering/disappearing
+  const showTabs = type === 'following' || (Array.isArray(artists) && artists.length > 0);
   const currentList = activeTab === 'artists' ? artists : users;
 
   return (
@@ -39,7 +54,7 @@ export default function SocialModal({
           </button>
         </div>
 
-        {/* Tabs if there are followed artists */}
+        {/* Tabs for following */}
         {showTabs && (
           <div className="flex gap-2 mb-3">
             <button
@@ -51,7 +66,7 @@ export default function SocialModal({
               }`}
             >
               <User size={12} />
-              <span>أشخاص ({users.length})</span>
+              <span>{t ? (t('profile.people') || 'أشخاص') : 'أشخاص'} ({users.length})</span>
             </button>
             <button
               onClick={() => setActiveTab('artists')}
@@ -62,7 +77,7 @@ export default function SocialModal({
               }`}
             >
               <Mic size={12} />
-              <span>فنانين ({artists.length})</span>
+              <span>{t ? (t('profile.artists') || 'فنانين') : 'فنانين'} ({artists.length})</span>
             </button>
           </div>
         )}
@@ -79,6 +94,8 @@ export default function SocialModal({
           ) : (
             currentList.map(item => {
               const isArt = Boolean(item.isArtist || activeTab === 'artists');
+              const avatarUri = item.avatar || item.cover || item.image || (isArt ? getCanonicalArtistAvatar(item.name) : null);
+
               return (
                 <div 
                   key={item.id || item._id}
@@ -96,8 +113,8 @@ export default function SocialModal({
                 >
                   <div className="flex items-center gap-2.5 truncate flex-1">
                     <div className="w-8 h-8 rounded-lg bg-[#17a398] brutal-border flex items-center justify-center font-bold text-xs text-[#0b1110] overflow-hidden shrink-0">
-                      {item.avatar || item.cover ? (
-                        <img src={item.avatar || item.cover} alt="" className="w-full h-full object-cover" />
+                      {avatarUri ? (
+                        <img src={avatarUri} alt="" className="w-full h-full object-cover" />
                       ) : (
                         item.name?.[0] || 'U'
                       )}

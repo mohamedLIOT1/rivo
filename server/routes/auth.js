@@ -111,7 +111,7 @@ router.post('/login', async (req, res) => {
     userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
-    userObj.followingCount = (user.following || []).length;
+    userObj.followingCount = (user.following || []).length + (user.followedArtists || []).length;
     await sanitizeUserLikedTracks(userObj, user._id);
     res.json({ success: true, user: userObj, token: makeToken(user) });
   } catch (e) {
@@ -150,7 +150,7 @@ router.get('/me', auth, async (req, res) => {
     userObj.role = userObj.isAdmin ? 'admin' : (userObj.role || 'user');
     userObj.isVerified = isVerifiedUser(userObj.name);
     userObj.followersCount = (user.followers || []).length;
-    userObj.followingCount = (user.following || []).length;
+    userObj.followingCount = (user.following || []).length + (user.followedArtists || []).length;
     await sanitizeUserLikedTracks(userObj, user._id);
     res.json({ success: true, user: userObj });
   } catch (e) {

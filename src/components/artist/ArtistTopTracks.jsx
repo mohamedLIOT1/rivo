@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Play, Heart, MoreVertical, Flame, ChevronDown, ChevronUp } from 'lucide-react';
 import { ArtistLinks } from '../../utils/artistUtils';
 import { useTranslation } from '../../context/PreferencesContext';
@@ -6,7 +6,7 @@ import { normalizeCoverUrl, handleCoverImageError } from '../../utils/coverUtils
 import { formatDuration } from '../../utils/timeUtils';
 import { formatCompactPlays } from './ArtistTrackList';
 
-export default function ArtistTopTracks({
+function ArtistTopTracks({
   tracks = [],
   isDark = true,
   onSelectTrack,
@@ -56,7 +56,9 @@ export default function ArtistTopTracks({
       {/* Tracks Vertical List */}
       <div className="space-y-1.5 sm:space-y-2">
         {displayedTracks.map((track, idx) => {
-          const playsStr = formatCompactPlays(track.plays);
+          const trackPlays = Number(track.plays);
+          const rawCount = trackPlays > 0 ? trackPlays : (Number(track.views) || 0);
+          const playsFormatted = rawCount >= 10000 ? formatCompactPlays(rawCount) : rawCount.toLocaleString();
           const trackId = String(track.id || track._id || idx);
 
           return (
@@ -109,13 +111,19 @@ export default function ArtistTopTracks({
 
               {/* Right Side Stats & Actions */}
               <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-                {/* Server Plays Count */}
-                {playsStr && (
-                  <div className="hidden sm:flex items-center gap-1 text-[11px] font-mono font-semibold text-zinc-400" title={`${Number(track.plays).toLocaleString()} plays`}>
-                    <Flame size={12} className="text-[#17a398]" />
-                    <span>{playsStr}</span>
-                  </div>
-                )}
+                {/* Server Plays Count - Always visible on mobile and desktop */}
+                <div
+                  className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-bold shrink-0 ${
+                    isDark ? 'bg-zinc-800/80 text-zinc-300' : 'bg-zinc-100 text-[#082621]'
+                  }`}
+                  title={`${rawCount.toLocaleString()} ${isRTL ? 'استماع' : 'plays'}`}
+                >
+                  <Flame size={12} className="text-[#17a398] shrink-0" />
+                  <span>{playsFormatted}</span>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 font-normal">
+                    {isRTL ? 'استماع' : 'plays'}
+                  </span>
+                </div>
 
                 {/* Duration */}
                 <span className="text-[11px] sm:text-xs font-mono text-zinc-400">
@@ -157,3 +165,5 @@ export default function ArtistTopTracks({
     </div>
   );
 }
+
+export default memo(ArtistTopTracks);

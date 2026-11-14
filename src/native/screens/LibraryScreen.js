@@ -67,6 +67,10 @@ import SongItem from '../ui/SongItem';
 import MiniMixerModal from '../components/MiniMixerModal';
 import PlaylistHeaderActionMenu from '../components/playlist/PlaylistHeaderActionMenu';
 import PlaylistReorderRowItem, { QUEUE_ROW_HEIGHT } from '../components/playlist/PlaylistReorderRowItem';
+import PlaylistCoverCollage from '../components/playlist/PlaylistCoverCollage';
+import { getCanonicalArtistAvatar } from '../../utils/canonicalArtistAvatars';
+
+let cachedDbArtistAvatars = null;
 
 const { width } = Dimensions.get('window');
 
@@ -147,6 +151,7 @@ const CoverPickerThumb = React.memo(function CoverPickerThumb({ track, selected,
 
 const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
   playlist,
+  tracks = [],
   isDark,
   cardWidth,
   onSelect,
@@ -160,16 +165,12 @@ const PlaylistItemGridCard = React.memo(function PlaylistItemGridCard({
       onPress={() => onSelect(playlist)}
     >
       <View style={styles.playlistCoverBox}>
-        {playlist.cover ? (
-          <Image
-            source={{ uri: normalizeCoverUri(playlist.cover) }}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="cover"
-            fadeDuration={0}
-          />
-        ) : (
-          <Disc size={28} color={colors.mint} />
-        )}
+        <PlaylistCoverCollage
+          playlist={playlist}
+          tracks={tracks}
+          discSize={28}
+          isDark={isDark}
+        />
       </View>
       <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }, isRTL && { textAlign: 'right' }, rtlTextStyle]} numberOfLines={1}>
         {playlist.name}
@@ -334,6 +335,77 @@ function LibraryScreen({
   // Preserve cached catalog metadata even when offline so playlist IDs map to Vault files via youtubeId / dedupeKey
   const allTracks = (userTracks && userTracks.length > 0) ? userTracks : (audioTracks || []);
   const safeLikedIds = useMemo(() => (Array.isArray(likedTrackIds) ? likedTrackIds : []), [likedTrackIds]);
+
+  const [dbAvatars, setDbAvatars] = useState(cachedDbArtistAvatars || {});
+
+  useEffect(() => {
+    if (cachedDbArtistAvatars) return;
+    let isMounted = true;
+    const controller = new AbortController();
+
+    fetch(`${API_BASE_URL}/api/artists/counts`, { signal: controller.signal })
+      .then(r => r.json())
+      .then(d => {
+        if (isMounted && d?.success && d?.counts) {
+          const map = {};
+          for (const [key, val] of Object.entries(d.counts)) {
+            if (val?.cover || val?.avatar) {
+              map[key.toLowerCase().trim()] = val.cover || val.avatar;
+            }
+          }
+          cachedDbArtistAvatars = map;
+          setDbAvatars(map);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, []);
+
+  const hydratedFollowedArtists = useMemo(() => {
+    if (!Array.isArray(followedArtists) || followedArtists.length === 0) return [];
+
+    const trackArtistMap = new Map();
+    for (const t of (allTracks || [])) {
+      if (t?.artist && (t.cover || t.coverUrl)) {
+        const norm = t.artist.toLowerCase().trim();
+        if (!trackArtistMap.has(norm)) {
+          trackArtistMap.set(norm, t.cover || t.coverUrl);
+        }
+      }
+    }
+
+    return followedArtists.map(item => {
+      if (!item) return null;
+      const cleanName = typeof item === 'object' ? (item.name || '') : String(item).trim();
+      if (!cleanName) return null;
+
+      const lower = cleanName.toLowerCase().trim();
+      const directObjAvatar = typeof item === 'object' ? (item.avatar || item.cover || item.image) : null;
+      const canonical = getCanonicalArtistAvatar(cleanName);
+      const fromDb = dbAvatars[lower] || dbAvatars[lower.replace(/\s+/g, '-')];
+      const fromTrack = trackArtistMap.get(lower);
+
+      const avatar = directObjAvatar || canonical || fromDb || fromTrack || null;
+
+      return {
+        id: lower,
+        name: cleanName,
+        avatar,
+      };
+    }).filter(Boolean);
+  }, [followedArtists, allTracks, dbAvatars]);
+
+  const hydratedFollowedArtistsMap = useMemo(() => {
+    const map = new Map();
+    for (const a of hydratedFollowedArtists) {
+      map.set(a.id, a);
+    }
+    return map;
+  }, [hydratedFollowedArtists]);
 
   const downloadedLookup = useMemo(() => {
     const byId = new Map();
@@ -1327,25 +1399,44 @@ function LibraryScreen({
     return playlists || [];
   }, [playlists, activeFilter]);
 
-  const renderFollowedArtistItem = useCallback(({ item: artistName }) => (
-    <TouchableOpacity
-      style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth, alignItems: 'center', paddingVertical: 14 }]}
-      activeOpacity={0.85}
-      onPress={() => onSelectArtist && onSelectArtist(artistName)}
-    >
-      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#17a398', alignItems: 'center', justifyContent: 'center', marginBottom: 8, borderWidth: 1.5, borderColor: '#082621' }}>
-        <Text style={{ fontSize: 20, fontWeight: '900', color: '#082621' }}>
-          {(artistName || 'A').charAt(0).toUpperCase()}
+  const renderFollowedArtistItem = useCallback(({ item }) => {
+    const artistName = typeof item === 'string' ? item : (item?.name || item?.artist || '');
+    const cleanName = String(artistName || '').trim();
+    const artistData = (item && typeof item === 'object' && (item.avatar || item.cover)) ? item : hydratedFollowedArtistsMap.get(cleanName.toLowerCase());
+    const avatarUri = artistData?.avatar || artistData?.cover || getCanonicalArtistAvatar(cleanName);
+    const initialChar = (cleanName || 'A').charAt(0).toUpperCase();
+
+    return (
+      <TouchableOpacity
+        style={[styles.playlistGridCard, !isDark && styles.playlistGridCardLight, { width: cardWidth, alignItems: 'center', paddingVertical: 14 }]}
+        activeOpacity={0.85}
+        onPress={() => onSelectArtist && onSelectArtist(cleanName)}
+      >
+        <View style={styles.artistAvatarWrap}>
+          {avatarUri ? (
+            <Image
+              source={{ uri: normalizeCoverUri(avatarUri) }}
+              style={styles.artistAvatar}
+              resizeMode="cover"
+              fadeDuration={0}
+            />
+          ) : (
+            <View style={styles.artistAvatarFallback}>
+              <Text style={styles.artistAvatarText}>
+                {initialChar}
+              </Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }, { textAlign: 'center', fontWeight: '900' }]} numberOfLines={1}>
+          {cleanName || 'Artist'}
         </Text>
-      </View>
-      <Text style={[styles.playlistCardName, !isDark && { color: '#0b1110' }, { textAlign: 'center', fontWeight: '900' }]} numberOfLines={1}>
-        {artistName}
-      </Text>
-      <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', marginTop: 2, fontFamily: 'monospace' }}>
-        FOLLOWING
-      </Text>
-    </TouchableOpacity>
-  ), [cardWidth, isDark, onSelectArtist]);
+        <Text style={{ fontSize: 9, color: '#17a398', fontWeight: '800', marginTop: 2, fontFamily: 'monospace' }}>
+          {isRTL ? 'فنان متابع' : 'FOLLOWING'}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [cardWidth, isDark, onSelectArtist, hydratedFollowedArtistsMap, isRTL]);
 
   const renderFollowedArtistsEmpty = useCallback(() => (
     <View style={[styles.emptyCard, !isDark && styles.emptyCardLight, { marginTop: 20 }]}>
@@ -1363,11 +1454,12 @@ function LibraryScreen({
     <PlaylistItemGridCard
       key={playlist._id || playlist.id}
       playlist={playlist}
+      tracks={tracks}
       isDark={isDark}
       cardWidth={cardWidth}
       onSelect={handleSelectPlaylistCard}
     />
-  ), [cardWidth, isDark, handleSelectPlaylistCard]);
+  ), [cardWidth, isDark, handleSelectPlaylistCard, tracks]);
 
   const renderPlaylistsHeader = useCallback(() => (
     <View>
@@ -1423,6 +1515,61 @@ function LibraryScreen({
         </View>
       </TouchableOpacity>
 
+      {/* Followed Artists Shelf under 'All' filter */}
+      {activeFilter === 'all' && hydratedFollowedArtists.length > 0 && (
+        <View style={{ marginBottom: 18 }}>
+          <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }, { marginTop: 4, marginBottom: 10 }]}>
+            <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
+              {isRTL ? `الفنانين المتابعون (${hydratedFollowedArtists.length})` : `FOLLOWED ARTISTS (${hydratedFollowedArtists.length})`}
+            </Text>
+            <CassetteTag label={isRTL ? 'متابعون' : 'FOLLOWED'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.tealLight} />
+          </View>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 2, gap: 12 }}
+          >
+            {hydratedFollowedArtists.map(artist => (
+              <TouchableOpacity
+                key={artist.id}
+                onPress={() => onSelectArtist && onSelectArtist(artist.name)}
+                activeOpacity={0.85}
+                style={[
+                  styles.followedArtistShelfCard,
+                  !isDark && styles.followedArtistShelfCardLight
+                ]}
+              >
+                <View style={styles.artistAvatarWrap}>
+                  {artist.avatar ? (
+                    <Image
+                      source={{ uri: normalizeCoverUri(artist.avatar) }}
+                      style={styles.artistAvatar}
+                      resizeMode="cover"
+                      fadeDuration={0}
+                    />
+                  ) : (
+                    <View style={styles.artistAvatarFallback}>
+                      <Text style={styles.artistAvatarText}>
+                        {(artist.name || 'A').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[styles.followedArtistName, !isDark && { color: '#0b1110' }, rtlTextStyle]}
+                  numberOfLines={1}
+                >
+                  {artist.name}
+                </Text>
+                <Text style={styles.followedArtistBadge}>
+                  {isRTL ? 'فنان متابع' : 'ARTIST'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
       {/* User Playlists */}
       <View style={[styles.cratesHeader, !isDark && { borderBottomColor: '#0b1110' }]}>
         <Text style={[styles.cratesTitle, !isDark && { color: '#0b1110' }, rtlTextStyle]}>
@@ -1431,7 +1578,7 @@ function LibraryScreen({
         <CassetteTag label={isRTL ? 'المجموعات' : 'COLLECTION'} bg={!isDark ? '#0b1110' : colors.ink} textColor={colors.mint} />
       </View>
     </View>
-  ), [isDark, colors, likedTracks.length, onNavigateOffline, playlists.length, isRTL, rtlTextStyle]);
+  ), [isDark, colors, likedTracks.length, onNavigateOffline, playlists.length, isRTL, rtlTextStyle, activeFilter, hydratedFollowedArtists, onSelectArtist]);
 
   const renderPlaylistsEmpty = useCallback(() => (
     <View style={[styles.emptyCard, !isDark && styles.emptyCardLight]}>
@@ -1612,24 +1759,13 @@ function LibraryScreen({
                   {!isLiteMode && Platform.OS !== 'android' && <View style={styles.hardShadow} />}
                   <View style={[styles.playlistHero, !isDark && styles.playlistHeroLight]}>
                     <View style={styles.playlistBigBox}>
-                      <View style={StyleSheet.absoluteFillObject}>
-                        <Disc size={32} color={colors.mint} style={{ alignSelf: 'center', marginTop: 12 }} />
-                      </View>
-                      {((!coverFailed && selectedView.cover) || (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)) ? (
-                        <Image
-                          source={{
-                            uri: normalizeCoverUri(
-                              (!coverFailed && selectedView.cover)
-                                ? selectedView.cover
-                                : (activePlaylistTracks[0]?.cover || activePlaylistTracks[0]?.coverUrl)
-                            ),
-                          }}
-                          style={{ width: '100%', height: '100%', borderRadius: 8 }}
-                          resizeMode="cover"
-                          fadeDuration={0}
-                          onError={() => setCoverFailed(true)}
-                        />
-                      ) : null}
+                      <PlaylistCoverCollage
+                        playlist={selectedView}
+                        tracks={activePlaylistTracks.length > 0 ? activePlaylistTracks : tracks}
+                        discSize={32}
+                        isDark={isDark}
+                        style={{ borderRadius: 8 }}
+                      />
                     </View>
                     <View style={{ flex: 1, marginLeft: 12 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -1856,7 +1992,7 @@ function LibraryScreen({
           key={`library_${activeFilter}_${numCols}`}
           data={activeFilter === 'artists' ? followedArtists : filteredPlaylists}
           numColumns={numCols}
-          keyExtractor={(item, idx) => (activeFilter === 'artists' ? `art_${item || idx}` : String(item._id || item.id || idx))}
+          keyExtractor={(item, idx) => (activeFilter === 'artists' ? `art_${typeof item === 'string' ? item : (item?.id || item?.name || idx)}` : String(item._id || item.id || idx))}
           renderItem={activeFilter === 'artists' ? renderFollowedArtistItem : renderPlaylistItem}
           ListHeaderComponent={activeFilter === 'artists' ? null : renderPlaylistsHeader}
           ListEmptyComponent={activeFilter === 'artists' ? renderFollowedArtistsEmpty : renderPlaylistsEmpty}
@@ -2428,6 +2564,64 @@ const styles = StyleSheet.create({
   playlistGridCardLight: {
     backgroundColor: '#ffffff',
     borderColor: '#0b1110',
+  },
+  followedArtistShelfCard: {
+    width: 96,
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    backgroundColor: colors.surfaceDark,
+  },
+  followedArtistShelfCardLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  artistAvatarWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 1.5,
+    borderColor: '#082621',
+    backgroundColor: '#17a398',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  artistAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  artistAvatarFallback: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#17a398',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artistAvatarText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#082621',
+    fontFamily: 'monospace',
+  },
+  followedArtistName: {
+    fontFamily: 'monospace',
+    fontWeight: '900',
+    fontSize: 11,
+    color: colors.paper,
+    textAlign: 'center',
+    maxWidth: '100%',
+  },
+  followedArtistBadge: {
+    fontSize: 8,
+    color: '#17a398',
+    fontWeight: '800',
+    marginTop: 2,
+    fontFamily: 'monospace',
   },
   playlistCoverBox: {
     width: '100%',

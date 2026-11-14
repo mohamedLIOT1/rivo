@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { API_BASE_URL } from '../../config';
 import { matchesArtist, getCanonicalArtistName, getArtistAliasNote } from '../../utils/artistUtils';
 import { isQuranContent } from '../../utils/quranUtils';
+import { CANONICAL_ARTIST_AVATARS, getCanonicalArtistAvatar } from '../../utils/canonicalArtistAvatars';
 
 // In-memory client cache for 0ms instant artist page loads
 const clientArtistCache = new Map();
@@ -165,29 +166,51 @@ export function useArtistWebData({ initialArtist, tracks = [], albums = [] }) {
   // Persistent avatar lock per artist to prevent drifting or flipping across track reorders
   const lockedAvatarRef = useRef({});
   const avatar = useMemo(() => {
-    // 1. Highest priority: Fixed canonical remote data
+    // 1. High priority: Valid verified remote data if already fetched
     const canonicalRemote = remoteData?.cover || remoteData?.avatar;
-    if (canonicalRemote) {
+    if (canonicalRemote && !canonicalRemote.includes('photo-1514525253161') && !canonicalRemote.includes('hqdefault')) {
       lockedAvatarRef.current[artistKey] = canonicalRemote;
       return canonicalRemote;
     }
 
-    // 2. Previously locked avatar for this artist in the current session
+    // 2. Instant 0ms canonical avatar resolution for known artists (resolves before network fetch completes)
+    const canonicalKnown = getCanonicalArtistAvatar(artistName) ||
+      getCanonicalArtistAvatar(rawArtistName) ||
+      CANONICAL_ARTIST_AVATARS[artistKey] ||
+      (canonicalName ? CANONICAL_ARTIST_AVATARS[canonicalName.toLowerCase()] : null);
+    if (canonicalKnown) {
+      lockedAvatarRef.current[artistKey] = canonicalKnown;
+      return canonicalKnown;
+    }
+
+    // 3. Previously locked avatar for this artist in the current session
     if (lockedAvatarRef.current[artistKey]) {
       return lockedAvatarRef.current[artistKey];
     }
 
-    // 3. Initial artist data (if carrying a dedicated portrait, not temporary)
+    // 4. Initial artist data (if carrying a dedicated portrait, not temporary)
     const initialImg = initialArtist?.cover || initialArtist?.avatar || initialArtist?.headerImage;
-    if (initialImg) {
+    if (initialImg && !initialImg.includes('photo-1514525253161') && !initialImg.includes('hqdefault')) {
       lockedAvatarRef.current[artistKey] = initialImg;
       return initialImg;
     }
 
-    return '';
-  }, [remoteData, initialArtist, artistKey]);
+    // 5. Fallback: First available cover from artist's tracks to prevent blank flashing
+    const trackWithCover = (localArtistTracks || []).find(t => t?.cover);
+    if (trackWithCover?.cover) {
+      lockedAvatarRef.current[artistKey] = trackWithCover.cover;
+      return trackWithCover.cover;
+    }
 
-  const banner = remoteData?.banner || initialArtist?.banner || '';
+    // 6. Generic remote fallback if present
+    if (canonicalRemote) {
+      return canonicalRemote;
+    }
+
+    return '';
+  }, [remoteData, initialArtist, artistKey, artistName, rawArtistName, canonicalName, localArtistTracks]);
+
+  const banner = remoteData?.banner || initialArtist?.banner || avatar || '';
   const isVerified = Boolean(remoteData?.isVerified || initialArtist?.isVerified);
 
   // Helper release classifier
