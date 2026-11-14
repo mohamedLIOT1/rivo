@@ -9,6 +9,8 @@ import { isPodcastContent } from '../utils/podcastUtils';
 import { buildUrl } from '../utils/router';
 import RivoLogo from './RivoLogo';
 import { normalizeCoverUrl, handleCoverImageError } from '../utils/coverUtils';
+import { getCanonicalArtistAvatar } from '../utils/canonicalArtistAvatars';
+import { CANONICAL_RECITERS } from '../utils/canonicalRecitersData';
 
 function Navigation({ 
   currentScreen = 'home', 
@@ -261,10 +263,49 @@ function Navigation({
 
             {/* Playlists / Artists List */}
             <div className="flex-1 min-h-[160px] overflow-y-auto space-y-1.5 pr-1 pb-1 text-xs font-bold">
-              {/* If Artists filter is selected, render Followed Artists */}
-              {libraryFilter === 'artists' ? (
-                followedArtists && followedArtists.length > 0 ? (
-                  followedArtists.map((artName, idx) => (
+              {/* If Artists filter is selected, render Followed Artists or Reciters */}
+              {libraryFilter === 'artists' ? (() => {
+                const isQuran = libraryMode === 'quran';
+                let displayItems = [];
+
+                if (isQuran) {
+                  const userReciters = (followedArtists || []).filter(name => isQuranContent(name));
+                  if (userReciters.length > 0) {
+                    displayItems = userReciters.map(name => ({ name, isReciter: true }));
+                  } else {
+                    displayItems = (CANONICAL_RECITERS || []).slice(0, 8).map(r => ({ name: r.name, isReciter: true, cover: r.cover }));
+                  }
+                } else {
+                  displayItems = (followedArtists || [])
+                    .filter(name => !isQuranContent(name))
+                    .map(name => ({ name, isReciter: false }));
+                }
+
+                if (displayItems.length === 0) {
+                  return (
+                    <div className={`p-4 text-center rounded-lg border border-dashed ${
+                      isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
+                    }`}>
+                      <p className={`text-xs font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
+                        {isQuran 
+                          ? (isRTL ? 'لا يوجد قراء محددون' : 'No reciters found')
+                          : (isRTL ? 'لا تتابع أي فنانين بعد' : 'No followed artists yet')}
+                      </p>
+                      <p className="text-[10px] text-zinc-500 mt-1">
+                        {isQuran
+                          ? (isRTL ? 'اختر قارئاً من شاشة القرآن' : 'Select a reciter from Quran screen')
+                          : (isRTL ? 'افتح بروفايل أي فنان واضغط متابعة للوصول السريع هنا' : 'Follow artists to access them quickly here')}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return displayItems.map((item, idx) => {
+                  const artName = typeof item === 'string' ? item : item.name;
+                  const isRec = Boolean(item.isReciter);
+                  const avatarUrl = item.cover || getCanonicalArtistAvatar(artName);
+
+                  return (
                     <div
                       key={artName + idx}
                       onClick={() => onSelectArtist && onSelectArtist(artName)}
@@ -275,38 +316,36 @@ function Navigation({
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <div className="w-7 h-7 rounded-full bg-[#17a398] text-[#0b1110] flex items-center justify-center shrink-0 font-black text-xs border border-black/20">
-                          {artName.charAt(0).toUpperCase()}
-                        </div>
+                        {avatarUrl ? (
+                          <img
+                            src={normalizeCoverUrl(avatarUrl)}
+                            alt={artName}
+                            className="w-7 h-7 rounded-full object-cover shrink-0 border border-black/20 bg-zinc-800"
+                            onError={handleCoverImageError}
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full bg-[#17a398] text-[#0b1110] flex items-center justify-center shrink-0 font-black text-xs border border-black/20">
+                            {artName.charAt(0).toUpperCase()}
+                          </div>
+                        )}
                         <div className="truncate flex-1 min-w-0">
                           <div className={`truncate leading-none text-xs font-black ${isDark ? 'text-zinc-200' : 'text-[#0b1110]'}`} dir={isRTL ? "rtl" : "ltr"}>
                             {artName}
                           </div>
                           <span className="text-[10px] font-mono text-zinc-500 font-normal block truncate mt-0.5">
-                            {isRTL ? 'فنان متابع' : 'Followed Artist'}
+                            {isRec ? (isRTL ? 'قارئ قرآن' : 'Quran Reciter') : (isRTL ? 'فنان متابع' : 'Followed Artist')}
                           </span>
                         </div>
                       </div>
                       <span className={`text-[8px] font-mono font-black px-1.5 py-0.5 rounded shrink-0 ${
                         isDark ? 'bg-zinc-800 text-[#17a398]' : 'bg-[#ded2bb] text-[#0b1110]'
                       }`}>
-                        ARTIST
+                        {isRec ? (isRTL ? 'قارئ' : 'RECITER') : 'ARTIST'}
                       </span>
                     </div>
-                  ))
-                ) : (
-                  <div className={`p-4 text-center rounded-lg border border-dashed ${
-                    isDark ? 'bg-zinc-900/60 border-zinc-700' : 'bg-white border-zinc-400'
-                  }`}>
-                    <p className={`text-xs font-bold ${isDark ? 'text-zinc-300' : 'text-zinc-800'}`}>
-                      {isRTL ? 'لا تتابع أي فنانين بعد' : 'No followed artists yet'}
-                    </p>
-                    <p className="text-[10px] text-zinc-500 mt-1">
-                      {isRTL ? 'افتح بروفايل أي فنان واضغط متابعة للوصول السريع هنا' : 'Follow artists to access them quickly here'}
-                    </p>
-                  </div>
-                )
-              ) : (
+                  );
+                });
+              })() : (
                 <>
                   {/* Liked Songs / Favorite Surahs */}
                   <div

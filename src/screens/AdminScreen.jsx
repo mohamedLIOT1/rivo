@@ -15,6 +15,8 @@ import AddAlbumModal from '../components/AddAlbumModal';
 import DeleteAlbumModal from '../components/DeleteAlbumModal';
 import VerifiedBadge from '../components/VerifiedBadge';
 import { useTranslation } from '../context/PreferencesContext';
+import { getCanonicalArtistAvatar } from '../utils/canonicalArtistAvatars';
+import { handleCoverImageError } from '../utils/coverUtils';
 
 export default function AdminScreen({
   currentUser,
@@ -1202,8 +1204,9 @@ export default function AdminScreen({
                 >
                   <div className="flex items-center gap-3 mb-3">
                     <img
-                      src={artist.image || artist.avatar || artist.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200'}
-                      alt={artist.name}
+                      src={getCanonicalArtistAvatar(artist.name) || artist.image || artist.avatar || artist.cover || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=200'}
+                      alt=""
+                      onError={handleCoverImageError}
                       className="w-12 h-12 rounded-full brutal-border object-cover bg-black/10 shrink-0"
                     />
                     <div className="min-w-0 flex-1">

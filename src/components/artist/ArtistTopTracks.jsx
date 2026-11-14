@@ -56,8 +56,7 @@ function ArtistTopTracks({
       {/* Tracks Vertical List */}
       <div className="space-y-1.5 sm:space-y-2">
         {displayedTracks.map((track, idx) => {
-          const trackPlays = Number(track.plays);
-          const rawCount = trackPlays > 0 ? trackPlays : (Number(track.views) || 0);
+          const rawCount = Math.max(0, Number(track.plays) || 0);
           const playsFormatted = rawCount >= 10000 ? formatCompactPlays(rawCount) : rawCount.toLocaleString();
           const trackId = String(track.id || track._id || idx);
 

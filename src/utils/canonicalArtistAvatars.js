@@ -55,13 +55,37 @@ export const CANONICAL_ARTIST_AVATARS = {
   'تو ليت': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/91/92/51/91925187-578f-ef47-bb71-c035616b23d9/198588806296.jpg/600x600bb.jpg',
 
   // Sherine
-  'sherine': 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bf/f4/bc/bff4bce9-14a0-5696-6ae8-0051871a2dd6/3617056073114_cover.jpg/600x600bb.jpg',
-  'شيرين': 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bf/f4/bc/bff4bce9-14a0-5696-6ae8-0051871a2dd6/3617056073114_cover.jpg/600x600bb.jpg',
-  'شيرين عبد الوهاب': 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/bf/f4/bc/bff4bce9-14a0-5696-6ae8-0051871a2dd6/3617056073114_cover.jpg/600x600bb.jpg',
+  'sherine': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/f9/29/9b/f9299b39-c73d-13e1-c684-b1e8a87cfe1e/3664216111270.png/600x600bb.jpg',
+  'شيرين': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/f9/29/9b/f9299b39-c73d-13e1-c684-b1e8a87cfe1e/3664216111270.png/600x600bb.jpg',
+  'شيرين عبد الوهاب': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/f9/29/9b/f9299b39-c73d-13e1-c684-b1e8a87cfe1e/3664216111270.png/600x600bb.jpg',
+  'sherin': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/f9/29/9b/f9299b39-c73d-13e1-c684-b1e8a87cfe1e/3664216111270.png/600x600bb.jpg',
+
+  // Angham
+  'angham': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/33/ca/48/33ca489f-c5e6-7450-f0c4-228769396dc7/1614067.jpg/600x600bb.jpg',
+  'أنغام': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/33/ca/48/33ca489f-c5e6-7450-f0c4-228769396dc7/1614067.jpg/600x600bb.jpg',
+  'انغام': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/33/ca/48/33ca489f-c5e6-7450-f0c4-228769396dc7/1614067.jpg/600x600bb.jpg',
+
+  // Mohamed Mounir
+  'mohamed mounir': 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/61/a7/50/61a7500b-3372-9fe8-4f55-2584e4a31602/cover.jpg/600x600bb.jpg',
+  'محمد منير': 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/61/a7/50/61a7500b-3372-9fe8-4f55-2584e4a31602/cover.jpg/600x600bb.jpg',
+  'منير': 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/61/a7/50/61a7500b-3372-9fe8-4f55-2584e4a31602/cover.jpg/600x600bb.jpg',
+  'الكينج': 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/61/a7/50/61a7500b-3372-9fe8-4f55-2584e4a31602/cover.jpg/600x600bb.jpg',
+
+  // Abo El Anwar
+  'abo el anwar': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/34/7a/60/347a600c-ef6d-252e-2a29-4814136bf8b7/cover.jpg/600x600bb.jpg',
+  'أبو الانوار': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/34/7a/60/347a600c-ef6d-252e-2a29-4814136bf8b7/cover.jpg/600x600bb.jpg',
+  'ابو الانوار': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/34/7a/60/347a600c-ef6d-252e-2a29-4814136bf8b7/cover.jpg/600x600bb.jpg',
+  'أبو الأنوار': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/34/7a/60/347a600c-ef6d-252e-2a29-4814136bf8b7/cover.jpg/600x600bb.jpg',
 
   // Fairouz
   'fairouz': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b8/b6/2a/b8b62a1a-3e3e-4629-873b-eb061c4bb6c9/cover.jpg/600x600bb.jpg',
   'فيروز': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b8/b6/2a/b8b62a1a-3e3e-4629-873b-eb061c4bb6c9/cover.jpg/600x600bb.jpg',
+
+  // Drake
+  'drake': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/8c/d7/30/8cd73004-2d53-e7e4-bf7a-d4915422e261/196874972977.jpg/600x600bb.jpg',
+
+  // Kendrick Lamar
+  'kendrick lamar': 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/94/28/36/94283609-93bb-db1c-e997-44e82c157e90/00602567261216.rgb.jpg/600x600bb.jpg',
 
   // Radiohead
   'radiohead': 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/1f/2c/8b/1f2c8bd3-07cb-17fe-f1f0-0fa415392e62/634904078385.png/600x600bb.jpg',
@@ -71,8 +95,8 @@ export const CANONICAL_ARTIST_AVATARS = {
   'أحمد منيب': 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/b2/8e/58/b28e58f2-2b62-e1d2-0448-4e892c2a04e5/cover.jpg/600x600bb.jpg',
 
   // Abyusif
-  'abyusif': 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a4/96/60/a496603a-028c-0f9c-70fc-e68b377b5a19/cover.jpg/600x600bb.jpg',
-  'أبيوسف': 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/a4/96/60/a496603a-028c-0f9c-70fc-e68b377b5a19/cover.jpg/600x600bb.jpg',
+  'abyusif': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/69/f9/aa/69f9aa09-d6b1-3893-a4d7-6f359e65c9dc/0.jpg/600x600bb.jpg',
+  'أبيوسف': 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/69/f9/aa/69f9aa09-d6b1-3893-a4d7-6f359e65c9dc/0.jpg/600x600bb.jpg',
 
   // Lil Baba
   'lil baba': 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/44/e0/f8/44e0f8f8-b30a-9d0a-b33a-d68a9b9a68bc/cover.jpg/600x600bb.jpg',

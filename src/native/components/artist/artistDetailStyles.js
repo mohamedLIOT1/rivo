@@ -477,4 +477,28 @@ export const styles = StyleSheet.create({
   trackArtistLight: {
     color: '#57534e',
   },
+  loadMoreBtn: {
+    backgroundColor: '#182320',
+    borderWidth: 1.5,
+    borderColor: '#3f3f46',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadMoreBtnLight: {
+    backgroundColor: '#ede5d3',
+    borderColor: '#0b1110',
+  },
+  loadMoreText: {
+    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#17a398',
+  },
+  loadMoreTextLight: {
+    color: '#0b1110',
+  },
 });

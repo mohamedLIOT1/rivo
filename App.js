@@ -639,12 +639,14 @@ function NativeAppShell() {
           const LibraryScreenComp = getLazyScreen('library', () => require('./src/native/screens/LibraryScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <LibraryScreenComp
-                onOpenCreatePlaylist={handleOpenCreatePlaylist}
-                onNavigateOffline={handleNavigateOffline}
-                onTrackAction={handleTrackAction}
-                onSelectArtist={handleSelectArtist}
-              />
+              <ErrorBoundary>
+                <LibraryScreenComp
+                  onOpenCreatePlaylist={handleOpenCreatePlaylist}
+                  onNavigateOffline={handleNavigateOffline}
+                  onTrackAction={handleTrackAction}
+                  onSelectArtist={handleSelectArtist}
+                />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -653,7 +655,9 @@ function NativeAppShell() {
           const PodcastScreenComp = getLazyScreen('podcasts', () => require('./src/native/screens/PodcastScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <PodcastScreenComp onTrackAction={handleTrackAction} />
+              <ErrorBoundary>
+                <PodcastScreenComp onTrackAction={handleTrackAction} />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -662,7 +666,9 @@ function NativeAppShell() {
           const QuranScreenComp = getLazyScreen('quran', () => require('./src/native/screens/QuranScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <QuranScreenComp onTrackAction={handleTrackAction} />
+              <ErrorBoundary>
+                <QuranScreenComp onTrackAction={handleTrackAction} />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -671,7 +677,9 @@ function NativeAppShell() {
           const OfflineScreenComp = getLazyScreen('offline', () => require('./src/native/screens/OfflineScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <OfflineScreenComp />
+              <ErrorBoundary>
+                <OfflineScreenComp />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -680,19 +688,21 @@ function NativeAppShell() {
           const ProfileScreenComp = getLazyScreen('profile', () => require('./src/native/screens/ProfileScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <ProfileScreenComp
-                onOpenSettings={handleOpenSettings}
-                onOpenAuth={handleOpenAuth}
-                onOpenFriendActivity={handleOpenFriendActivity}
-                onOpenJam={handleOpenJam}
-                onOpenChat={handleOpenChat}
-                onSelectPlaylist={handleSelectPlaylist}
-                onOpenFullPlayer={handleOpenFullPlayer}
-                onSelectAlbum={handleSelectAlbum}
-                onSelectArtist={handleSelectArtist}
-                viewingUser={viewingUser}
-                onClearViewingUser={handleClearViewingUser}
-              />
+              <ErrorBoundary>
+                <ProfileScreenComp
+                  onOpenSettings={handleOpenSettings}
+                  onOpenAuth={handleOpenAuth}
+                  onOpenFriendActivity={handleOpenFriendActivity}
+                  onOpenJam={handleOpenJam}
+                  onOpenChat={handleOpenChat}
+                  onSelectPlaylist={handleSelectPlaylist}
+                  onOpenFullPlayer={handleOpenFullPlayer}
+                  onSelectAlbum={handleSelectAlbum}
+                  onSelectArtist={handleSelectArtist}
+                  viewingUser={viewingUser}
+                  onClearViewingUser={handleClearViewingUser}
+                />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -701,7 +711,9 @@ function NativeAppShell() {
           const StatsScreenComp = getLazyScreen('stats', () => require('./src/native/screens/StatsScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <StatsScreenComp />
+              <ErrorBoundary>
+                <StatsScreenComp />
+              </ErrorBoundary>
             </View>
           );
         })()}
@@ -710,7 +722,9 @@ function NativeAppShell() {
           const AdminScreenComp = getLazyScreen('admin', () => require('./src/native/screens/AdminScreen').default);
           return (
             <View style={{ flex: 1 }}>
-              <AdminScreenComp />
+              <ErrorBoundary>
+                <AdminScreenComp />
+              </ErrorBoundary>
             </View>
           );
         })()}

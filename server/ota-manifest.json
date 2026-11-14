@@ -1,11 +1,11 @@
 {
   "enabled": true,
-  "version": "2.4.47",
+  "version": "2.4.48",
   "bundleUrl": "/api/downloads/ota/index.android.bundle",
   "minAppVersion": "1.0.0",
-  "notes": "تحسينات شاملة للألبومات والبروفايل والتصفح وإصلاح البحث والمكتبة",
-  "notesEn": "Catalog and mobile performance overhaul with search and library fixes",
-  "bundleSize": 5409175,
+  "notes": "تحديث هوائي فوري (5.16 MB) • بدون إعادة تثبيت التطبيق • أحدث التحسينات والإصلاحات",
+  "notesEn": "Instant in-app OTA update (5.16 MB) • No reinstall required • Performance improvements and bug fixes.",
+  "bundleSize": 5412163,
   "sizeMb": "5.16 MB",
-  "updatedAt": "2026-11-14T10:29:23.654Z"
+  "updatedAt": "2026-11-14T12:01:26.661Z"
 }

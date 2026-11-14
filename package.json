@@ -1,6 +1,6 @@
 {
   "name": "rivo",
-  "version": "2.4.47",
+  "version": "2.4.48",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

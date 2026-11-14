@@ -1387,16 +1387,17 @@ function LibraryScreen({
   }, []);
 
   const filteredPlaylists = useMemo(() => {
+    const list = Array.isArray(playlists) ? playlists : [];
     if (activeFilter === 'quran') {
-      return (playlists || []).filter(p => isQuranContent(p) || p.isQuran || (p.name && /قرآن|سورة|مصحف|تلاوة|قراء|reciter/i.test(p.name)));
+      return list.filter(p => p && (isQuranContent(p) || p.isQuran || (p.name && /قرآن|سورة|مصحف|تلاوة|قراء|reciter/i.test(p.name))));
     }
     if (activeFilter === 'playlists') {
-      return (playlists || []).filter(p => !isQuranContent(p) && !p.isQuran && !(p.name && /قرآن|سورة|مصحف|تلاوة|قراء/i.test(p.name)));
+      return list.filter(p => p && !isQuranContent(p) && !p.isQuran && !(p.name && /قرآن|سورة|مصحف|تلاوة|قراء/i.test(p.name)));
     }
     if (activeFilter === 'podcasts') {
-      return (playlists || []).filter(p => p.isPodcast || (p.name && /بودكاست|podcast/i.test(p.name)));
+      return list.filter(p => p && (p.isPodcast || (p.name && /بودكاست|podcast/i.test(p.name))));
     }
-    return playlists || [];
+    return list;
   }, [playlists, activeFilter]);
 
   const renderFollowedArtistItem = useCallback(({ item }) => {
@@ -1990,7 +1991,7 @@ function LibraryScreen({
       ) : (
         <FlatList
           key={`library_${activeFilter}_${numCols}`}
-          data={activeFilter === 'artists' ? followedArtists : filteredPlaylists}
+          data={activeFilter === 'artists' ? (Array.isArray(followedArtists) ? followedArtists : []) : filteredPlaylists}
           numColumns={numCols}
           keyExtractor={(item, idx) => (activeFilter === 'artists' ? `art_${typeof item === 'string' ? item : (item?.id || item?.name || idx)}` : String(item._id || item.id || idx))}
           renderItem={activeFilter === 'artists' ? renderFollowedArtistItem : renderPlaylistItem}

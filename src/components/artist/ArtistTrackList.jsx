@@ -34,10 +34,16 @@ function ArtistTrackList({
   toggleLike
 }) {
   const { t, isRTL } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(false);
-  const INITIAL_LIMIT = 10;
-  const displayedTracks = isExpanded ? artistTracks : artistTracks.slice(0, INITIAL_LIMIT);
-  const hasMore = artistTracks.length > INITIAL_LIMIT;
+  const PAGE_SIZE = 10;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  React.useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [artistTracks]);
+
+  const displayedTracks = artistTracks.slice(0, visibleCount);
+  const remainingCount = Math.max(0, artistTracks.length - visibleCount);
+  const hasMore = remainingCount > 0;
 
   return (
     <div className={`brutal-border-thick brutal-shadow-lg p-4 sm:p-6 mb-6 sm:mb-8 rounded-xl ${
@@ -53,16 +59,25 @@ function ArtistTrackList({
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          {hasMore && (
+          {hasMore ? (
             <button
-              onClick={() => setIsExpanded(prev => !prev)}
+              onClick={() => setVisibleCount(c => Math.min(artistTracks.length, c + PAGE_SIZE))}
               type="button"
               className="flex items-center gap-1 text-xs font-mono font-bold text-[#17a398] hover:underline cursor-pointer"
             >
-              <span>{isExpanded ? (isRTL ? 'عرض أقل' : 'Show Less') : (isRTL ? 'عرض الكل' : 'View All')}</span>
-              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              <span>{isRTL ? `+${Math.min(PAGE_SIZE, remainingCount)} المزيد` : `+${Math.min(PAGE_SIZE, remainingCount)} More`}</span>
+              <ChevronDown size={14} />
             </button>
-          )}
+          ) : visibleCount > PAGE_SIZE ? (
+            <button
+              onClick={() => setVisibleCount(PAGE_SIZE)}
+              type="button"
+              className="flex items-center gap-1 text-xs font-mono font-bold text-[#17a398] hover:underline cursor-pointer"
+            >
+              <span>{isRTL ? 'عرض أقل' : 'Show Less'}</span>
+              <ChevronUp size={14} />
+            </button>
+          ) : null}
           <span className={`text-[10px] font-mono font-bold ${isDark ? 'text-zinc-400' : 'text-[#082621]/60'}`}>
             {isQuran ? t('profile.surahsCount', { count: artistTracks.length }) : t('profile.tracksCount', { count: artistTracks.length })}
           </span>
@@ -156,34 +171,41 @@ function ArtistTrackList({
           );
         })}
 
-        {/* Expand / Collapse Toggle Button */}
-        {hasMore && (
-          <div className="pt-3 sm:pt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setIsExpanded(prev => !prev)}
-              className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg text-xs font-mono font-bold brutal-border brutal-shadow-sm brutal-btn cursor-pointer transition ${
-                isDark
-                  ? 'bg-zinc-800 hover:bg-zinc-700 text-[#17a398] border-zinc-700'
-                  : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
-              }`}
-            >
-              {isExpanded ? (
-                <>
-                  <ChevronUp size={15} strokeWidth={2.5} />
-                  <span>{isRTL ? 'عرض أقل' : 'Show Less'}</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown size={15} strokeWidth={2.5} />
-                  <span>
-                    {isRTL 
-                      ? `عرض باقي الأغاني (${artistTracks.length} ${isQuran ? 'سورة' : 'أغنية'})`
-                      : `View All ${artistTracks.length} ${isQuran ? 'Surahs' : 'Tracks'}`}
-                  </span>
-                </>
-              )}
-            </button>
+        {/* Progressive Load / Collapse Toggle Buttons */}
+        {(hasMore || visibleCount > PAGE_SIZE) && (
+          <div className="pt-3 sm:pt-4 flex flex-wrap items-center justify-center gap-2">
+            {hasMore && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount(c => Math.min(artistTracks.length, c + PAGE_SIZE))}
+                className={`inline-flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg text-xs font-mono font-bold brutal-border brutal-shadow-sm brutal-btn cursor-pointer transition ${
+                  isDark
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-[#17a398] border-zinc-700'
+                    : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
+                }`}
+              >
+                <ChevronDown size={15} strokeWidth={2.5} />
+                <span>
+                  {isRTL
+                    ? `+${Math.min(PAGE_SIZE, remainingCount)} ${isQuran ? 'سور إضافية' : 'أغانٍ إضافية'} (متبقي ${remainingCount})`
+                    : `+${Math.min(PAGE_SIZE, remainingCount)} More ${isQuran ? 'Surahs' : 'Tracks'} (${remainingCount} remaining)`}
+                </span>
+              </button>
+            )}
+            {visibleCount > PAGE_SIZE && (
+              <button
+                type="button"
+                onClick={() => setVisibleCount(PAGE_SIZE)}
+                className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-xs font-mono font-bold brutal-border brutal-shadow-sm brutal-btn cursor-pointer transition opacity-80 hover:opacity-100 ${
+                  isDark
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                    : 'bg-[#ede5d3] hover:bg-white text-[#0b1110] border-black'
+                }`}
+              >
+                <ChevronUp size={15} strokeWidth={2.5} />
+                <span>{isRTL ? 'عرض أقل' : 'Show Less'}</span>
+              </button>
+            )}
           </div>
         )}
       </div>

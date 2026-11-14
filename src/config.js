@@ -4,7 +4,7 @@
 
 export const API_BASE_URL = (() => {
   // 1. Running inside browser (desktop, tablet, mobile web)
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
     const { hostname, protocol, host } = window.location;
     if (
       window.Capacitor ||

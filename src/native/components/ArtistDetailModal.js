@@ -122,6 +122,18 @@ export default function ArtistDetailModal({
     allAlbums,
   });
 
+  const [visibleCount, setVisibleCount] = useState(10);
+  useEffect(() => {
+    if (visible) {
+      setVisibleCount(10);
+    }
+  }, [visible, artistName]);
+
+  const pagedTracks = useMemo(() => {
+    return (finalTracks || []).slice(0, visibleCount);
+  }, [finalTracks, visibleCount]);
+  const remainingCount = Math.max(0, (finalTracks || []).length - visibleCount);
+
   const handlePlayAll = (shuffle = false) => {
     if (finalTracks.length === 0) return;
     let queue = [...finalTracks];
@@ -265,7 +277,7 @@ export default function ArtistDetailModal({
           style={styles.scrollArea}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          data={finalTracks}
+          data={pagedTracks}
           keyExtractor={(t, idx) => String(t._id || t.id || idx)}
           renderItem={renderTrackItem}
           initialNumToRender={Platform.OS === 'android' ? 5 : 8}
@@ -313,7 +325,33 @@ export default function ArtistDetailModal({
               </View>
             </View>
           )}
-          ListFooterComponent={<View style={{ height: currentTrack ? 120 : 60 }} />}
+          ListFooterComponent={(
+            <View style={{ paddingBottom: currentTrack ? 120 : 60, paddingHorizontal: 16, alignItems: 'center' }}>
+              {remainingCount > 0 ? (
+                <TouchableOpacity
+                  onPress={() => setVisibleCount((c) => Math.min((finalTracks || []).length, c + 10))}
+                  style={[styles.loadMoreBtn, !isDark && styles.loadMoreBtnLight, { width: '100%' }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, !isDark && styles.loadMoreTextLight]}>
+                    {isRTL
+                      ? `+10 أغانٍ إضافية (متبقي ${remainingCount})`
+                      : `+10 More Tracks (${remainingCount} remaining)`}
+                  </Text>
+                </TouchableOpacity>
+              ) : visibleCount > 10 ? (
+                <TouchableOpacity
+                  onPress={() => setVisibleCount(10)}
+                  style={[styles.loadMoreBtn, !isDark && styles.loadMoreBtnLight, { width: '100%', opacity: 0.8 }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.loadMoreText, !isDark && styles.loadMoreTextLight]}>
+                    {isRTL ? 'عرض أقل' : 'Show Less'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
           windowSize={5}
           maxToRenderPerBatch={10}
           initialNumToRender={10}

@@ -97,6 +97,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
     setCurrentScreen(screen);
 
     if (screen === 'home') {
+      setLibraryMode('music');
       setSelectedArtist(null);
       setSelectedPlaylist(null);
       setViewingProfileUserId(null);
@@ -265,6 +266,7 @@ export function NavigationProvider({ children, likedTrackIds = [], playlists = [
       setCurrentScreen(screen || 'home');
 
       if (screen === 'home') {
+        setLibraryMode('music');
         setSelectedArtist(null);
         setSelectedPlaylist(null);
         setViewingProfileUserId(null);

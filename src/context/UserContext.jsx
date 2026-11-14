@@ -221,6 +221,10 @@ export function UserProvider({ children }) {
       } catch {}
       return next;
     });
+
+    if (getToken()) {
+      api.post('/api/users/follow-artist', { artist: cleanName }).catch(() => {});
+    }
   }, []);
 
   const isFollowingArtist = useCallback((artistName) => {
@@ -335,6 +339,13 @@ export function UserProvider({ children }) {
         if (data.user) {
           const lIds = data.likedTrackIds || data.user.likedTrackIds || [];
           setCurrentUser(prev => ({ ...prev, ...data.user, likedTrackIds: lIds, likedTracks: lIds }));
+          if (Array.isArray(data.user.followedArtists) && data.user.followedArtists.length > 0) {
+            setFollowedArtists(data.user.followedArtists);
+            try {
+              localStorage.setItem('rivo_followed_artists', JSON.stringify(data.user.followedArtists));
+              localStorage.setItem('liofy_followed_artists', JSON.stringify(data.user.followedArtists));
+            } catch {}
+          }
         }
         if (Array.isArray(data.tracks)) {
           const liked = new Set((data.likedTrackIds || []).map(String));
